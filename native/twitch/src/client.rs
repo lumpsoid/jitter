@@ -55,6 +55,23 @@ impl Twitch {
             .map_err(|e| TwitchError::Network(e.to_string()))?;
         Ok(bytes.to_vec())
     }
+
+    /// GETs a URL (usher) and returns the status and body; a non-success
+    /// status is the caller's to classify.
+    pub(crate) async fn get(&self, url: &str) -> Result<(u16, Vec<u8>), TwitchError> {
+        let response = self
+            .http
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| TwitchError::Network(e.to_string()))?;
+        let status = response.status().as_u16();
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|e| TwitchError::Network(e.to_string()))?;
+        Ok((status, bytes.to_vec()))
+    }
 }
 
 /// The headers of every GQL request; the only place they are built.

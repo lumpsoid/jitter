@@ -5,6 +5,7 @@
 pub mod browse_popular;
 pub mod channel_by_login;
 pub mod channel_videos;
+pub mod playback_access_token;
 pub mod users_stream;
 
 use jitter_core::models::{Channel, ChannelId, ChannelLogin, Timestamp};

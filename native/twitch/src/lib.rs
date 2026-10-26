@@ -5,6 +5,8 @@
 pub mod client;
 pub mod error;
 pub mod gql;
+pub mod hls;
+pub mod playback;
 
 pub use client::Twitch;
 pub use error::TwitchError;
