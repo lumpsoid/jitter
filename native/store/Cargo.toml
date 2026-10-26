@@ -1,0 +1,16 @@
+[package]
+name = "jitter_store"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+jitter_core = { path = "../core" }
+dirs = "6.0.0"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"

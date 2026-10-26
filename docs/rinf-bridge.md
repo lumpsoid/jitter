@@ -10,6 +10,7 @@ only knows the signals it defines.
 native/core   (jitter_core)    business logic + state. No rinf, no tokio, no I/O.
       ▲
 native/twitch (jitter_twitch)  Twitch access: responses ↔ core types.
+native/store  (jitter_store)   SQLite: implements core's storage ports.
       ▲                ▲
 native/hub    (hub)   native/cli  (jitter_cli)
   rinf bridge           CLI head
@@ -32,6 +33,11 @@ Dependencies point down the arrows only.
   playlists and chat wire formats into them. Core never calls twitch; heads
   ask core what to load, call twitch, and hand the result back. Storage
   enters through core's ports. No decisions; no rinf.
+- **store** persists. `SqliteStore` implements core's storage ports
+  (`FavoritesStore`, `ResumeStore`) over one SQLite file that every head on
+  the machine shares: WAL, migrations in an `IMMEDIATE` transaction, and no
+  upsert that could bring back a row another process removed. No decisions;
+  no rinf.
 - **hub** translates. It builds the controllers with their infrastructure,
   turns Dart signals into controller actions, owns the tick interval, signals
   platform effects to Dart, and turns controller state into Rust signals. It
@@ -70,7 +76,7 @@ Two ways in, one rule for choosing:
 
 | Dependency | Enters through | Why |
 |---|---|---|
-| Infrastructure: `RecipeStore`, `SettingsStore`, `IdGen` | constructor (`Box<dyn Trait>`) | Border dependency; traits live in core, real impls in `store` (`SqliteStore`, `UuidIds`), fakes in core's `fakes/` |
+| Infrastructure: `RecipeStore`, `SettingsStore`, `IdGen` (jitter: `FavoritesStore`, `ResumeStore`) | constructor (`Box<dyn Trait>`) | Border dependency; traits live in core, real impls in `store` (`SqliteStore`, `UuidIds`; jitter: `jitter_store::SqliteStore`, one clone per controller), fakes in core's `fakes/` |
 | Shared controller: `RecipeCatalog` | method argument (`&` / `&mut`) | Shared mutable state; the borrow checker proves who reads and who writes, with no `Rc<RefCell>` and no runtime borrow failures |
 
 - The controller that owns data owns its persistence: `RecipeCatalog`
@@ -219,6 +225,14 @@ settings into the controllers, and only then starts the hub task. If that
 fails it sends `BootFailed { message }` and waits for another `Boot`; Dart
 shows the message with a Retry that resends `Boot`. Until both the first
 recipe-list snapshot and the settings arrive the GUI shows a spinner.
+
+**jitter deviates on desktop.** Its database is shared by the GUI and the
+CLI, so the location is defined once, in Rust: `jitter_store::default_db_path()`
+(`<platform data dir>/jitter/jitter.db`). The desktop hub opens that and
+ignores any directory in `Boot`; `path_provider` would give a different,
+app-id-named directory, and copying its per-platform rule into the CLI would
+put the path in two languages. On Android/iOS there is no CLI and the
+sandbox requires Dart's directory, so `Boot`'s directory is used there.
 
 ## Flutter
 

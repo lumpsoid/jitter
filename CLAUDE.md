@@ -16,13 +16,15 @@ A GUI application for watching Twitch streams.
 ```
 native/core   (jitter_core)    business logic + state. No rinf, no tokio, no I/O.
 native/twitch (jitter_twitch)  Twitch access; returns core types.
+native/store  (jitter_store)   SQLite; implements core's storage ports.
 native/hub    (hub)            rinf bridge — the Flutter head's Rust side.
 native/cli    (jitter_cli)     CLI head.
 lib/                           Flutter GUI head.
 ```
 
-Each interaction head (GUI, TUI, CLI) is its own crate on top of core and
-twitch. Dependencies point from heads to twitch to core, never back.
+Each interaction head (GUI, TUI, CLI) is its own crate on top of core,
+twitch and store. Dependencies point from heads to twitch and store, and
+from those to core, never back.
 
 ## Architectural commitments
 
