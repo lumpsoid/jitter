@@ -2,6 +2,7 @@
 //! Twitch responses into core types and returns them; core never calls this
 //! crate. No decisions; no rinf.
 
+pub mod chat;
 pub mod client;
 pub mod error;
 pub mod gql;
