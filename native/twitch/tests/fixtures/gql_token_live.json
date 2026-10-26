@@ -1,0 +1,19 @@
+{
+  "data": {
+    "streamPlaybackAccessToken": {
+      "value": "{\"adblock\":false,\"authorization\":{\"forbidden\":false,\"reason\":\"\"},\"blackout_enabled\":false,\"channel\":\"xqc\",\"channel_id\":71092938,\"chansub\":{\"restricted_bitrates\":[],\"view_until\":1924905600},\"ci_gb\":false,\"geoblock_reason\":\"\",\"device_id\":\"462001f7562e3516e2b0ce52df66fc9a\",\"expires\":1793054747,\"extended_history_allowed\":false,\"game\":\"\",\"hide_ads\":false,\"https_required\":true,\"mature\":false,\"notification_id\":null,\"partner\":false,\"platform\":\"web\",\"player_type\":\"site\",\"private\":{\"allowed_to_view\":true},\"privileged\":false,\"role\":\"\",\"server_ads\":true,\"show_ads\":true,\"subscriber\":false,\"turbo\":false,\"user_id\":null,\"user_ip\":\"192.0.2.1\",\"version\":3,\"maximum_resolution\":\"FULL_HD\",\"maximum_video_bitrate_kbps\":12500,\"maximum_resolution_reasons\":{\"QUAD_HD\":[\"AUTHZ_GEO\",\"AUTHZ_NOT_LOGGED_IN\"],\"ULTRA_HD\":[\"AUTHZ_GEO\",\"AUTHZ_NOT_LOGGED_IN\"]},\"maximum_video_bitrate_kbps_reasons\":[\"AUTHZ_DISALLOWED_BITRATE\"]}",
+      "signature": "acefa9b6c50c97a3b1f39430db910d381e7de540",
+      "authorization": {
+        "isForbidden": false,
+        "forbiddenReasonCode": "NONE",
+        "__typename": "PlaybackAccessTokenAuthorization"
+      },
+      "__typename": "PlaybackAccessToken"
+    }
+  },
+  "extensions": {
+    "durationMilliseconds": 28,
+    "requestID": "01M5X53PKVGPHZNN4MXBW35FTG",
+    "operationName": "PlaybackAccessToken"
+  }
+}

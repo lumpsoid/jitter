@@ -1,0 +1,19 @@
+{
+  "data": {
+    "streamPlaybackAccessToken": {
+      "value": "{\"adblock\":false,\"authorization\":{\"forbidden\":false,\"reason\":\"\"},\"blackout_enabled\":false,\"channel\":\"twitch\",\"channel_id\":12826,\"chansub\":{\"restricted_bitrates\":[],\"view_until\":1924905600},\"ci_gb\":false,\"geoblock_reason\":\"\",\"device_id\":\"7e0db9bc3165024f8393dcafcfbf31a8\",\"expires\":1793054792,\"extended_history_allowed\":false,\"game\":\"\",\"hide_ads\":false,\"https_required\":true,\"mature\":false,\"notification_id\":null,\"partner\":false,\"platform\":\"web\",\"player_type\":\"site\",\"private\":{\"allowed_to_view\":true},\"privileged\":false,\"role\":\"\",\"server_ads\":true,\"show_ads\":true,\"subscriber\":false,\"turbo\":false,\"user_id\":null,\"user_ip\":\"192.0.2.1\",\"version\":3,\"maximum_resolution\":\"FULL_HD\",\"maximum_video_bitrate_kbps\":12500,\"maximum_resolution_reasons\":{\"QUAD_HD\":[\"AUTHZ_GEO\",\"AUTHZ_NOT_LOGGED_IN\"],\"ULTRA_HD\":[\"AUTHZ_GEO\",\"AUTHZ_NOT_LOGGED_IN\"]},\"maximum_video_bitrate_kbps_reasons\":[\"AUTHZ_DISALLOWED_BITRATE\"]}",
+      "signature": "f34e9ae7de8a2d10b5482dbe10fdbd551a8631ad",
+      "authorization": {
+        "isForbidden": false,
+        "forbiddenReasonCode": "NONE",
+        "__typename": "PlaybackAccessTokenAuthorization"
+      },
+      "__typename": "PlaybackAccessToken"
+    }
+  },
+  "extensions": {
+    "durationMilliseconds": 28,
+    "requestID": "01M5X552TD5D7FKN74E4S93TPZ",
+    "operationName": "PlaybackAccessToken"
+  }
+}

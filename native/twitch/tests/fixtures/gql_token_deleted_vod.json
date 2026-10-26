@@ -1,0 +1,10 @@
+{
+  "data": {
+    "videoPlaybackAccessToken": null
+  },
+  "extensions": {
+    "durationMilliseconds": 27,
+    "requestID": "01M5X538M8N9KAQBJ0GP2ZNMGR",
+    "operationName": "PlaybackAccessToken"
+  }
+}

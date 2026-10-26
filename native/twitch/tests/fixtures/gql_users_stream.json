@@ -1,0 +1,34 @@
+{
+  "data": {
+    "users": [
+      {
+        "id": "71092938",
+        "login": "xqc",
+        "displayName": "xQc",
+        "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/xqc-profile_image-9298dca608632101-50x50.jpeg",
+        "stream": {
+          "id": "320926770780",
+          "title": "🦉LIVE🦉CLICK🦉HERE🦉DRAMA🦉NEWS🦉VIDEOS🦉GTA V🦉NOPIXEL V🦉PROGRESS TODAY🦉MEGA UTRA🦉DAY🦉WOAH🦉",
+          "viewersCount": 22239,
+          "createdAt": "2026-10-26T20:59:27Z",
+          "previewImageURL": "https://static-cdn.jtvnw.net/previews-ttv/live_user_xqc-{width}x{height}.jpg",
+          "game": {
+            "displayName": "Grand Theft Auto V"
+          }
+        }
+      },
+      {
+        "id": "12826",
+        "login": "twitch",
+        "displayName": "Twitch",
+        "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/7db44749-286f-4db0-9c99-574b16170d44-profile_image-50x50.png",
+        "stream": null
+      },
+      null
+    ]
+  },
+  "extensions": {
+    "durationMilliseconds": 47,
+    "requestID": "01M5X536KVC7Z3NJH9R61BT6VG"
+  }
+}

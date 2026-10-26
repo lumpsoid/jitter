@@ -1,0 +1,10 @@
+{
+  "data": {
+    "streamPlaybackAccessToken": null
+  },
+  "extensions": {
+    "durationMilliseconds": 30,
+    "requestID": "01M5X53Q3A5G4PJ4F222BXT3S8",
+    "operationName": "PlaybackAccessToken"
+  }
+}

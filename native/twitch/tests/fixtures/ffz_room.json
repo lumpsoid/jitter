@@ -1,0 +1,58 @@
+{
+  "room": {
+    "_id": 166895,
+    "twitch_id": 71092938,
+    "youtube_id": null,
+    "id": "xqc",
+    "is_group": false,
+    "display_name": "xQc",
+    "set": 166907,
+    "moderator_badge": "https://cdn.frankerfacez.com/room-badge/mod/id/71092938/v/98a226c4/1",
+    "vip_badge": null,
+    "mod_urls": {
+      "1": "https://cdn.frankerfacez.com/room-badge/mod/id/71092938/v/98a226c4/1"
+    },
+    "user_badges": {},
+    "user_badge_ids": {},
+    "css": null
+  },
+  "sets": {
+    "166907": {
+      "id": 166907,
+      "_type": 1,
+      "icon": null,
+      "title": "Channel: xQc",
+      "css": null,
+      "emoticons": [
+        {
+          "id": 246878,
+          "name": "WideHard",
+          "height": 20,
+          "width": 50,
+          "public": true,
+          "hidden": false,
+          "modifier": false,
+          "modifier_flags": 0,
+          "offset": null,
+          "margins": null,
+          "css": null,
+          "owner": {
+            "_id": 54361,
+            "name": "fabulouspotato69",
+            "display_name": "FabulousPotato69"
+          },
+          "artist": null,
+          "urls": {
+            "1": "https://cdn.frankerfacez.com/emote/246878/1",
+            "2": "https://cdn.frankerfacez.com/emote/246878/2",
+            "4": "https://cdn.frankerfacez.com/emote/246878/4"
+          },
+          "status": 1,
+          "usage_count": 19480,
+          "created_at": "2018-04-22T12:42:02.167Z",
+          "last_updated": "2018-04-22T22:52:32.554Z"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,358 @@
+{
+  "data": {
+    "streams": {
+      "edges": [
+        {
+          "cursor": "eyJzIjoyNDg5NjUuNTgwNjY0NTU5ODgsImQiOmZhbHNlLCJ0Ijp0cnVlfQ==",
+          "node": {
+            "id": "318143733475",
+            "title": "🔴WORLDS 2026 SWISS STAGE TL VS AL🔴",
+            "viewersCount": 248965,
+            "previewImageURL": "https://static-cdn.jtvnw.net/previews-ttv/live_user_caedrel-440x248.jpg",
+            "verticalPreviewImageURL": "https://static-cdn.jtvnw.net/previews-ttv/live_user_caedrel-248x440.jpg",
+            "height": 1080,
+            "width": 1920,
+            "isDualFormat": false,
+            "broadcaster": {
+              "id": "92038375",
+              "login": "caedrel",
+              "displayName": "Caedrel",
+              "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/483a37ac-58fd-4e2f-8dc3-2c68a0164112-profile_image-50x50.png",
+              "primaryColorHex": "8205B3",
+              "roles": {
+                "isPartner": true,
+                "isParticipatingDJ": false,
+                "__typename": "UserRoles"
+              },
+              "__typename": "User"
+            },
+            "freeformTags": [
+              {
+                "id": "fft:CHANNEL:92038375:0",
+                "name": "English",
+                "__typename": "FreeformTag"
+              },
+              {
+                "id": "fft:CHANNEL:92038375:1",
+                "name": "LPL",
+                "__typename": "FreeformTag"
+              },
+              {
+                "id": "fft:CHANNEL:92038375:2",
+                "name": "LCK",
+                "__typename": "FreeformTag"
+              },
+              {
+                "id": "fft:CHANNEL:92038375:3",
+                "name": "LEC",
+                "__typename": "FreeformTag"
+              },
+              {
+                "id": "fft:CHANNEL:92038375:4",
+                "name": "Worlds",
+                "__typename": "FreeformTag"
+              },
+              {
+                "id": "fft:CHANNEL:92038375:5",
+                "name": "Esports",
+                "__typename": "FreeformTag"
+              },
+              {
+                "id": "fft:CHANNEL:92038375:6",
+                "name": "DropsEnabled",
+                "__typename": "FreeformTag"
+              }
+            ],
+            "game": {
+              "id": "21779",
+              "slug": "league-of-legends",
+              "name": "League of Legends",
+              "displayName": "League of Legends",
+              "boxArtURL": "https://static-cdn.jtvnw.net/ttv-boxart/21779-40x56.jpg",
+              "__typename": "Game"
+            },
+            "type": "live",
+            "previewThumbnailProperties": {
+              "blurReason": "BLUR_NOT_REQUIRED",
+              "__typename": "PreviewThumbnailProperties"
+            },
+            "costreamDetails": null,
+            "__typename": "Stream"
+          },
+          "trackingID": "9f066969-a178-4613-bda1-7307ae434aff",
+          "__typename": "StreamEdge"
+        },
+        {
+          "cursor": "eyJzIjo3MTgzMC41NTA0NDc4NTIyNSwiZCI6ZmFsc2UsInQiOnRydWV9",
+          "node": {
+            "id": "319096273765",
+            "title": "🏆⚽KINGS LEAGUE CUP | 🔵 STALLIONS vs CAESAR 🔴 ORE 21🏆⚽ TUTTE LE PARTITE QUI ⬅️👑",
+            "viewersCount": 71830,
+            "previewImageURL": "https://static-cdn.jtvnw.net/previews-ttv/live_user_tumblurr-440x248.jpg",
+            "verticalPreviewImageURL": "https://static-cdn.jtvnw.net/previews-ttv/live_user_tumblurr-248x440.jpg",
+            "height": 1080,
+            "width": 1920,
+            "isDualFormat": false,
+            "broadcaster": {
+              "id": "77827128",
+              "login": "tumblurr",
+              "displayName": "Tumblurr",
+              "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/76689ba7-8a3a-4369-bb9b-6ec7c54e4648-profile_image-50x50.png",
+              "primaryColorHex": "EDEDED",
+              "roles": {
+                "isPartner": true,
+                "isParticipatingDJ": false,
+                "__typename": "UserRoles"
+              },
+              "__typename": "User"
+            },
+            "freeformTags": [
+              {
+                "id": "fft:CHANNEL:77827128:0",
+                "name": "Italiano",
+                "__typename": "FreeformTag"
+              }
+            ],
+            "game": {
+              "id": "1863222988",
+              "slug": "kings-league",
+              "name": "Kings League",
+              "displayName": "Kings League",
+              "boxArtURL": "https://static-cdn.jtvnw.net/ttv-boxart/1863222988-40x56.jpg",
+              "__typename": "Game"
+            },
+            "type": "live",
+            "previewThumbnailProperties": {
+              "blurReason": "BLUR_NOT_REQUIRED",
+              "__typename": "PreviewThumbnailProperties"
+            },
+            "costreamDetails": null,
+            "__typename": "Stream"
+          },
+          "trackingID": "28c03735-61f9-4098-aaec-5777b043e060",
+          "__typename": "StreamEdge"
+        },
+        {
+          "cursor": "eyJzIjo2MTM4NS44MDYwMzY3ODI0MSwiZCI6ZmFsc2UsInQiOnRydWV9",
+          "node": {
+            "id": "319706447703",
+            "title": "TLAW vs AL | WORLDS 2026 | Swiss Stage Day 4",
+            "viewersCount": 61385,
+            "previewImageURL": "https://static-cdn.jtvnw.net/previews-ttv/live_user_riotgames-440x248.jpg",
+            "verticalPreviewImageURL": "https://static-cdn.jtvnw.net/previews-ttv/live_user_riotgames-248x440.jpg",
+            "height": 1080,
+            "width": 1920,
+            "isDualFormat": false,
+            "broadcaster": {
+              "id": "36029255",
+              "login": "riotgames",
+              "displayName": "Riot Games",
+              "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/35b02a12-d516-499e-90f8-7899f136fa18-profile_image-50x50.png",
+              "primaryColorHex": "00001B",
+              "roles": {
+                "isPartner": true,
+                "isParticipatingDJ": false,
+                "__typename": "UserRoles"
+              },
+              "__typename": "User"
+            },
+            "freeformTags": [
+              {
+                "id": "fft:CHANNEL:36029255:0",
+                "name": "Esports",
+                "__typename": "FreeformTag"
+              },
+              {
+                "id": "fft:CHANNEL:36029255:1",
+                "name": "English",
+                "__typename": "FreeformTag"
+              },
+              {
+                "id": "fft:CHANNEL:36029255:2",
+                "name": "DropsEnabled",
+                "__typename": "FreeformTag"
+              }
+            ],
+            "game": {
+              "id": "21779",
+              "slug": "league-of-legends",
+              "name": "League of Legends",
+              "displayName": "League of Legends",
+              "boxArtURL": "https://static-cdn.jtvnw.net/ttv-boxart/21779-40x56.jpg",
+              "__typename": "Game"
+            },
+            "type": "live",
+            "previewThumbnailProperties": {
+              "blurReason": "BLUR_NOT_REQUIRED",
+              "__typename": "PreviewThumbnailProperties"
+            },
+            "costreamDetails": null,
+            "__typename": "Stream"
+          },
+          "trackingID": "b1db71ad-1427-4e11-bce4-f07e58145533",
+          "__typename": "StreamEdge"
+        },
+        {
+          "cursor": "eyJzIjo1MTYwMy4xNDk3OTUwMzE0NDQsImQiOmZhbHNlLCJ0Ijp0cnVlfQ==",
+          "node": {
+            "id": "318120729442",
+            "title": "Soirée Masterkill sur Fortnite ft. Inox, Michou & Doigby !",
+            "viewersCount": 51603,
+            "previewImageURL": "https://static-cdn.jtvnw.net/previews-ttv/live_user_gotaga-440x248.jpg",
+            "verticalPreviewImageURL": "https://static-cdn.jtvnw.net/previews-ttv/live_user_gotaga-248x440.jpg",
+            "height": 1080,
+            "width": 1920,
+            "isDualFormat": false,
+            "broadcaster": {
+              "id": "24147592",
+              "login": "gotaga",
+              "displayName": "Gotaga",
+              "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/69e324f6-fc7d-4131-89ed-227a955637cf-profile_image-50x50.png",
+              "primaryColorHex": "E10F21",
+              "roles": {
+                "isPartner": true,
+                "isParticipatingDJ": false,
+                "__typename": "UserRoles"
+              },
+              "__typename": "User"
+            },
+            "freeformTags": [
+              {
+                "id": "fft:CHANNEL:24147592:0",
+                "name": "Français",
+                "__typename": "FreeformTag"
+              },
+              {
+                "id": "fft:CHANNEL:24147592:1",
+                "name": "DropsActivés",
+                "__typename": "FreeformTag"
+              }
+            ],
+            "game": {
+              "id": "33214",
+              "slug": "fortnite",
+              "name": "Fortnite",
+              "displayName": "Fortnite",
+              "boxArtURL": "https://static-cdn.jtvnw.net/ttv-boxart/33214-40x56.jpg",
+              "__typename": "Game"
+            },
+            "type": "live",
+            "previewThumbnailProperties": {
+              "blurReason": "BLUR_NOT_REQUIRED",
+              "__typename": "PreviewThumbnailProperties"
+            },
+            "costreamDetails": null,
+            "__typename": "Stream"
+          },
+          "trackingID": "8788ff24-b881-4b3e-86ec-3063beb9a047",
+          "__typename": "StreamEdge"
+        },
+        {
+          "cursor": "eyJzIjo0NzU0NC41NDk1MjcxODU2MzQsImQiOmZhbHNlLCJ0Ijp0cnVlfQ==",
+          "node": {
+            "id": "318119417570",
+            "title": "GALA BALON DE ORO EN DIRECTO !! LAMINE YAMAL, MBAPPE, KANE... ??? DESPUES DEBATE CON LA COBRA | DjMaRiiO",
+            "viewersCount": 47544,
+            "previewImageURL": "https://static-cdn.jtvnw.net/previews-ttv/live_user_djmariio-440x248.jpg",
+            "verticalPreviewImageURL": "https://static-cdn.jtvnw.net/previews-ttv/live_user_djmariio-248x440.jpg",
+            "height": 1080,
+            "width": 1920,
+            "isDualFormat": false,
+            "broadcaster": {
+              "id": "1895664",
+              "login": "djmariio",
+              "displayName": "DjMaRiiO",
+              "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/e7457017-ea00-45a4-a88a-9f6615daebe9-profile_image-50x50.png",
+              "primaryColorHex": null,
+              "roles": {
+                "isPartner": true,
+                "isParticipatingDJ": false,
+                "__typename": "UserRoles"
+              },
+              "__typename": "User"
+            },
+            "freeformTags": [
+              {
+                "id": "fft:CHANNEL:1895664:0",
+                "name": "DJMARIO",
+                "__typename": "FreeformTag"
+              },
+              {
+                "id": "fft:CHANNEL:1895664:1",
+                "name": "DJMARIIO",
+                "__typename": "FreeformTag"
+              },
+              {
+                "id": "fft:CHANNEL:1895664:2",
+                "name": "FIFA",
+                "__typename": "FreeformTag"
+              },
+              {
+                "id": "fft:CHANNEL:1895664:3",
+                "name": "FC",
+                "__typename": "FreeformTag"
+              },
+              {
+                "id": "fft:CHANNEL:1895664:4",
+                "name": "Español",
+                "__typename": "FreeformTag"
+              },
+              {
+                "id": "fft:CHANNEL:1895664:5",
+                "name": "ULTIMATEMOSTOLES",
+                "__typename": "FreeformTag"
+              },
+              {
+                "id": "fft:CHANNEL:1895664:6",
+                "name": "FC26",
+                "__typename": "FreeformTag"
+              },
+              {
+                "id": "fft:CHANNEL:1895664:7",
+                "name": "MUNDIAL",
+                "__typename": "FreeformTag"
+              },
+              {
+                "id": "fft:CHANNEL:1895664:8",
+                "name": "WORLDCUP",
+                "__typename": "FreeformTag"
+              },
+              {
+                "id": "fft:CHANNEL:1895664:9",
+                "name": "FC27",
+                "__typename": "FreeformTag"
+              }
+            ],
+            "game": {
+              "id": "518203",
+              "slug": "sports-1",
+              "name": "Sports",
+              "displayName": "Sports",
+              "boxArtURL": "https://static-cdn.jtvnw.net/ttv-boxart/518203-40x56.jpg",
+              "__typename": "Game"
+            },
+            "type": "live",
+            "previewThumbnailProperties": {
+              "blurReason": "BLUR_NOT_REQUIRED",
+              "__typename": "PreviewThumbnailProperties"
+            },
+            "costreamDetails": null,
+            "__typename": "Stream"
+          },
+          "trackingID": "70454e51-7a6d-4e45-8c58-cafa065e0d3d",
+          "__typename": "StreamEdge"
+        }
+      ],
+      "pageInfo": {
+        "hasNextPage": true,
+        "__typename": "PageInfo"
+      },
+      "__typename": "StreamConnection"
+    }
+  },
+  "extensions": {
+    "durationMilliseconds": 84,
+    "requestID": "01M5X4ZC4JTZQ7CVXPA4HDR22B",
+    "operationName": "BrowsePage_Popular"
+  }
+}

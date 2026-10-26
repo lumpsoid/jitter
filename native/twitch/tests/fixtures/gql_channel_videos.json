@@ -1,0 +1,257 @@
+{
+  "data": {
+    "user": {
+      "id": "71092938",
+      "videos": {
+        "edges": [
+          {
+            "cursor": "2881171681|1231130|2026-09-22T17:22:09Z|50593",
+            "node": {
+              "animatedPreviewURL": "https://d2vi6trrdongqn.cloudfront.net/5c5bc6763b66f3a804cc_xqc_320926770780_1793048367/storyboards/2911620180-strip-0.jpg",
+              "game": {
+                "boxArtURL": "https://static-cdn.jtvnw.net/ttv-boxart/509658-40x56.jpg",
+                "id": "509658",
+                "slug": "just-chatting",
+                "displayName": "Just Chatting",
+                "name": "Just Chatting",
+                "__typename": "Game"
+              },
+              "broadcast": {
+                "id": "320926770780",
+                "title": null,
+                "startedAt": null,
+                "__typename": "Broadcast"
+              },
+              "id": "2911620180",
+              "lengthSeconds": 5067,
+              "owner": {
+                "displayName": "xQc",
+                "id": "71092938",
+                "login": "xqc",
+                "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/xqc-profile_image-9298dca608632101-50x50.jpeg",
+                "primaryColorHex": "FFBF00",
+                "roles": {
+                  "isPartner": true,
+                  "__typename": "UserRoles"
+                },
+                "__typename": "User"
+              },
+              "previewThumbnailURL": "https://vod-secure.twitch.tv/_404/404_processing_320x180.png",
+              "publishedAt": "2026-10-26T20:59:32Z",
+              "self": {
+                "isRestricted": false,
+                "viewingHistory": null,
+                "__typename": "VideoSelfEdge"
+              },
+              "title": "🦉LIVE🦉CLICK🦉HERE🦉DRAMA🦉NEWS🦉VIDEOS🦉GTA V🦉NOPIXEL V🦉PROGRESS TODAY🦉MEGA UTRA🦉DAY🦉WOAH🦉",
+              "viewCount": 1884,
+              "resourceRestriction": null,
+              "contentTags": [],
+              "__typename": "Video"
+            },
+            "__typename": "VideoEdge"
+          },
+          {
+            "cursor": "2881171681|1231130|2026-09-22T17:22:09Z|50593",
+            "node": {
+              "animatedPreviewURL": "https://d2vi6trrdongqn.cloudfront.net/0c2e112934b4a5bd6750_xqc_320898342492_1792875041/storyboards/2909822254-strip-0.jpg",
+              "game": {
+                "boxArtURL": "https://static-cdn.jtvnw.net/ttv-boxart/509658-40x56.jpg",
+                "id": "509658",
+                "slug": "just-chatting",
+                "displayName": "Just Chatting",
+                "name": "Just Chatting",
+                "__typename": "Game"
+              },
+              "broadcast": {
+                "id": "320898342492",
+                "title": null,
+                "startedAt": null,
+                "__typename": "Broadcast"
+              },
+              "id": "2909822254",
+              "lengthSeconds": 42700,
+              "owner": {
+                "displayName": "xQc",
+                "id": "71092938",
+                "login": "xqc",
+                "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/xqc-profile_image-9298dca608632101-50x50.jpeg",
+                "primaryColorHex": "FFBF00",
+                "roles": {
+                  "isPartner": true,
+                  "__typename": "UserRoles"
+                },
+                "__typename": "User"
+              },
+              "previewThumbnailURL": "https://static-cdn.jtvnw.net/cf_vods/d2vi6trrdongqn/0c2e112934b4a5bd6750_xqc_320898342492_1792875041//thumb/thumb0-320x180.jpg",
+              "publishedAt": "2026-10-24T20:50:46Z",
+              "self": {
+                "isRestricted": false,
+                "viewingHistory": null,
+                "__typename": "VideoSelfEdge"
+              },
+              "title": "🫂LIVE🫂CLICK🫂DRAMA🫂HUGE🫂NOPIXEL V🫂GTA V🫂PALETO MYSTEY🫂WERE SO BACK🫂DRILL FINDING🫂TURF GRINDING🫂PUZZLE SOLVING🫂",
+              "viewCount": 771943,
+              "resourceRestriction": null,
+              "contentTags": [],
+              "__typename": "Video"
+            },
+            "__typename": "VideoEdge"
+          },
+          {
+            "cursor": "2881171681|1231130|2026-09-22T17:22:09Z|50593",
+            "node": {
+              "animatedPreviewURL": "https://d1m7jfoe9zdc1j.cloudfront.net/2a1a5817e56d7f787ac5_xqc_321931133273_1792789626/storyboards/2908856317-strip-0.jpg",
+              "game": {
+                "boxArtURL": "https://static-cdn.jtvnw.net/ttv-boxart/509658-40x56.jpg",
+                "id": "509658",
+                "slug": "just-chatting",
+                "displayName": "Just Chatting",
+                "name": "Just Chatting",
+                "__typename": "Game"
+              },
+              "broadcast": {
+                "id": "321931133273",
+                "title": null,
+                "startedAt": null,
+                "__typename": "Broadcast"
+              },
+              "id": "2908856317",
+              "lengthSeconds": 40806,
+              "owner": {
+                "displayName": "xQc",
+                "id": "71092938",
+                "login": "xqc",
+                "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/xqc-profile_image-9298dca608632101-50x50.jpeg",
+                "primaryColorHex": "FFBF00",
+                "roles": {
+                  "isPartner": true,
+                  "__typename": "UserRoles"
+                },
+                "__typename": "User"
+              },
+              "previewThumbnailURL": "https://static-cdn.jtvnw.net/cf_vods/d1m7jfoe9zdc1j/2a1a5817e56d7f787ac5_xqc_321931133273_1792789626//thumb/thumb0-320x180.jpg",
+              "publishedAt": "2026-10-23T21:07:11Z",
+              "self": {
+                "isRestricted": false,
+                "viewingHistory": null,
+                "__typename": "VideoSelfEdge"
+              },
+              "title": "🎃 LIVE🎃 HERE🎃DRAMA🎃 BIG🎃 NOPIXEL V🎃 GTA V🎃 MEGA DAY🎃 ULTRA MEGA DAY🎃 IMPORTANT🎃 LOCK IN🎃",
+              "viewCount": 706373,
+              "resourceRestriction": null,
+              "contentTags": [],
+              "__typename": "Video"
+            },
+            "__typename": "VideoEdge"
+          },
+          {
+            "cursor": "2881171681|1231130|2026-09-22T17:22:09Z|50593",
+            "node": {
+              "animatedPreviewURL": "https://d2vi6trrdongqn.cloudfront.net/03c6bbf4dff92859742c_xqc_320774646110_1792695855/storyboards/2907859259-strip-0.jpg",
+              "game": {
+                "boxArtURL": "https://static-cdn.jtvnw.net/ttv-boxart/509658-40x56.jpg",
+                "id": "509658",
+                "slug": "just-chatting",
+                "displayName": "Just Chatting",
+                "name": "Just Chatting",
+                "__typename": "Game"
+              },
+              "broadcast": {
+                "id": "320774646110",
+                "title": null,
+                "startedAt": null,
+                "__typename": "Broadcast"
+              },
+              "id": "2907859259",
+              "lengthSeconds": 47134,
+              "owner": {
+                "displayName": "xQc",
+                "id": "71092938",
+                "login": "xqc",
+                "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/xqc-profile_image-9298dca608632101-50x50.jpeg",
+                "primaryColorHex": "FFBF00",
+                "roles": {
+                  "isPartner": true,
+                  "__typename": "UserRoles"
+                },
+                "__typename": "User"
+              },
+              "previewThumbnailURL": "https://static-cdn.jtvnw.net/cf_vods/d2vi6trrdongqn/03c6bbf4dff92859742c_xqc_320774646110_1792695855//thumb/thumb0-320x180.jpg",
+              "publishedAt": "2026-10-22T19:04:20Z",
+              "self": {
+                "isRestricted": false,
+                "viewingHistory": null,
+                "__typename": "VideoSelfEdge"
+              },
+              "title": "🚓LIVE🚓CLICK🚓DRAMA🚓GTA V🚓NOPIXEL V🚓MEGA ULTRA SUPER DAY🚓LOCK IT IN🚓TURF DAY🚓CAR DAY🚓END TIMES DAY🚓COOL🚓",
+              "viewCount": 793211,
+              "resourceRestriction": null,
+              "contentTags": [],
+              "__typename": "Video"
+            },
+            "__typename": "VideoEdge"
+          },
+          {
+            "cursor": "2881171681|1231130|2026-09-22T17:22:09Z|50593",
+            "node": {
+              "animatedPreviewURL": "https://d1m7jfoe9zdc1j.cloudfront.net/e703c7899ad0c6a9d661_xqc_322064727131_1792612570/storyboards/2907037919-strip-0.jpg",
+              "game": {
+                "boxArtURL": "https://static-cdn.jtvnw.net/ttv-boxart/509658-40x56.jpg",
+                "id": "509658",
+                "slug": "just-chatting",
+                "displayName": "Just Chatting",
+                "name": "Just Chatting",
+                "__typename": "Game"
+              },
+              "broadcast": {
+                "id": "322064727131",
+                "title": null,
+                "startedAt": null,
+                "__typename": "Broadcast"
+              },
+              "id": "2907037919",
+              "lengthSeconds": 42906,
+              "owner": {
+                "displayName": "xQc",
+                "id": "71092938",
+                "login": "xqc",
+                "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/xqc-profile_image-9298dca608632101-50x50.jpeg",
+                "primaryColorHex": "FFBF00",
+                "roles": {
+                  "isPartner": true,
+                  "__typename": "UserRoles"
+                },
+                "__typename": "User"
+              },
+              "previewThumbnailURL": "https://static-cdn.jtvnw.net/cf_vods/d1m7jfoe9zdc1j/e703c7899ad0c6a9d661_xqc_322064727131_1792612570//thumb/thumb0-320x180.jpg",
+              "publishedAt": "2026-10-21T19:56:15Z",
+              "self": {
+                "isRestricted": false,
+                "viewingHistory": null,
+                "__typename": "VideoSelfEdge"
+              },
+              "title": "🌫️LIVE🌫️CLICK🌫️GTA V🌫️NOPIXEL V🌫️MEGA DAY🌫️IMPORTANT🌫️LOCK IN🌫️CAR DAY????🌫️WOAH🌫️LETS GET IT🌫️BUSTA🌫️YAY🌫️",
+              "viewCount": 808681,
+              "resourceRestriction": null,
+              "contentTags": [],
+              "__typename": "Video"
+            },
+            "__typename": "VideoEdge"
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": true,
+          "__typename": "PageInfo"
+        },
+        "__typename": "VideoConnection"
+      },
+      "__typename": "User"
+    }
+  },
+  "extensions": {
+    "durationMilliseconds": 76,
+    "requestID": "01M5X50D8RJ41DXGP53CSYVT3G",
+    "operationName": "FilterableVideoTower_Videos"
+  }
+}
