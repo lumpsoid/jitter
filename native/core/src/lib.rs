@@ -3,4 +3,6 @@
 //! the store crate. Core never calls Twitch: twitch returns core types and
 //! the heads hand them in. Heads pass the clock.
 
+pub mod browse;
 pub mod models;
+pub mod playback;
