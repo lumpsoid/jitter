@@ -4,6 +4,7 @@
 
 pub mod chat;
 pub mod client;
+pub mod emotes;
 pub mod error;
 pub mod gql;
 pub mod hls;

@@ -56,6 +56,29 @@ impl Twitch {
         Ok(bytes.to_vec())
     }
 
+    /// GETs a third-party URL (emote providers) and returns the status and
+    /// body of a success. Carries `third_party_headers()`, never Twitch's.
+    pub(crate) async fn third_party_get(&self, url: &str) -> Result<(u16, Vec<u8>), TwitchError> {
+        let response = self
+            .http
+            .get(url)
+            .headers(third_party_headers())
+            .send()
+            .await
+            .map_err(|e| TwitchError::Network(e.to_string()))?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(TwitchError::Http {
+                status: status.as_u16(),
+            });
+        }
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|e| TwitchError::Network(e.to_string()))?;
+        Ok((status.as_u16(), bytes.to_vec()))
+    }
+
     /// GETs a URL (usher) and returns the status and body; a non-success
     /// status is the caller's to classify.
     pub(crate) async fn get(&self, url: &str) -> Result<(u16, Vec<u8>), TwitchError> {
@@ -86,6 +109,12 @@ pub fn headers(device_id: Option<&str>) -> Result<HeaderMap, TwitchError> {
         map.insert(DEVICE_ID_HEADER, value);
     }
     Ok(map)
+}
+
+/// The headers of a request to a non-Twitch host (emote providers): none.
+/// `Client-Id` is Twitch's and must not leak to third parties.
+pub fn third_party_headers() -> HeaderMap {
+    HeaderMap::new()
 }
 
 /// A random 32-hex-digit device id. `PlaybackAccessToken` sends a fresh one

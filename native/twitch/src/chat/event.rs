@@ -6,10 +6,7 @@ use jitter_core::models::{
 };
 
 use super::irc::IrcMessage;
-
-/// Twitch's own emote image, at the 2x scale (`1.0|2.0|3.0` are offered).
-const EMOTE_URL_PREFIX: &str = "https://static-cdn.jtvnw.net/emoticons/v2/";
-const EMOTE_URL_SUFFIX: &str = "/default/dark/2.0";
+use crate::emotes::{TwitchEmoteScale, twitch_emote_url};
 
 /// How a `/me` message is wrapped: `\u{1}ACTION <text>\u{1}`.
 const ACTION_PREFIX: &str = "\u{1}ACTION ";
@@ -144,7 +141,7 @@ fn emote_spans(tag: &str, text: &str) -> Vec<EmoteSpan> {
                 emote: Emote {
                     id: id.to_owned(),
                     name: name.iter().collect(),
-                    url: format!("{EMOTE_URL_PREFIX}{id}{EMOTE_URL_SUFFIX}"),
+                    url: twitch_emote_url(id, TwitchEmoteScale::Two),
                     zero_width: false,
                 },
             });
