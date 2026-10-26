@@ -9,3 +9,9 @@ workspace = true
 
 [dependencies]
 jitter_core = { path = "../core" }
+rand = "0.10.3"
+reqwest = { version = "0.12.28", default-features = false, features = ["rustls-tls", "json"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+thiserror = "2.0.21"
+time = { version = "0.3.55", features = ["parsing"] }

@@ -1,5 +1,5 @@
 use jitter_core::browse::{BrowseController, FirstPage, ListState, MorePages};
-use jitter_core::models::{Channel, ChannelId, ChannelLogin, Cursor, Page, Stream, Timestamp};
+use jitter_core::models::{Channel, ChannelId, ChannelLogin, Cursor, Page, Stream};
 
 fn stream(id: &str) -> Stream {
     let (Ok(channel_id), Ok(login)) = (ChannelId::parse("1"), ChannelLogin::parse("xqc")) else {
@@ -16,7 +16,7 @@ fn stream(id: &str) -> Stream {
         title: String::new(),
         game_name: None,
         viewers: 1,
-        started_at: Timestamp::from_unix(0),
+        started_at: None,
         thumbnail_url: String::new(),
     }
 }

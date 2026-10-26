@@ -1,6 +1,6 @@
 use jitter_core::models::{
     Channel, ChannelId, ChannelIdError, ChannelLogin, ChannelLoginError, Playback, QualityKind,
-    Resolution, Seconds, Stream, Timestamp, Variant, VideoId, VideoIdError,
+    Resolution, Seconds, Stream, Variant, VideoId, VideoIdError,
 };
 
 fn login(s: &str) -> ChannelLogin {
@@ -134,8 +134,27 @@ fn stream_thumbnail_fills_template() {
         title: "t".into(),
         game_name: None,
         viewers: 1,
-        started_at: Timestamp::from_unix(0),
+        started_at: None,
         thumbnail_url: "https://t/live-{width}x{height}.jpg".into(),
     };
     assert_eq!(stream.thumbnail(320, 180), "https://t/live-320x180.jpg");
+}
+
+#[test]
+fn stream_thumbnail_without_template_is_unchanged() {
+    let stream = Stream {
+        id: "1".into(),
+        channel: Channel {
+            id: ChannelId::parse("7").unwrap_or_else(|e| unreachable!("{e:?}")),
+            login: login("xqc"),
+            display_name: "xQc".into(),
+            avatar_url: String::new(),
+        },
+        title: "t".into(),
+        game_name: None,
+        viewers: 1,
+        started_at: None,
+        thumbnail_url: "https://t/live-440x248.jpg".into(),
+    };
+    assert_eq!(stream.thumbnail(320, 180), "https://t/live-440x248.jpg");
 }

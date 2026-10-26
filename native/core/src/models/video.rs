@@ -1,7 +1,7 @@
 use super::{Channel, Seconds, Timestamp, VideoId};
 
-/// Broadcast types we show. Other types are dropped at the twitch mapping
-/// boundary.
+/// Broadcast types we list. Twitch's video nodes do not carry one: a video's
+/// kind is the type it was requested as.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoKind {
     Archive,

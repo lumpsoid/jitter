@@ -65,7 +65,7 @@ fn stream(channel: Channel, viewers: u32) -> Stream {
         title: String::new(),
         game_name: None,
         viewers,
-        started_at: Timestamp::from_unix(0),
+        started_at: None,
         thumbnail_url: String::new(),
     }
 }
