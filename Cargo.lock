@@ -90,6 +90,9 @@ dependencies = [
 [[package]]
 name = "jitter_core"
 version = "0.1.0"
+dependencies = [
+ "jitter_core",
+]
 
 [[package]]
 name = "jitter_twitch"

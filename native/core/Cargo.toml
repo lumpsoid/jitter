@@ -8,3 +8,11 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+
+[features]
+# Test doubles for the storage ports (`fakes` module). Off in production
+# builds; integration tests turn it on via the dev-dependency below.
+test-fakes = []
+
+[dev-dependencies]
+jitter_core = { path = ".", features = ["test-fakes"] }

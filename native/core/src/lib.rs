@@ -4,5 +4,11 @@
 //! the heads hand them in. Heads pass the clock.
 
 pub mod browse;
+#[cfg(any(test, feature = "test-fakes"))]
+pub mod fakes;
+pub mod favorites;
 pub mod models;
 pub mod playback;
+pub mod ports;
+pub mod resume;
+pub mod resume_policy;
