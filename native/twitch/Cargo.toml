@@ -1,0 +1,10 @@
+[package]
+name = "jitter_twitch"
+version.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+jitter_core = { path = "../core" }

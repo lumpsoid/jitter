@@ -1,0 +1,20 @@
+# This file is used for telling Rust-related tools
+# where various Rust crates are.
+# This also unifies `target` output folder and
+# various Rust configurations.
+
+[workspace]
+resolver = "3"
+members = ["native/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+# No panics in Rust (CLAUDE.md): return `Result` instead.
+# Every member opts in with `[lints] workspace = true`.
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+wildcard_imports = "deny"

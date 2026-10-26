@@ -1,0 +1,22 @@
+[package]
+# Do not change the name of this crate.
+name = "hub"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+# `lib` is required for non-library targets,
+# such as tests and benchmarks.
+# `cdylib` is for Linux, Android, Windows, and web.
+# `staticlib` is for iOS and macOS.
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+jitter_core = { path = "../core" }
+jitter_twitch = { path = "../twitch" }
+rinf = "8.11.0"
+serde = { version = "1.0.219", features = ["derive"] }
+tokio = { version = "1.45.0", features = ["rt", "macros", "time"] }
