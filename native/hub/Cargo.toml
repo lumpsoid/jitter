@@ -3,6 +3,7 @@
 name = "hub"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 
 [lib]
 # `lib` is required for non-library targets,

@@ -28,9 +28,10 @@ Dependencies point down the arrows only.
 - **core** decides. It exposes feature controllers: actions in, state and
   effects out. It defines the infrastructure traits it needs (`ports/`) and
   implements them only as test fakes (`fakes/`, behind `test-fakes`).
-- **twitch** talks to Twitch. It implements the core's traits over Twitch's
-  APIs, playlists and chat, turning wire formats into core types. No
-  decisions; no rinf.
+- **twitch** talks to Twitch. It returns core types, turning Twitch's APIs,
+  playlists and chat wire formats into them. Core never calls twitch; heads
+  ask core what to load, call twitch, and hand the result back. Storage
+  enters through core's ports. No decisions; no rinf.
 - **hub** translates. It builds the controllers with their infrastructure,
   turns Dart signals into controller actions, owns the tick interval, signals
   platform effects to Dart, and turns controller state into Rust signals. It

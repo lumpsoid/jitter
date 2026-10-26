@@ -10,6 +10,7 @@ members = ["native/*"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
+license = "0BSD"
 
 # No panics in Rust (CLAUDE.md): return `Result` instead.
 # Every member opts in with `[lints] workspace = true`.
