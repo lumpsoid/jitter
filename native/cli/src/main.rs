@@ -41,6 +41,13 @@ enum Command {
     },
     /// Resolve a live channel or VOD and print its qualities or one URL.
     Play(PlayArgs),
+    /// Print a channel's live chat, emotes as `[name]`, until interrupted.
+    Chat {
+        login: String,
+        /// Also print the connection's log (PING/PONG, reconnects) to stderr.
+        #[arg(long, short)]
+        verbose: bool,
+    },
     /// Record a VOD position by hand.
     Resume {
         id: String,
@@ -67,6 +74,7 @@ async fn run(command: Command) -> commands::Result<()> {
         Command::Fav { command } => commands::fav::run(command).await,
         Command::Vods { login, pages } => commands::vods::run(&login, pages).await,
         Command::Play(args) => commands::play::run(args).await,
+        Command::Chat { login, verbose } => commands::chat::run(&login, verbose).await,
         Command::Resume {
             id,
             position_s,

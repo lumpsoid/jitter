@@ -15,6 +15,9 @@ reqwest = { version = "0.12.28", default-features = false, features = ["rustls-t
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 thiserror = "2.0.21"
-tokio = { version = "1.54.1", default-features = false, features = ["macros"] }
+tokio = { version = "1.54.1", default-features = false, features = ["macros", "net", "time"] }
 time = { version = "0.3.55", features = ["parsing"] }
 url = "2.5.8"
+tokio-tungstenite = { version = "0.30.0", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
+futures-util = { version = "0.3.34", default-features = false, features = ["sink", "std"] }
+log = "0.4.34"
