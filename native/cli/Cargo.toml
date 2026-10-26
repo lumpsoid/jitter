@@ -4,9 +4,16 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[[bin]]
+name = "jitter"
+path = "src/main.rs"
+
 [lints]
 workspace = true
 
 [dependencies]
 jitter_core = { path = "../core" }
 jitter_twitch = { path = "../twitch" }
+jitter_store = { path = "../store" }
+clap = { version = "4.6.7", features = ["derive"] }
+tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros"] }
