@@ -53,10 +53,18 @@ pub enum PlaybackUpdate {
         qualities: Vec<QualityOption>,
         selected: String,
         live: bool,
+        details: PlaybackDetails,
     },
     Failed {
         message: String,
     },
+}
+
+/// What is playing, shown on the player page beside the video.
+#[derive(Serialize, SignalPiece)]
+pub struct PlaybackDetails {
+    /// The game or category's name; `None` when there is none to show.
+    pub game: Option<String>,
 }
 
 /// One entry of the quality menu: `name` goes back in [`SelectQuality`],

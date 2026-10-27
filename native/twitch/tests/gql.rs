@@ -7,14 +7,15 @@
 //! user, and the empty and missing ones).
 
 use jitter_core::models::{
-    CategoryId, ChannelId, ChannelLogin, Cursor, SearchQuery, Seconds, Timestamp, VideoKind,
+    CategoryId, ChannelId, ChannelLogin, Cursor, SearchQuery, Seconds, Timestamp, VideoId,
+    VideoKind,
 };
 use jitter_twitch::TwitchError;
 use jitter_twitch::client::{CLIENT_ID, headers};
 use jitter_twitch::gql::users_stream::{LIVE_STATUS_BATCH, batch_variables};
 use jitter_twitch::gql::{
     browse_directories, browse_popular, channel_by_login, channel_videos, decode, game_streams,
-    persisted_body, query_body, search_channels, search_games, users_stream,
+    persisted_body, playback_details, query_body, search_channels, search_games, users_stream,
 };
 
 const BROWSE: &[u8] = include_bytes!("fixtures/gql_browse_popular.json");
@@ -31,6 +32,11 @@ const VIDEOS: &[u8] = include_bytes!("fixtures/gql_channel_videos.json");
 const USERS_STREAM: &[u8] = include_bytes!("fixtures/gql_users_stream.json");
 const CHANNEL: &[u8] = include_bytes!("fixtures/gql_channel_by_login.json");
 const CHANNEL_UNKNOWN: &[u8] = include_bytes!("fixtures/gql_channel_by_login_unknown.json");
+// Hand-written after the raw `PlaybackDetails*` documents' live answers
+// (checked with `jitter play` on 2026-10-27; VOD 2909822254 is in Just
+// Chatting), with `users_stream`'s recorded game: not recorded.
+const DETAILS_LIVE: &[u8] = include_bytes!("fixtures/gql_playback_details_live.json");
+const DETAILS_VOD: &[u8] = include_bytes!("fixtures/gql_playback_details_vod.json");
 const BOGUS_HASH: &[u8] = include_bytes!("fixtures/gql_persisted_bogus_hash.json");
 
 fn ok<T, E: std::fmt::Debug>(result: Result<T, E>) -> T {
@@ -246,6 +252,58 @@ fn users_stream_yields_only_the_live_id() {
         live.thumbnail(320, 180),
         "https://static-cdn.jtvnw.net/previews-ttv/live_user_xqc-320x180.jpg"
     );
+}
+
+// --- playback details ------------------------------------------------------
+
+#[test]
+fn playback_details_ask_by_login_and_by_id() {
+    assert_eq!(
+        playback_details::live_variables(&login("xqc"))["login"],
+        "xqc"
+    );
+    let Ok(id) = VideoId::parse("2909822254") else {
+        unreachable!("valid id");
+    };
+    assert_eq!(playback_details::vod_variables(&id)["id"], "2909822254");
+}
+
+#[test]
+fn live_details_carry_the_stream_game() {
+    let details = ok(playback_details::parse_live(DETAILS_LIVE));
+    let game = ok(details.game.ok_or("no game"));
+    assert_eq!(game.id.as_str(), "32982");
+    assert_eq!(game.name, "Grand Theft Auto V");
+}
+
+#[test]
+fn vod_details_carry_the_video_game() {
+    let details = ok(playback_details::parse_vod(DETAILS_VOD));
+    let game = ok(details.game.ok_or("no game"));
+    assert_eq!(game.id.as_str(), "509658");
+    assert_eq!(game.name, "Just Chatting");
+}
+
+#[test]
+fn offline_channel_and_gameless_vod_have_no_game() {
+    let offline = br#"{"data":{"user":{"stream":null}}}"#;
+    assert_eq!(ok(playback_details::parse_live(offline)).game, None);
+    let no_game = br#"{"data":{"video":{"game":null}}}"#;
+    assert_eq!(ok(playback_details::parse_vod(no_game)).game, None);
+}
+
+#[test]
+fn details_of_an_unknown_login_or_vod_are_not_found() {
+    let unknown = br#"{"data":{"user":null}}"#;
+    assert!(matches!(
+        playback_details::parse_live(unknown),
+        Err(TwitchError::NotFound)
+    ));
+    let unknown = br#"{"data":{"video":null}}"#;
+    assert!(matches!(
+        playback_details::parse_vod(unknown),
+        Err(TwitchError::NotFound)
+    ));
 }
 
 // --- channel lookup --------------------------------------------------------

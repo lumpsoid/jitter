@@ -11,7 +11,7 @@
 use jitter_core::browse::BrowseController;
 use jitter_core::categories::TopCategoriesController;
 use jitter_core::favorites::FavoritesController;
-use jitter_core::models::{Category, Page, PageRequest, Playback, Stream};
+use jitter_core::models::{Category, Page, PageRequest, Playback, PlaybackDetails, Stream};
 use jitter_core::playback::{PlaybackController, PlaybackTarget};
 use jitter_core::ports::StoreError;
 use jitter_core::resume::ResumeController;
@@ -130,6 +130,7 @@ pub enum Fetched {
     Playback {
         target: PlaybackTarget,
         result: Result<Playback, TwitchError>,
+        details: Result<PlaybackDetails, TwitchError>,
     },
     // Channel
     Channel(ChannelFetched),
@@ -318,8 +319,12 @@ fn on_fetched(
             favorites_changed(c);
         }
         // Playback
-        Fetched::Playback { target, result } => {
-            playback::resolved(&mut c.playback, &c.resume, target, result);
+        Fetched::Playback {
+            target,
+            result,
+            details,
+        } => {
+            playback::resolved(&mut c.playback, &c.resume, target, result, details);
         }
         // Channel
         Fetched::Channel(fetched) => {

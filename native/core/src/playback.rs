@@ -2,7 +2,9 @@
 //! quality, then deciding what the player opens. Pure state; heads resolve
 //! through twitch and hand the result in.
 
-use crate::models::{ChannelLogin, Open, Playback, Quality, Seconds, Timestamp, VideoId};
+use crate::models::{
+    ChannelLogin, Open, Playback, PlaybackDetails, Quality, Seconds, Timestamp, VideoId,
+};
 use crate::ports::StoreError;
 use crate::resume::ResumeController;
 use crate::resume_policy::ResumeDecision;
@@ -24,6 +26,8 @@ pub enum PlaybackState {
         playback: Playback,
         /// Name of the selected quality; always one of `playback.qualities`.
         selected: String,
+        /// What is playing, for the page to show.
+        details: PlaybackDetails,
     },
     Failed {
         message: String,
@@ -57,11 +61,18 @@ impl PlaybackController {
         self.state = PlaybackState::Resolving { target };
     }
 
-    /// Applies a resolve result. Ignored unless `target` is the one being
-    /// resolved, so a slow resolve for channel A cannot replace a later pick
-    /// of channel B. Returns whether it applied, i.e. whether the result is
-    /// the one now shown.
-    pub fn apply(&mut self, target: PlaybackTarget, result: Result<Playback, String>) -> bool {
+    /// Applies a resolve result and the details fetched beside it. Ignored
+    /// unless `target` is the one being resolved, so a slow resolve for
+    /// channel A cannot replace a later pick of channel B. Details that
+    /// failed to load leave the page without them; the stream still plays.
+    /// Returns whether it applied, i.e. whether the result is the one now
+    /// shown.
+    pub fn apply(
+        &mut self,
+        target: PlaybackTarget,
+        result: Result<Playback, String>,
+        details: Result<PlaybackDetails, String>,
+    ) -> bool {
         let PlaybackState::Resolving { target: current } = &self.state else {
             return false;
         };
@@ -78,6 +89,7 @@ impl PlaybackController {
                     target,
                     selected: q.name.clone(),
                     playback,
+                    details: details.unwrap_or_default(),
                 },
             },
         };

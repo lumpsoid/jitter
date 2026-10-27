@@ -18,6 +18,7 @@ void main() {
       ],
       selected: '1080p60',
       live: true,
+      details: PlaybackDetails(game: 'Grand Theft Auto V'),
     );
 
     holder

@@ -5,6 +5,7 @@ import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/chat/chat_panel.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
+import 'package:jitter/player/playback_title.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
@@ -85,7 +86,13 @@ class _PlayerPageState extends State<PlayerPage> {
         final state = widget.playback.state;
         return Scaffold(
           appBar: AppBar(
-            title: Text(widget.title),
+            title: PlaybackTitle(
+              title: widget.title,
+              details: switch (state) {
+                PlaybackUpdateReady(:final details) => details,
+                _ => null,
+              },
+            ),
             actions: [
               if (state case PlaybackUpdateReady(
                 :final qualities,

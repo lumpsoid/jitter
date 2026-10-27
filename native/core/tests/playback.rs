@@ -1,7 +1,7 @@
 use jitter_core::fakes::FakeResumeStore;
 use jitter_core::models::{
-    ChannelLogin, Open, Playback, QualityKind, Resolution, ResumePoint, Seconds, Timestamp,
-    Variant, VideoId,
+    CategoryId, ChannelLogin, GameRef, Open, Playback, PlaybackDetails, QualityKind, Resolution,
+    ResumePoint, Seconds, Timestamp, Variant, VideoId,
 };
 use jitter_core::playback::{PlaybackController, PlaybackState, PlaybackTarget};
 use jitter_core::resume::ResumeController;
@@ -32,6 +32,10 @@ fn playback(variants: Vec<Variant>) -> Playback {
     Playback::from_variants("https://example.test/master.m3u8".to_owned(), variants)
 }
 
+fn no_details() -> Result<PlaybackDetails, String> {
+    Ok(PlaybackDetails::default())
+}
+
 fn selected(c: &PlaybackController) -> Option<&str> {
     c.selected_quality().map(|q| q.name.as_str())
 }
@@ -44,16 +48,17 @@ fn result_for_another_target_is_ignored() {
     assert!(!c.apply(
         live("a"),
         Ok(playback(vec![variant("720p", 720, QualityKind::Transcode)])),
+        no_details()
     ));
     assert_eq!(c.state(), &PlaybackState::Resolving { target: live("b") });
-    assert!(!c.apply(live("a"), Err("late".to_owned())));
+    assert!(!c.apply(live("a"), Err("late".to_owned()), no_details()));
     assert_eq!(c.state(), &PlaybackState::Resolving { target: live("b") });
 }
 
 #[test]
 fn result_while_idle_is_ignored() {
     let mut c = PlaybackController::new();
-    c.apply(live("a"), Err("x".to_owned()));
+    c.apply(live("a"), Err("x".to_owned()), no_details());
     assert_eq!(c.state(), &PlaybackState::Idle);
 }
 
@@ -67,6 +72,7 @@ fn source_is_selected_by_default() {
             variant("720p", 720, QualityKind::Transcode),
             variant("1080p (source)", 1080, QualityKind::Source),
         ])),
+        no_details(),
     );
     assert_eq!(selected(&c), Some("1080p (source)"));
 }
@@ -81,6 +87,7 @@ fn no_source_selects_first_quality() {
             variant("480p", 480, QualityKind::Transcode),
             variant("720p", 720, QualityKind::Transcode),
         ])),
+        no_details(),
     );
     assert_eq!(selected(&c), Some("720p"));
 }
@@ -98,6 +105,7 @@ fn select_unknown_name_keeps_selection_and_known_name_changes_it() {
             variant("720p", 720, QualityKind::Transcode),
             variant("480p", 480, QualityKind::Transcode),
         ])),
+        no_details(),
     );
     c.select("nope");
     assert_eq!(selected(&c), Some("720p"));
@@ -109,7 +117,7 @@ fn select_unknown_name_keeps_selection_and_known_name_changes_it() {
 fn error_and_empty_playback_fail() {
     let mut c = PlaybackController::new();
     c.begin(live("a"));
-    assert!(c.apply(live("a"), Err("offline".to_owned())));
+    assert!(c.apply(live("a"), Err("offline".to_owned()), no_details()));
     assert_eq!(
         c.state(),
         &PlaybackState::Failed {
@@ -117,8 +125,77 @@ fn error_and_empty_playback_fail() {
         }
     );
     c.begin(live("a"));
-    c.apply(live("a"), Ok(playback(vec![])));
+    c.apply(live("a"), Ok(playback(vec![])), no_details());
     assert!(matches!(c.state(), PlaybackState::Failed { .. }));
+}
+
+fn gta() -> PlaybackDetails {
+    let Ok(id) = CategoryId::parse("32982") else {
+        unreachable!("valid id");
+    };
+    PlaybackDetails {
+        game: Some(GameRef {
+            id,
+            name: "Grand Theft Auto V".to_owned(),
+        }),
+    }
+}
+
+fn details(c: &PlaybackController) -> Option<&PlaybackDetails> {
+    match c.state() {
+        PlaybackState::Ready { details, .. } => Some(details),
+        _ => None,
+    }
+}
+
+fn one_quality() -> Result<Playback, String> {
+    Ok(playback(vec![variant("720p", 720, QualityKind::Transcode)]))
+}
+
+#[test]
+fn ready_carries_the_details() {
+    let mut c = PlaybackController::new();
+    c.begin(live("a"));
+    assert!(c.apply(live("a"), one_quality(), Ok(gta())));
+    assert_eq!(details(&c), Some(&gta()));
+}
+
+#[test]
+fn details_that_failed_to_load_still_play_without_them() {
+    let mut c = PlaybackController::new();
+    c.begin(live("a"));
+    assert!(c.apply(live("a"), one_quality(), Err("timed out".to_owned())));
+    assert_eq!(selected(&c), Some("720p"));
+    assert_eq!(details(&c), Some(&PlaybackDetails::default()));
+}
+
+#[test]
+fn details_do_not_rescue_a_failed_resolve() {
+    let mut c = PlaybackController::new();
+    c.begin(live("a"));
+    assert!(c.apply(live("a"), Err("offline".to_owned()), Ok(gta())));
+    assert_eq!(
+        c.state(),
+        &PlaybackState::Failed {
+            message: "offline".to_owned()
+        }
+    );
+}
+
+#[test]
+fn switching_quality_keeps_the_details() {
+    let mut c = PlaybackController::new();
+    c.begin(live("a"));
+    c.apply(
+        live("a"),
+        Ok(playback(vec![
+            variant("1080p60", 1080, QualityKind::Source),
+            variant("720p60", 720, QualityKind::Transcode),
+        ])),
+        Ok(gta()),
+    );
+    c.switch_quality("720p60", Seconds::ZERO);
+    assert_eq!(details(&c), Some(&gta()));
 }
 
 fn vod() -> VideoId {
@@ -137,6 +214,7 @@ fn ready(target: PlaybackTarget) -> PlaybackController {
             variant("1080p60", 1080, QualityKind::Source),
             variant("720p60", 720, QualityKind::Transcode),
         ])),
+        no_details(),
     );
     c
 }
@@ -331,7 +409,7 @@ fn leaving_goes_idle() {
     assert!(c.leave(&live("a")));
     assert_eq!(c.state(), &PlaybackState::Idle);
     c.begin(live("a"));
-    c.apply(live("a"), Err("offline".to_owned()));
+    c.apply(live("a"), Err("offline".to_owned()), no_details());
     assert!(c.leave(&live("a")));
     assert_eq!(c.state(), &PlaybackState::Idle);
 }

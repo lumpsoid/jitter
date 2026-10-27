@@ -43,11 +43,21 @@ pub async fn run(args: PlayArgs) -> Result<()> {
     let twitch = twitch()?;
     let mut playback = PlaybackController::new();
     playback.begin(target.clone());
-    let resolved = match &target {
-        PlaybackTarget::Live(login) => twitch.live(login).await,
-        PlaybackTarget::Vod(id) => twitch.vod(id).await,
+    let resolve = async {
+        match &target {
+            PlaybackTarget::Live(login) => twitch.live(login).await,
+            PlaybackTarget::Vod(id) => twitch.vod(id).await,
+        }
     };
-    playback.apply(target, resolved.map_err(|e| e.to_string()));
+    let (resolved, details) = tokio::join!(resolve, twitch.playback_details(&target));
+    if let Err(e) = &details {
+        eprintln!("-- playback details unavailable: {e}");
+    }
+    playback.apply(
+        target,
+        resolved.map_err(|e| e.to_string()),
+        details.map_err(|e| e.to_string()),
+    );
 
     let not_ready = || "playback did not resolve".to_owned();
     match playback.state() {
@@ -70,11 +80,15 @@ pub async fn run(args: PlayArgs) -> Result<()> {
     let PlaybackState::Ready {
         playback: resolved,
         selected,
+        details,
         ..
     } = playback.state()
     else {
         return Err(not_ready());
     };
+    if let Some(game) = &details.game {
+        println!("Game: {}", game.name);
+    }
     for q in &resolved.qualities {
         let marker = if q.name == *selected { '*' } else { ' ' };
         let size = q

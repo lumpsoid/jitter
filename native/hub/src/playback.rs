@@ -5,7 +5,7 @@ use std::fmt::Display;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use jitter_core::models::{
-    ChannelLogin, Open, Playback, Quality, QualityKind, Seconds, Timestamp, VideoId,
+    self, ChannelLogin, Open, Playback, Quality, QualityKind, Seconds, Timestamp, VideoId,
 };
 use jitter_core::playback::{self, PlaybackController, PlaybackState};
 use jitter_core::resume::ResumeController;
@@ -16,13 +16,14 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::format::twitch_error;
 use crate::run::Fetched;
 use crate::signals::{
-    LeavePlayer, PlaybackTarget, PlaybackUpdate, PlayerCommand, PlayerPosition, QualityOption,
-    SelectQuality,
+    LeavePlayer, PlaybackDetails, PlaybackTarget, PlaybackUpdate, PlayerCommand, PlayerPosition,
+    QualityOption, SelectQuality,
 };
 
-/// `Play`: starts resolving `target` through twitch; the result comes back
-/// as [`Fetched::Playback`]. A target core rejects fails at once. Returns
-/// the target now playing, `None` when it was rejected.
+/// `Play`: starts resolving `target` through twitch, and loading what it
+/// plays beside it; both come back together as [`Fetched::Playback`]. A
+/// target core rejects fails at once. Returns the target now playing,
+/// `None` when it was rejected.
 pub fn play(
     playback: &mut PlaybackController,
     twitch: &Twitch,
@@ -40,25 +41,37 @@ pub fn play(
     PlaybackUpdate::from(playback.state()).send_signal_to_dart();
     let (twitch, fetch, playing) = (twitch.clone(), fetch.clone(), target.clone());
     tokio::spawn(async move {
-        let result = match &target {
-            playback::PlaybackTarget::Live(login) => twitch.live(login).await,
-            playback::PlaybackTarget::Vod(id) => twitch.vod(id).await,
+        let resolve = async {
+            match &target {
+                playback::PlaybackTarget::Live(login) => twitch.live(login).await,
+                playback::PlaybackTarget::Vod(id) => twitch.vod(id).await,
+            }
         };
-        let _ = fetch.send(Fetched::Playback { target, result });
+        let (result, details) = tokio::join!(resolve, twitch.playback_details(&target));
+        let _ = fetch.send(Fetched::Playback {
+            target,
+            result,
+            details,
+        });
     });
     Some(playing)
 }
 
 /// A resolve finished: shows the result and, if it is the one being
 /// resolved, opens the selected quality where core says to start. A stale
-/// result changes nothing.
+/// result changes nothing. A details failure is logged; core decides what
+/// the page shows without them.
 pub fn resolved(
     playback: &mut PlaybackController,
     resume: &ResumeController,
     target: playback::PlaybackTarget,
     result: Result<Playback, TwitchError>,
+    details: Result<models::PlaybackDetails, TwitchError>,
 ) {
-    if !playback.apply(target, result.map_err(|e| twitch_error(&e))) {
+    let details = details
+        .map_err(|e| e.to_string())
+        .inspect_err(|e| debug_print!("loading the playback details: {e}"));
+    if !playback.apply(target, result.map_err(|e| twitch_error(&e)), details) {
         return;
     }
     match playback.open(resume) {
@@ -189,14 +202,24 @@ impl From<&PlaybackState> for PlaybackUpdate {
                 target,
                 playback,
                 selected,
+                details,
             } => Self::Ready {
                 qualities: playback.qualities.iter().map(QualityOption::from).collect(),
                 selected: selected.clone(),
                 live: matches!(target, playback::PlaybackTarget::Live(_)),
+                details: PlaybackDetails::from(details),
             },
             PlaybackState::Failed { message } => Self::Failed {
                 message: message.clone(),
             },
+        }
+    }
+}
+
+impl From<&models::PlaybackDetails> for PlaybackDetails {
+    fn from(details: &models::PlaybackDetails) -> Self {
+        Self {
+            game: details.game.as_ref().map(|game| game.name.clone()),
         }
     }
 }

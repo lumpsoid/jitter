@@ -262,7 +262,11 @@ pub enum Fetched {
     TopCategories { request: PageRequest, result: Result<Page<Category>, String> },
     CategoryStreams { request: PageRequest, result: Result<Page<Stream>, String> },
     Favorites(FavoritesFetched),
-    Playback { target: PlaybackTarget, result: Result<Playback, TwitchError> },
+    Playback {
+        target: PlaybackTarget,
+        result: Result<Playback, TwitchError>,
+        details: Result<PlaybackDetails, TwitchError>,
+    },
     Channel(ChannelFetched),
     Chat(ChatFetched),
     Search(SearchFetched),
