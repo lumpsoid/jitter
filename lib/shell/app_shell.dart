@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/favorites/favorites_page.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:jitter/top/top_page.dart';
@@ -22,11 +23,15 @@ class AppShell extends StatefulWidget {
   const new({
     // Browse
     required this.browse,
+    // Favorites
+    required this.favorites,
     super.key,
   });
 
   // Browse
   final BrowseHolder browse;
+  // Favorites
+  final FavoritesHolder favorites;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -48,7 +53,11 @@ class _AppShellState extends State<AppShell> {
       label: 'Favorites',
       icon: Icons.favorite_outline,
       selectedIcon: Icons.favorite,
-      page: const FavoritesPage(),
+      page: FavoritesPage(
+        favorites: widget.favorites,
+        // Opening a channel lands with the channel page (G5).
+        onOpenChannel: (_) {},
+      ),
     ),
   ];
 

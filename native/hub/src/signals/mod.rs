@@ -7,9 +7,16 @@
 mod boot;
 // Browse
 mod browse;
+// Favorites
+mod favorites;
 
 pub use boot::{Boot, BootFailed, Booted};
 // Browse
 pub use browse::{
     BrowseMore, BrowseReady, BrowseState, BrowseUpdate, NextBrowsePage, RefreshBrowse, StreamCard,
+};
+// Favorites
+pub use favorites::{
+    AddFavorite, FavoriteRow, FavoriteStatus, FavoritesReady, FavoritesUpdate, RefreshFavorites,
+    RemoveFavorite,
 };

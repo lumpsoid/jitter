@@ -18,16 +18,18 @@ use jitter_twitch::Twitch;
 use rinf::{DartSignal, DartSignalPack, RustSignal, SignalReceiver};
 use tokio::sync::mpsc;
 
+use crate::favorites::{self, FavoritesFetched};
+use crate::signals::{Boot, Booted};
+// Browse
 use crate::browse;
-use crate::signals::{Boot, Booted, BrowseReady, NextBrowsePage, RefreshBrowse};
+use crate::signals::{BrowseReady, NextBrowsePage, RefreshBrowse};
+// Favorites
+use crate::signals::{AddFavorite, FavoritesReady, RefreshFavorites, RemoveFavorite};
 
 /// Every controller, built and loaded from one store.
-#[expect(
-    dead_code,
-    reason = "read by the Favorites (G4) and player (G7) arms when they land"
-)]
 pub struct Controllers {
     favorites: FavoritesController,
+    #[expect(dead_code, reason = "read by the player (G7) arms when they land")]
     resume: ResumeController,
     // Browse
     browse: BrowseController,
@@ -70,6 +72,8 @@ pub enum Fetched {
         request: PageRequest,
         result: Result<Page<Stream>, String>,
     },
+    // Favorites
+    Favorites(FavoritesFetched),
 }
 
 /// Runs until the runtime shuts down. Holds the only receiver of every Dart
@@ -86,6 +90,12 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
     let next_browse_page = NextBrowsePage::get_dart_signal_receiver();
     browse::refresh(&mut c.browse, &twitch, &fetch);
 
+    // Favorites
+    let favorites_ready = FavoritesReady::get_dart_signal_receiver();
+    let add_favorite = AddFavorite::get_dart_signal_receiver();
+    let remove_favorite = RemoveFavorite::get_dart_signal_receiver();
+    let refresh_favorites = RefreshFavorites::get_dart_signal_receiver();
+
     loop {
         tokio::select! {
             // Boot: already booted; a hot-restarted Dart side asks again.
@@ -95,6 +105,16 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
             Some(_) = browse_ready.recv() => browse::ready(&c.browse),
             Some(_) = refresh_browse.recv() => browse::refresh(&mut c.browse, &twitch, &fetch),
             Some(_) = next_browse_page.recv() => browse::next(&mut c.browse, &twitch, &fetch),
+
+            // Favorites
+            Some(_) = favorites_ready.recv() => favorites::on_ready(&c.favorites, &twitch, &fetch),
+            Some(pack) = add_favorite.recv() => favorites::add(&pack.message.login, &twitch, &fetch),
+            Some(pack) = remove_favorite.recv() => {
+                favorites::remove(&mut c.favorites, &pack.message.channel_id);
+            }
+            Some(_) = refresh_favorites.recv() => {
+                favorites::refresh(&mut c.favorites, &twitch, &fetch);
+            }
 
             // Network results
             Some(result) = fetched.recv() => on_fetched(&mut c, result),
@@ -110,5 +130,7 @@ fn on_fetched(c: &mut Controllers, result: Fetched) {
     match result {
         // Browse
         Fetched::TopStreams { request, result } => browse::on_page(&mut c.browse, request, result),
+        // Favorites
+        Fetched::Favorites(fetched) => favorites::on_fetched(&mut c.favorites, fetched),
     }
 }

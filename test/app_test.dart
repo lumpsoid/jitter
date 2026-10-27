@@ -2,12 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/app.dart';
 import 'package:jitter/boot/boot_holder.dart';
+import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/top/browse_holder.dart';
 
 void main() {
   testWidgets('spins until booted', (tester) async {
     await tester.pumpWidget(
-      JitterApp(boot: BootHolder(), browse: BrowseHolder()),
+      JitterApp(
+        boot: BootHolder(),
+        browse: BrowseHolder(),
+        favorites: FavoritesHolder(),
+      ),
     );
 
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
@@ -15,7 +20,13 @@ void main() {
 
   testWidgets('shows a boot failure with Retry', (tester) async {
     final boot = BootHolder();
-    await tester.pumpWidget(JitterApp(boot: boot, browse: BrowseHolder()));
+    await tester.pumpWidget(
+      JitterApp(
+        boot: boot,
+        browse: BrowseHolder(),
+        favorites: FavoritesHolder(),
+      ),
+    );
     boot.fail('Storage failed: disk full');
     await tester.pump();
 
@@ -28,7 +39,11 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
-      JitterApp(boot: BootHolder()..booted(), browse: BrowseHolder()),
+      JitterApp(
+        boot: BootHolder()..booted(),
+        browse: BrowseHolder(),
+        favorites: FavoritesHolder(),
+      ),
     );
 
     expect(find.byType(NavigationBar), findsOneWidget);
@@ -42,7 +57,11 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
-      JitterApp(boot: BootHolder()..booted(), browse: BrowseHolder()),
+      JitterApp(
+        boot: BootHolder()..booted(),
+        browse: BrowseHolder(),
+        favorites: FavoritesHolder(),
+      ),
     );
 
     expect(find.byType(NavigationRail), findsOneWidget);

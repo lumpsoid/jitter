@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:jitter/app.dart';
 import 'package:jitter/boot/boot_holder.dart';
+import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:rinf/rinf.dart';
@@ -16,6 +17,8 @@ Future<void> main() async {
 
   // Browse
   final browse = BrowseHolder()..connect();
+  // Favorites
+  final favorites = FavoritesHolder()..connect();
 
   final boot = BootHolder();
   unawaited(boot.connect());
@@ -25,6 +28,8 @@ Future<void> main() async {
       boot: boot,
       // Browse
       browse: browse,
+      // Favorites
+      favorites: favorites,
     ),
   );
 }

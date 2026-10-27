@@ -3,6 +3,7 @@
 
 // Browse
 mod browse;
+mod favorites;
 mod format;
 mod run;
 mod signals;
