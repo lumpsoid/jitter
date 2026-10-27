@@ -116,22 +116,78 @@ void main() {
     final seeks = await pumpBar(tester);
 
     final drag = await tester.startGesture(_at(250));
-    // Two bands up, straight: the position stays where the press put it.
-    await drag.moveTo(_at(250) - const Offset(0, 120));
+    // A band up, straight: the position stays where the press put it.
+    await drag.moveTo(_at(250) - const Offset(0, 80));
     await tester.pump(_rest);
-    expect(find.text('1:30:00  ×1/4'), findsOneWidget);
+    expect(find.text('1:30:00  ×1/10'), findsOneWidget);
 
-    // 100 pixels of 21.6 s, at a quarter.
-    await drag.moveTo(_at(350) - const Offset(0, 120));
+    // 100 pixels of 21.6 s, at a tenth.
+    await drag.moveTo(_at(350) - const Offset(0, 80));
     await tester.pump(_rest);
-    expect(seeks.last, const Duration(hours: 1, minutes: 39));
-    expect(find.text('1:39:00  ×1/4'), findsOneWidget);
+    expect(seeks.last, const Duration(hours: 1, minutes: 33, seconds: 36));
+
+    // Two bands up, at a hundredth.
+    await drag.moveTo(_at(450) - const Offset(0, 150));
+    await tester.pump(_rest);
+    expect(
+      seeks.last,
+      const Duration(hours: 1, minutes: 33, seconds: 57, milliseconds: 600),
+    );
+    expect(find.text('1:33:57  ×1/100'), findsOneWidget);
 
     // Back down on the bar, at its own pace again.
-    await drag.moveTo(_at(450));
+    await drag.moveTo(_at(550));
     await tester.pump(_rest);
-    expect(seeks.last, const Duration(hours: 2, minutes: 15));
+    expect(
+      seeks.last,
+      const Duration(hours: 2, minutes: 9, seconds: 57, milliseconds: 600),
+    );
     await drag.up();
+  });
+
+  /// A slowed drag held at 350, then rolled 20 pixels on as it lifts.
+  Future<List<Duration>> heldThenLifted(
+    WidgetTester tester,
+    PointerDeviceKind kind,
+  ) async {
+    final seeks = await pumpBar(tester);
+    final drag = await tester.createGesture(kind: kind);
+    await drag.down(_at(250));
+    await drag.moveTo(
+      _at(250) - const Offset(0, 80),
+      timeStamp: const Duration(milliseconds: 100),
+    );
+    await drag.moveTo(
+      _at(350) - const Offset(0, 80),
+      timeStamp: const Duration(milliseconds: 500),
+    );
+    await tester.pump(_rest);
+    await drag.moveTo(
+      _at(370) - const Offset(0, 80),
+      timeStamp: const Duration(milliseconds: 960),
+    );
+    await drag.up(timeStamp: const Duration(milliseconds: 1000));
+    await tester.pump(_rest);
+    return seeks;
+  }
+
+  testWidgets("a finger's lift does not move where its drag ends", (
+    tester,
+  ) async {
+    final seeks = await heldThenLifted(tester, PointerDeviceKind.touch);
+
+    // Held at 1:33:36; the roll's 1:34:19 is undone.
+    expect(seeks.last, const Duration(hours: 1, minutes: 33, seconds: 36));
+    expect(find.text('1:34:19  ×1/10'), findsNothing);
+  });
+
+  testWidgets("a mouse's drag ends where it is let go", (tester) async {
+    final seeks = await heldThenLifted(tester, PointerDeviceKind.mouse);
+
+    expect(
+      seeks.last,
+      const Duration(hours: 1, minutes: 34, seconds: 19, milliseconds: 200),
+    );
   });
 
   testWidgets('a sweep seeks only where it rests and where it ends', (

@@ -1,25 +1,22 @@
 import 'package:flutter/foundation.dart';
 
-/// How far from the bar each slower band starts, a finger's width apart.
-const double scrubBand = 50;
+/// How far from the bar each slower band starts: a finger's width and a
+/// half, so a finger stays in one without trying.
+const double scrubBand = 60;
 
 /// How fast a drag along the seek bar moves the position, by the keys held
 /// or by how far from the bar the pointer has gone: across a long VOD each
 /// pixel of the bar is many seconds, so a precise spot needs a slower drag.
+/// Each speed is ten times finer than the one before: a step that is felt,
+/// not a nudge.
 enum ScrubSpeed {
   /// The position follows the pointer across the bar.
   normal(1, ''),
 
-  /// A band away from the bar: half the bar's pace.
-  half(0.5, '×1/2'),
-
-  /// Two bands away: a quarter.
-  quarter(0.25, '×1/4'),
-
-  /// Shift, or three bands away: a tenth.
+  /// Shift, or a band away from the bar: a tenth of the bar's pace.
   fine(0.1, '×1/10'),
 
-  /// Shift and Ctrl: a hundredth.
+  /// Shift and Ctrl, or two bands away: a hundredth.
   finest(0.01, '×1/100');
 
   new(this.gain, this.label);
@@ -30,13 +27,12 @@ enum ScrubSpeed {
       ? finest
       : fine;
 
-  /// [distance] from the bar, up or down: a slower speed each
-  /// [scrubBand] further, down to a tenth: a finger's way to slow down.
+  /// [distance] from the bar, up or down: a finer speed each [scrubBand]
+  /// further, down to a hundredth, as the keys go; a finger's way to them.
   factory away(double distance) => switch (distance.abs() ~/ scrubBand) {
     0 => normal,
-    1 => half,
-    2 => quarter,
-    _ => fine,
+    1 => fine,
+    _ => finest,
   };
 
   /// The share of the bar's pace a drag moves at.

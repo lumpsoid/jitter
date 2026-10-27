@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:jitter/player/scrub.dart';
+import 'package:jitter/player/scrub_trail.dart';
 
 /// The bar's height, the pointer's target; the track is drawn in its
 /// middle, thinner.
@@ -25,11 +26,11 @@ const _rest = Duration(milliseconds: 150);
 /// A VOD's seek bar, in media_kit's controls in place of their own
 /// and drawn like it. A click seeks to the spot and a drag follows the
 /// pointer; held Shift slows the drag to a tenth and Shift and Ctrl to a
-/// hundredth; taking the pointer or a finger away from the bar slows it to
-/// a half, a quarter and a tenth, a band further each ([ScrubSpeed]). The
-/// slower of the two wins. A slowed press does not jump: the drag starts
-/// from where it plays. Over the bar a bubble shows the time under the
-/// pointer, or the drag's and its speed.
+/// hundredth, and so does taking the pointer or a finger a band or two
+/// away from the bar ([ScrubSpeed]); the slower of the two wins. A slowed
+/// press does not jump: the drag starts from where it plays. A finger's
+/// drag ends where it was held, not where its lift rolled it. Over the bar
+/// a bubble shows the time under the pointer, or the drag's and its speed.
 ///
 /// A drag seeks the player itself, where it rests and where it ends, so
 /// its frame shows. Twitch also publishes preview images along each VOD
@@ -73,8 +74,17 @@ class _SeekBarState extends State<SeekBar> {
   /// The drag under way, or null.
   Scrub? _scrub;
 
-  /// Whether the drag is a mouse's, whose moves keep the controls shown.
+  /// Whether the drag is a mouse's, whose moves keep the controls shown;
+  /// otherwise a finger's, whose lift [_trail] undoes.
   bool _mouse = false;
+
+  /// Where a finger's drag has been lately; null for a mouse's.
+  ScrubTrail? _trail;
+
+  /// When the pointer went down and came up, by its events' clock; the up
+  /// is null until it does, and for a drag cancelled without one.
+  Duration _downAt = Duration.zero;
+  Duration? _upAt;
 
   /// How slow the drag's distance from the bar makes it.
   ScrubSpeed _away = ScrubSpeed.normal;
@@ -132,6 +142,7 @@ class _SeekBarState extends State<SeekBar> {
       speed: _speed,
     );
     setState(() => _scrub = scrub);
+    _trail = _mouse ? null : ScrubTrail(_downAt, scrub);
     _seek(scrub.target);
   }
 
@@ -150,15 +161,21 @@ class _SeekBarState extends State<SeekBar> {
     final scrub = _scrub?.moveTo(details.localPosition.dx, _speed);
     if (scrub == null || scrub.target == _scrub?.target) return;
     setState(() => _scrub = scrub);
+    _trail?.add(details.sourceTimeStamp ?? _downAt, scrub);
     _resting?.cancel();
     _resting = Timer(_rest, () => _seek(scrub.target));
   }
 
-  /// Seeks to where the drag ends, unless it rested there already. Holds
-  /// the spot until the player reports from there, so the thumb does not
-  /// flick back to where it played before.
+  /// Seeks to where the drag ends, unless it rested there already: for a
+  /// finger, where it was before it began to lift ([ScrubTrail]). Holds the
+  /// spot until the player reports from there, so the thumb does not flick
+  /// back to where it played before.
   void _end() {
-    final scrub = _scrub;
+    final scrub = switch ((_scrub, _trail, _upAt)) {
+      (_?, final trail?, final upAt?) => trail.settled(upAt),
+      (final scrub, _, _) => scrub,
+    };
+    _trail = null;
     if (scrub == null) return;
     _resting?.cancel();
     if (scrub.target != _sought) _seek(scrub.target);
@@ -210,28 +227,35 @@ class _SeekBarState extends State<SeekBar> {
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onPanDown: (details) => _start(details.localPosition.dx, width),
-            onPanStart: (details) =>
-                _mouse = details.kind == PointerDeviceKind.mouse,
             onPanUpdate: _move,
             onPanEnd: (_) => _end(),
             onPanCancel: _end,
-            child: SizedBox(
-              height: seekBarHeight,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Positioned.fill(
-                    child: CustomPaint(
-                      painter: _BarPainter(
-                        played: scrub?.fraction ?? _fraction(_position),
-                        buffered: _fraction(_buffer),
-                        hovered: hovered,
-                        active: hovered != null || scrub != null,
+            // Under the gestures, so it hears each event before they do.
+            child: Listener(
+              onPointerDown: (event) {
+                _mouse = event.kind == PointerDeviceKind.mouse;
+                _downAt = event.timeStamp;
+                _upAt = null;
+              },
+              onPointerUp: (event) => _upAt = event.timeStamp,
+              child: SizedBox(
+                height: seekBarHeight,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: _BarPainter(
+                          played: scrub?.fraction ?? _fraction(_position),
+                          buffered: _fraction(_buffer),
+                          hovered: hovered,
+                          active: hovered != null || scrub != null,
+                        ),
                       ),
                     ),
-                  ),
-                  ?bubble,
-                ],
+                    ?bubble,
+                  ],
+                ),
               ),
             ),
           ),
