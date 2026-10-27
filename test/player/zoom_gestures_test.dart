@@ -128,6 +128,27 @@ void main() {
     expect(zoom.value.center.dx, greaterThan(0.5));
   });
 
+  testWidgets('a touch moves the picture only once past the hit slop', (
+    tester,
+  ) async {
+    final zoom = await pumpGestures(tester);
+    zoom.value = VideoZoom.none.zoomBy(4);
+    final start = zoom.value;
+
+    final finger = await tester.startGesture(const Offset(200, 100));
+    await finger.moveBy(const Offset(-10, 0));
+    await finger.moveBy(const Offset(10, 0));
+
+    expect(zoom.value, start);
+
+    await finger.moveBy(const Offset(-20, 0)); // 20 out: past the slop of 18
+    await finger.moveBy(const Offset(-40, 0));
+    await finger.up();
+
+    // Only the 40 after the slop: 40 / 400 of the frame, at 4x.
+    expect(zoom.value.center.dx, closeTo(0.5 + 0.1 / 4, 1e-9));
+  });
+
   testWidgets('a pinch zooms without a drag moving it twice', (tester) async {
     final zoom = await pumpGestures(tester);
     final left = await tester.startGesture(const Offset(280, 100), pointer: 1);

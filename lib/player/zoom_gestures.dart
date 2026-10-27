@@ -51,6 +51,21 @@ class _ZoomGesturesState extends State<ZoomGestures> {
   /// The pointers down on the video: one drags the picture.
   final _down = <int>{};
 
+  /// Where the one pointer down went down, until it has moved past the
+  /// hit slop: a tap's wobble does not move the picture. Null while it
+  /// drags, or while none or two are down.
+  Offset? _dragFrom;
+
+  void _onDown(PointerDownEvent event) {
+    _down.add(event.pointer);
+    _dragFrom = _down.length == 1 ? event.localPosition : null;
+  }
+
+  void _onUp(PointerEvent event) {
+    _down.remove(event.pointer);
+    _dragFrom = null;
+  }
+
   Offset _fraction(Offset offset) {
     final size = context.size ?? Size.zero;
     if (size.isEmpty) return Offset.zero;
@@ -77,6 +92,17 @@ class _ZoomGesturesState extends State<ZoomGestures> {
   /// gesture arena, even with their drag gestures off.
   void _onMove(PointerMoveEvent event) {
     if (_down.length != 1) return;
+    final from = _dragFrom;
+    if (from != null) {
+      final slop = computeHitSlop(
+        event.kind,
+        MediaQuery.maybeGestureSettingsOf(context),
+      );
+      // The move past the slop starts the drag; the picture follows from
+      // there, not jumping by the slop.
+      if ((event.localPosition - from).distance > slop) _dragFrom = null;
+      return;
+    }
     widget.zoom.value = widget.zoom.value.panBy(_fraction(event.localDelta));
   }
 
@@ -96,10 +122,10 @@ class _ZoomGesturesState extends State<ZoomGestures> {
   Widget build(BuildContext context) {
     return Listener(
       onPointerSignal: _onWheel,
-      onPointerDown: (event) => _down.add(event.pointer),
+      onPointerDown: _onDown,
       onPointerMove: _onMove,
-      onPointerUp: (event) => _down.remove(event.pointer),
-      onPointerCancel: (event) => _down.remove(event.pointer),
+      onPointerUp: _onUp,
+      onPointerCancel: _onUp,
       child: GestureDetector(
         onScaleStart: (_) => _pinched = 1,
         onScaleUpdate: _onScaleUpdate,
