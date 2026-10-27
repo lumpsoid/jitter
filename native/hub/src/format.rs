@@ -86,6 +86,16 @@ pub fn uptime_label(uptime: Seconds) -> String {
     }
 }
 
+/// A sleep timer the player offers: `15 minutes`.
+pub fn sleep_preset_label(minutes: u32) -> String {
+    format!("{minutes} minutes")
+}
+
+/// An armed sleep timer's time left, in minutes rounded up: `23 min left`.
+pub fn sleep_left_label(minutes: u32) -> String {
+    format!("{minutes} min left")
+}
+
 /// The day a VOD was streamed, in the viewer's time zone: `Oct 24`, with
 /// the year when it is not this one: `Dec 31, 2025`. `None` outside the
 /// dates chrono can hold.

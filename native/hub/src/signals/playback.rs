@@ -42,6 +42,18 @@ pub struct LeavePlayer {
     pub duration_s: u32,
 }
 
+/// The user armed the player page's sleep timer: stop playing `minutes`
+/// from now (one of [`PlaybackSleep`]'s `presets`), replacing a timer
+/// already armed.
+#[derive(Deserialize, DartSignal)]
+pub struct ArmSleepTimer {
+    pub minutes: u32,
+}
+
+/// The user turned the player page's sleep timer off.
+#[derive(Deserialize, DartSignal)]
+pub struct TurnOffSleepTimer;
+
 /// The player page's view state; Dart replaces what it has.
 #[derive(Serialize, RustSignal)]
 pub enum PlaybackUpdate {
@@ -53,11 +65,34 @@ pub enum PlaybackUpdate {
         qualities: Vec<QualityOption>,
         selected: String,
         live: bool,
-        details: PlaybackDetails,
+        /// Boxed: it would make this variant far larger than the others.
+        details: Box<PlaybackDetails>,
+        sleep: PlaybackSleep,
     },
+    /// The sleep timer stopped the player; the page offers to resume,
+    /// which plays the same target again.
+    Slept,
     Failed {
         message: String,
     },
+}
+
+/// The player page's sleep timer menu.
+#[derive(Serialize, SignalPiece)]
+pub struct PlaybackSleep {
+    /// The timers it offers; each one's `minutes` goes back in
+    /// [`ArmSleepTimer`].
+    pub presets: Vec<SleepPreset>,
+    /// While armed, the time left, ready to show (`23 min left`); `None`
+    /// while no timer is armed.
+    pub left: Option<String>,
+}
+
+/// One sleep timer the menu offers: `label` is shown (`15 minutes`).
+#[derive(Serialize, SignalPiece)]
+pub struct SleepPreset {
+    pub minutes: u32,
+    pub label: String,
 }
 
 /// What is playing, shown on the player page beside the video.
@@ -105,9 +140,18 @@ pub struct QualityOption {
 }
 
 /// A command for the video player, a platform effect: Dart performs it and
-/// keeps nothing.
+/// keeps nothing but the user's own volume under a fade.
 #[derive(Serialize, RustSignal)]
 pub enum PlayerCommand {
-    Open { url: String, start_s: u32 },
+    Open {
+        url: String,
+        start_s: u32,
+    },
     Stop,
+    /// Play at `level` (0.0 silence – 1.0) times the user's own volume,
+    /// which stays the user's: the sleep timer's fade-out. An `Open` or a
+    /// `Stop` ends the fade, as does a `level` of 1.0.
+    SetFade {
+        level: f64,
+    },
 }

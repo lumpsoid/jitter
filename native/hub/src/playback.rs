@@ -5,19 +5,24 @@ use std::fmt::Display;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use jitter_core::models::{
-    self, Channel, ChannelLogin, Open, Playback, Quality, QualityKind, Seconds, Timestamp, VideoId,
+    self, Channel, ChannelLogin, FadeLevel, Open, Playback, Quality, QualityKind, Seconds,
+    SleepStep, SleepTimer, Timestamp, VideoId,
 };
-use jitter_core::playback::{self, PlaybackController, PlaybackState};
+use jitter_core::playback::{self, PlaybackController, PlaybackState, SLEEP_PRESETS};
 use jitter_core::resume::ResumeController;
 use jitter_twitch::{Twitch, TwitchError};
 use rinf::{RustSignal, debug_print};
 use tokio::sync::mpsc::UnboundedSender;
+use tokio::time::Instant;
 
-use crate::format::{streamed_label, twitch_error, uptime_label, viewers_label};
+use crate::format::{
+    sleep_left_label, sleep_preset_label, streamed_label, twitch_error, uptime_label, viewers_label,
+};
 use crate::run::Fetched;
 use crate::signals::{
-    LeavePlayer, PlaybackChannel, PlaybackDetails, PlaybackLive, PlaybackTarget, PlaybackUpdate,
-    PlayerCommand, PlayerPosition, QualityOption, SelectQuality,
+    ArmSleepTimer, LeavePlayer, PlaybackChannel, PlaybackDetails, PlaybackLive, PlaybackSleep,
+    PlaybackTarget, PlaybackUpdate, PlayerCommand, PlayerPosition, QualityOption, SelectQuality,
+    SleepPreset,
 };
 
 /// `Play`: starts resolving `target` through twitch, and loading what it
@@ -161,6 +166,55 @@ pub fn leave(
     left
 }
 
+/// `ArmSleepTimer`: core arms the page's timer as of now; its wakes then
+/// come through [`sleep_wake`].
+pub fn arm_sleep(playback: &mut PlaybackController, signal: ArmSleepTimer) {
+    if playback.arm_sleep(signal.minutes, Instant::now().into_std()) {
+        send_state(playback);
+    }
+}
+
+/// `TurnOffSleepTimer`: the timer is gone and the player is back at the
+/// user's volume, even mid-fade.
+pub fn turn_off_sleep(playback: &mut PlaybackController) {
+    if playback.turn_off_sleep() {
+        send_state(playback);
+        send_fade(FadeLevel::FULL);
+    }
+}
+
+/// When the sleep timer next needs a tick; `None` while none is armed, so
+/// a turned-off or replaced timer is never ticked. Read afresh each loop.
+pub fn sleep_wake(playback: &PlaybackController) -> Option<Instant> {
+    playback.sleep_wake().map(Instant::from_std)
+}
+
+/// The sleep timer's wake: sends what core says changed. When it expired
+/// the player stops; returns whether it did, so the chat closes too.
+pub fn sleep_tick(playback: &mut PlaybackController) -> bool {
+    match playback.sleep_tick(Instant::now().into_std()) {
+        None => false,
+        Some(SleepStep::Counting { relabeled, fade }) => {
+            if relabeled {
+                send_state(playback);
+            }
+            if let Some(level) = fade {
+                send_fade(level);
+            }
+            false
+        }
+        Some(SleepStep::Expired) => {
+            send_state(playback);
+            PlayerCommand::Stop.send_signal_to_dart();
+            true
+        }
+    }
+}
+
+fn send_fade(level: FadeLevel) {
+    PlayerCommand::SetFade { level: level.get() }.send_signal_to_dart();
+}
+
 /// Sends the page's state, a live stream's uptime as of now. A clock that
 /// cannot be read is logged, and the state goes out without the uptime.
 fn send_state(playback: &PlaybackController) {
@@ -233,15 +287,31 @@ fn update(state: &PlaybackState, now: Option<Timestamp>) -> PlaybackUpdate {
             playback,
             selected,
             details,
+            sleep,
         } => PlaybackUpdate::Ready {
             qualities: playback.qualities.iter().map(QualityOption::from).collect(),
             selected: selected.clone(),
             live: matches!(target, playback::PlaybackTarget::Live(_)),
-            details: playback_details(details, now),
+            details: Box::new(playback_details(details, now)),
+            sleep: playback_sleep(sleep.as_ref()),
         },
+        PlaybackState::Slept { .. } => PlaybackUpdate::Slept,
         PlaybackState::Failed { message } => PlaybackUpdate::Failed {
             message: message.clone(),
         },
+    }
+}
+
+fn playback_sleep(timer: Option<&SleepTimer>) -> PlaybackSleep {
+    PlaybackSleep {
+        presets: SLEEP_PRESETS
+            .iter()
+            .map(|&minutes| SleepPreset {
+                minutes,
+                label: sleep_preset_label(minutes),
+            })
+            .collect(),
+        left: timer.map(|timer| sleep_left_label(timer.minutes_left())),
     }
 }
 

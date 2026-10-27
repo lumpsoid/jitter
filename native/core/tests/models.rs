@@ -1,7 +1,10 @@
+use std::time::{Duration, Instant};
+
 use jitter_core::models::{
     Category, CategoryId, CategoryIdError, Channel, ChannelId, ChannelIdError, ChannelLogin,
-    ChannelLoginError, LiveDetails, Playback, QualityKind, Resolution, Seconds, Stream, Timestamp,
-    Variant, VideoId, VideoIdError,
+    ChannelLoginError, FadeLevel, LiveDetails, Playback, QualityKind, Resolution, SLEEP_FADE,
+    SLEEP_FADE_STEP, Seconds, SleepStep, SleepTimer, Stream, Timestamp, Variant, VideoId,
+    VideoIdError,
 };
 
 fn login(s: &str) -> ChannelLogin {
@@ -267,4 +270,99 @@ fn box_art_without_a_size_is_unchanged() {
     );
     let c = category("https://b/elden-ring.jpg");
     assert_eq!(c.box_art(285, 380), "https://b/elden-ring.jpg");
+}
+
+// Sleep timer: the clock is a plain value; any instant serves as the origin.
+
+fn secs(s: u64) -> Duration {
+    Duration::from_secs(s)
+}
+
+fn armed(minutes: u64) -> (SleepTimer, Instant) {
+    let t0 = Instant::now();
+    let Some(timer) = SleepTimer::arm(secs(minutes * 60), t0) else {
+        unreachable!("a positive duration arms");
+    };
+    (timer, t0)
+}
+
+#[test]
+fn a_zero_sleep_timer_does_not_arm() {
+    assert_eq!(SleepTimer::arm(Duration::ZERO, Instant::now()), None);
+}
+
+#[test]
+fn a_sleep_timer_counts_down_to_its_deadline() {
+    let (timer, t0) = armed(15);
+    assert_eq!(timer.minutes_left(), 15);
+    assert_eq!(timer.remaining(t0 + secs(60)), secs(14 * 60));
+    assert!(!timer.expired(t0 + secs(15 * 60 - 1)));
+    assert!(timer.expired(t0 + secs(15 * 60)));
+    assert_eq!(timer.remaining(t0 + secs(16 * 60)), Duration::ZERO);
+}
+
+#[test]
+fn the_volume_fades_linearly_over_the_last_stretch() {
+    let (timer, t0) = armed(1);
+    let end = t0 + secs(60);
+    assert_eq!(timer.fade_level(t0), FadeLevel::FULL);
+    assert_eq!(timer.fade_level(end - SLEEP_FADE), FadeLevel::FULL);
+    assert_eq!(timer.fade_level(end - SLEEP_FADE / 2), FadeLevel::new(0.5));
+    assert_eq!(timer.fade_level(end), FadeLevel::new(0.0));
+}
+
+#[test]
+fn the_time_left_rounds_up_and_wakes_at_each_minute() {
+    let (mut timer, t0) = armed(15);
+    assert_eq!(timer.wake(), t0 + secs(60));
+    assert_eq!(
+        timer.tick(t0 + secs(30)),
+        SleepStep::Counting {
+            relabeled: false,
+            fade: None
+        }
+    );
+    assert_eq!(timer.minutes_left(), 15);
+    assert_eq!(timer.wake(), t0 + secs(60));
+    assert_eq!(
+        timer.tick(t0 + secs(60)),
+        SleepStep::Counting {
+            relabeled: true,
+            fade: None
+        }
+    );
+    assert_eq!(timer.minutes_left(), 14);
+    assert_eq!(timer.wake(), t0 + secs(120));
+}
+
+#[test]
+fn the_last_minute_wakes_at_the_fade_then_every_step_until_the_deadline() {
+    let (mut timer, t0) = armed(2);
+    let end = t0 + secs(120);
+    timer.tick(t0 + secs(60));
+    assert_eq!(timer.minutes_left(), 1);
+    assert_eq!(timer.wake(), end - SLEEP_FADE);
+    assert_eq!(
+        timer.tick(end - SLEEP_FADE),
+        SleepStep::Counting {
+            relabeled: false,
+            fade: Some(FadeLevel::FULL)
+        }
+    );
+    assert_eq!(timer.wake(), end - SLEEP_FADE + SLEEP_FADE_STEP);
+    let near = end - SLEEP_FADE_STEP / 2;
+    assert!(matches!(
+        timer.tick(near),
+        SleepStep::Counting { fade: Some(level), .. } if level < FadeLevel::new(0.05)
+    ));
+    assert_eq!(timer.wake(), end);
+    assert_eq!(timer.tick(end), SleepStep::Expired);
+}
+
+#[test]
+fn a_fade_level_is_clamped_to_silence_and_full() {
+    assert_eq!(FadeLevel::new(1.5), FadeLevel::FULL);
+    assert_eq!(FadeLevel::new(-0.1).get(), 0.0);
+    assert_eq!(FadeLevel::new(f64::NAN).get(), 0.0);
+    assert_eq!(FadeLevel::new(0.25).get(), 0.25);
 }

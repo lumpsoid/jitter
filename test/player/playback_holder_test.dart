@@ -19,6 +19,9 @@ void main() {
       selected: '1080p60',
       live: true,
       details: PlaybackDetails(game: 'Grand Theft Auto V'),
+      sleep: PlaybackSleep(
+        presets: [SleepPreset(minutes: 15, label: '15 minutes')],
+      ),
     );
 
     holder
@@ -30,5 +33,8 @@ void main() {
 
     holder.apply(const PlaybackUpdateFailed(message: 'offline'));
     expect(holder.state, const PlaybackUpdateFailed(message: 'offline'));
+
+    holder.apply(const PlaybackUpdateSlept());
+    expect(holder.state, const PlaybackUpdateSlept());
   });
 }

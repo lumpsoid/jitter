@@ -1,7 +1,9 @@
+use std::time::{Duration, Instant};
+
 use jitter_core::fakes::FakeResumeStore;
 use jitter_core::models::{
-    CategoryId, ChannelLogin, GameRef, Open, Playback, PlaybackDetails, QualityKind, Resolution,
-    ResumePoint, Seconds, Timestamp, Variant, VideoId,
+    CategoryId, ChannelLogin, FadeLevel, GameRef, Open, Playback, PlaybackDetails, QualityKind,
+    Resolution, ResumePoint, SLEEP_FADE, Seconds, SleepStep, Timestamp, Variant, VideoId,
 };
 use jitter_core::playback::{PlaybackController, PlaybackState, PlaybackTarget, TIMED_OUT};
 use jitter_core::resume::ResumeController;
@@ -485,4 +487,149 @@ fn leaving_a_replaced_target_keeps_the_new_one() {
     let mut c = ready(live("b"));
     assert!(!c.leave(&live("a")));
     assert!(matches!(c.state(), PlaybackState::Ready { .. }));
+}
+
+// Sleep timer
+
+fn minutes(m: u64) -> Duration {
+    Duration::from_secs(m * 60)
+}
+
+fn sleep_counting(relabeled: bool) -> SleepStep {
+    SleepStep::Counting {
+        relabeled,
+        fade: None,
+    }
+}
+
+#[test]
+fn a_sleep_timer_arms_only_while_ready() {
+    let t0 = Instant::now();
+    let mut c = PlaybackController::new();
+    assert!(!c.arm_sleep(15, t0));
+    c.begin(live("a"));
+    assert!(!c.arm_sleep(15, t0));
+    assert_eq!(c.sleep_wake(), None);
+    let mut c = ready(live("a"));
+    assert!(!c.arm_sleep(0, t0));
+    assert!(c.arm_sleep(15, t0));
+    assert_eq!(c.sleep_timer().map(|t| t.minutes_left()), Some(15));
+    assert_eq!(c.sleep_wake(), Some(t0 + minutes(1)));
+}
+
+#[test]
+fn arming_again_replaces_the_timer() {
+    let t0 = Instant::now();
+    let mut c = ready(live("a"));
+    c.arm_sleep(90, t0);
+    c.arm_sleep(15, t0 + minutes(5));
+    assert_eq!(c.sleep_timer().map(|t| t.minutes_left()), Some(15));
+    assert_eq!(c.sleep_tick(t0 + minutes(19)), Some(sleep_counting(true)));
+    assert_eq!(c.sleep_tick(t0 + minutes(20)), Some(SleepStep::Expired));
+}
+
+#[test]
+fn a_turned_off_timer_never_ticks() {
+    let t0 = Instant::now();
+    let mut c = ready(live("a"));
+    assert!(!c.turn_off_sleep());
+    c.arm_sleep(15, t0);
+    assert!(c.turn_off_sleep());
+    assert_eq!(c.sleep_wake(), None);
+    assert_eq!(c.sleep_tick(t0 + minutes(15)), None);
+    assert!(matches!(
+        c.state(),
+        PlaybackState::Ready { sleep: None, .. }
+    ));
+}
+
+#[test]
+fn a_quality_switch_keeps_the_timer() {
+    let mut c = ready(live("a"));
+    c.arm_sleep(15, Instant::now());
+    assert!(c.switch_quality("720p60", Seconds::ZERO).is_some());
+    assert!(c.sleep_timer().is_some());
+}
+
+#[test]
+fn the_timer_fades_then_stops_the_page_it_was_armed_on() {
+    let t0 = Instant::now();
+    let mut c = ready(live("a"));
+    c.arm_sleep(1, t0);
+    let end = t0 + minutes(1);
+    assert_eq!(
+        c.sleep_tick(end - SLEEP_FADE),
+        Some(SleepStep::Counting {
+            relabeled: false,
+            fade: Some(FadeLevel::FULL)
+        })
+    );
+    assert_eq!(
+        c.sleep_tick(end - SLEEP_FADE / 2),
+        Some(SleepStep::Counting {
+            relabeled: false,
+            fade: Some(FadeLevel::new(0.5))
+        })
+    );
+    assert_eq!(c.sleep_tick(end), Some(SleepStep::Expired));
+    assert_eq!(c.state(), &PlaybackState::Slept { target: live("a") });
+    assert_eq!(c.sleep_wake(), None);
+    assert_eq!(c.sleep_tick(end + minutes(1)), None);
+}
+
+#[test]
+fn a_slept_page_plays_nothing_and_records_nothing() {
+    let store = FakeResumeStore::default();
+    let mut resume = ResumeController::new(Box::new(store.clone()));
+    let target = PlaybackTarget::Vod(vod());
+    let t0 = Instant::now();
+    let mut c = ready(target.clone());
+    c.arm_sleep(1, t0);
+    c.sleep_tick(t0 + minutes(1));
+    assert_eq!(c.open(&resume), Ok(None));
+    assert!(!c.select("720p60"));
+    assert_eq!(record(&c, &mut resume, &target, 0, 0), None);
+    assert_eq!(record(&c, &mut resume, &target, 600, 3600), None);
+    assert_eq!(store.points(), vec![]);
+}
+
+#[test]
+fn resuming_a_slept_page_plays_it_again_without_a_timer() {
+    let t0 = Instant::now();
+    let mut c = ready(live("a"));
+    c.arm_sleep(1, t0);
+    c.sleep_tick(t0 + minutes(1));
+    c.begin(live("a"));
+    assert_eq!(c.state(), &PlaybackState::Resolving { target: live("a") });
+    c.apply(live("a"), one_quality(), no_details());
+    assert!(matches!(
+        c.state(),
+        PlaybackState::Ready { sleep: None, .. }
+    ));
+}
+
+#[test]
+fn leaving_or_playing_another_target_cancels_the_timer() {
+    let t0 = Instant::now();
+    let mut c = ready(live("a"));
+    c.arm_sleep(15, t0);
+    c.begin(live("b"));
+    assert_eq!(c.sleep_wake(), None);
+    assert_eq!(c.sleep_tick(t0 + minutes(15)), None);
+    let mut c = ready(live("a"));
+    c.arm_sleep(15, t0);
+    assert!(c.leave(&live("a")));
+    assert_eq!(c.sleep_wake(), None);
+}
+
+#[test]
+fn leaving_a_slept_page_goes_idle_unless_it_was_replaced() {
+    let t0 = Instant::now();
+    let mut c = ready(live("a"));
+    c.arm_sleep(1, t0);
+    c.sleep_tick(t0 + minutes(1));
+    assert!(!c.leave(&live("b")));
+    assert_eq!(c.state(), &PlaybackState::Slept { target: live("a") });
+    assert!(c.leave(&live("a")));
+    assert_eq!(c.state(), &PlaybackState::Idle);
 }

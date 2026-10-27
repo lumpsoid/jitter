@@ -40,7 +40,9 @@ use crate::favorites::{self, FavoritesFetched};
 use crate::signals::{AddFavorite, FavoritesReady, RefreshFavorites, RemoveFavorite};
 // Playback
 use crate::playback;
-use crate::signals::{LeavePlayer, Play, PlayerPosition, SelectQuality};
+use crate::signals::{
+    ArmSleepTimer, LeavePlayer, Play, PlayerPosition, SelectQuality, TurnOffSleepTimer,
+};
 // Channel
 use crate::channel::{self, ChannelFetched, ChannelPage};
 use crate::signals::{OpenChannel, RefreshChannel, SelectVodKind, VodsNextPage};
@@ -175,6 +177,8 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
     let select_quality = SelectQuality::get_dart_signal_receiver();
     let player_position = PlayerPosition::get_dart_signal_receiver();
     let leave_player = LeavePlayer::get_dart_signal_receiver();
+    let arm_sleep_timer = ArmSleepTimer::get_dart_signal_receiver();
+    let turn_off_sleep_timer = TurnOffSleepTimer::get_dart_signal_receiver();
     // Channel
     let open_channel = OpenChannel::get_dart_signal_receiver();
     let refresh_channel = RefreshChannel::get_dart_signal_receiver();
@@ -197,6 +201,9 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
         let chat_flush_at = chat::flush_at(&c.chat);
         // Search: when typing has paused long enough, copied out likewise.
         let search_due_at = search::due_at(&c.search);
+        // Playback: the sleep timer's next wake; none once it is off, left
+        // or replaced, so no stale tick can reach it.
+        let sleep_wake = playback::sleep_wake(&c.playback);
         tokio::select! {
             // Boot: already booted; a hot-restarted Dart side asks again.
             Some(_) = boot.recv() => Booted.send_signal_to_dart(),
@@ -256,6 +263,15 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
             Some(pack) = leave_player.recv() => {
                 // Chat: closes when the player stops.
                 if playback::leave(&mut c.playback, &mut c.resume, pack.message) {
+                    chat::stop(&mut c.chat, &twitch, &fetch);
+                }
+            }
+            Some(pack) = arm_sleep_timer.recv() => playback::arm_sleep(&mut c.playback, pack.message),
+            Some(_) = turn_off_sleep_timer.recv() => playback::turn_off_sleep(&mut c.playback),
+            // The same sleep as the chat batch's: pending while no timer is armed.
+            () = chat::until(sleep_wake) => {
+                // Chat: closes when the sleep timer stops the player.
+                if playback::sleep_tick(&mut c.playback) {
                     chat::stop(&mut c.chat, &twitch, &fetch);
                 }
             }

@@ -22,6 +22,9 @@ class _FakeEngine implements PlayerEngine {
   Future<void> stop() async => calls.add('stop');
 
   @override
+  Future<void> setFade(double level) async => calls.add('fade $level');
+
+  @override
   Duration get position => Duration.zero;
 
   @override
@@ -57,6 +60,14 @@ void main() {
     await performer.perform(const PlayerCommandOpen(url: 'b', startS: 5));
 
     expect(engine.calls, ['open a at 0', 'stop', 'open b at 5']);
+  });
+
+  test('a fade is one engine call, in order with the rest', () async {
+    await performer.perform(const PlayerCommandSetFade(level: 0.5));
+    await performer.perform(const PlayerCommandSetFade(level: 0.25));
+    await performer.perform(const PlayerCommandStop());
+
+    expect(engine.calls, ['fade 0.5', 'fade 0.25', 'stop']);
   });
 
   test('a failed call does not hold up the next', () async {

@@ -32,6 +32,7 @@ class PlayerCommandPerformer {
       start: Duration(seconds: startS),
     ),
     PlayerCommandStop() => _engine.stop(),
+    PlayerCommandSetFade(:final level) => _engine.setFade(level),
     _ => Future.value(),
   };
 }

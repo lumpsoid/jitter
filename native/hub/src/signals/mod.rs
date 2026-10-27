@@ -43,8 +43,9 @@ pub use favorites::{
 };
 // Playback
 pub use playback::{
-    LeavePlayer, Play, PlaybackChannel, PlaybackDetails, PlaybackLive, PlaybackTarget,
-    PlaybackUpdate, PlayerCommand, PlayerPosition, QualityOption, SelectQuality,
+    ArmSleepTimer, LeavePlayer, Play, PlaybackChannel, PlaybackDetails, PlaybackLive,
+    PlaybackSleep, PlaybackTarget, PlaybackUpdate, PlayerCommand, PlayerPosition, QualityOption,
+    SelectQuality, SleepPreset, TurnOffSleepTimer,
 };
 // Channel
 pub use channel::{

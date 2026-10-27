@@ -74,7 +74,9 @@ pub async fn run(args: PlayArgs) -> Result<()> {
     match playback.state() {
         PlaybackState::Ready { .. } => {}
         PlaybackState::Failed { message } => return Err(message.clone()),
-        PlaybackState::Idle | PlaybackState::Resolving { .. } => return Err(not_ready()),
+        PlaybackState::Idle | PlaybackState::Resolving { .. } | PlaybackState::Slept { .. } => {
+            return Err(not_ready());
+        }
     }
     if let Some(name) = &args.url {
         if !playback.select(name) {

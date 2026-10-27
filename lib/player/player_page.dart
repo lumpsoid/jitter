@@ -12,6 +12,8 @@ import 'package:jitter/player/playback_loading.dart';
 import 'package:jitter/player/playback_title.dart';
 import 'package:jitter/player/player_layout.dart';
 import 'package:jitter/player/player_shortcuts.dart';
+import 'package:jitter/player/sleep_stopped.dart';
+import 'package:jitter/player/sleep_timer_button.dart';
 import 'package:jitter/player/theatre.dart';
 import 'package:jitter/player/video_frame.dart';
 import 'package:jitter/src/bindings/bindings.dart';
@@ -71,8 +73,9 @@ class _PlayerPageState extends State<PlayerPage> {
     _reporter = Timer.periodic(_reportEvery, (_) => _reportPosition());
   }
 
-  /// Asks Rust to load [PlayerPage.target]: on open, and again on Retry;
-  /// Rust answers with `PlaybackUpdate`, loading first.
+  /// Asks Rust to load [PlayerPage.target]: on open, and again on Retry
+  /// or on the sleep timer's Resume; Rust answers with `PlaybackUpdate`,
+  /// loading first.
   void _play() => Play(target: widget.target).sendSignalToRust();
 
   void _reportPosition() => PlayerPosition(
@@ -85,6 +88,11 @@ class _PlayerPageState extends State<PlayerPage> {
     name: name,
     positionS: widget.player.position.inSeconds,
   ).sendSignalToRust();
+
+  void _armSleep(int minutes) =>
+      ArmSleepTimer(minutes: minutes).sendSignalToRust();
+
+  void _turnOffSleep() => const TurnOffSleepTimer().sendSignalToRust();
 
   void _toggleTheatre() => setState(() => _theatre = !_theatre);
 
@@ -130,12 +138,19 @@ class _PlayerPageState extends State<PlayerPage> {
                       if (state case PlaybackUpdateReady(
                         :final qualities,
                         :final selected,
-                      ))
+                        :final sleep,
+                      )) ...[
+                        SleepTimerButton(
+                          sleep: sleep,
+                          onArm: _armSleep,
+                          onTurnOff: _turnOffSleep,
+                        ),
                         _QualityMenu(
                           qualities: qualities,
                           selected: selected,
                           onSelected: _selectQuality,
                         ),
+                      ],
                       ChatToggle(chat: widget.chat),
                       IconButton(
                         tooltip: 'Theatre mode',
@@ -149,9 +164,12 @@ class _PlayerPageState extends State<PlayerPage> {
               onExit: _exitTheatre,
               child: PlayerLayout(
                 video: VideoFrame(
-                  // The video, or the failure's Retry; not the spinner.
+                  // The video, the failure's Retry or the sleep timer's
+                  // Resume; not the spinner.
                   childTakesFocus: switch (state) {
-                    PlaybackUpdateReady() || PlaybackUpdateFailed() => true,
+                    PlaybackUpdateReady() ||
+                    PlaybackUpdateFailed() ||
+                    PlaybackUpdateSlept() => true,
                     _ => false,
                   },
                   child: _video(state),
@@ -184,6 +202,7 @@ class _PlayerPageState extends State<PlayerPage> {
       message: message,
       onRetry: _play,
     ),
+    PlaybackUpdateSlept() => SleepStopped(onResume: _play),
     _ => const PlaybackLoading(),
   };
 }

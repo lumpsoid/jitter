@@ -337,9 +337,20 @@ results are current.
 
 The video player lives in Flutter (media_kit), but what it plays is
 decided in Rust. The hub sends `PlayerCommand::{Open { url, start_s },
-Stop}`; Dart performs each in order and keeps nothing. Core picks the
+Stop, SetFade { level }}`; Dart performs each in order. Core picks the
 quality and the start position (resume point, `MIN_RESUME`, finished
 VODs).
+
+The sleep timer is core's `SleepTimer`, held in `PlaybackState::Ready`, so
+a new `Play` or leaving the page drops it. Core decides when it next wakes
+(each minute the label changes, the fade's start, every `SLEEP_FADE_STEP`
+through `SLEEP_FADE`, the deadline); the hub's wake is a `select!` arm like
+the chat batch's, read afresh each loop, so a timer turned off or replaced
+is never ticked. Each fade step goes out as `SetFade`; at the deadline
+core moves to `Slept` and the hub sends `Stop` and closes the chat. The
+engine keeps the one thing a fade needs remembered, the user's own volume
+and mute under it (`FadedVolume`); `Open`, `Stop` and a level of 1.0 end
+the fade.
 
 Dart reports where the player is with `PlayerPosition` about every second,
 and once more in `LeavePlayer`. It does not decide whether that is worth
