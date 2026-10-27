@@ -81,7 +81,7 @@ pub struct EmoteImage {
 /// What the panel shows around the messages.
 #[derive(Serialize, SignalPiece)]
 pub struct ChatStatus {
-    /// Shown above the messages while not connected; none when connected.
+    /// Shown below the messages while not connected; none when connected.
     pub banner: Option<String>,
     /// The room's modes in effect, e.g. `Slow mode (30s)`; empty when none.
     pub modes: Vec<String>,

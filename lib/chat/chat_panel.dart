@@ -13,8 +13,10 @@ const double _pauseOffset = 24;
 const double _emoteHeight = 28;
 
 /// The live chat: its status lines, then the messages, newest at the
-/// bottom. Follows new messages until the user scrolls up; the list then
-/// holds still until they scroll back down or tap "Latest messages".
+/// bottom, then the connection bar while not connected, where new
+/// messages would arrive. Follows new messages until the user scrolls up;
+/// the list then holds still until they scroll back down or tap "Latest
+/// messages".
 class ChatPanel extends StatefulWidget {
   const new({required this.chat, super.key});
 
@@ -67,8 +69,6 @@ class _ChatPanelState extends State<ChatPanel> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (status.banner case final banner?)
-              _StatusLine(text: banner, icon: Icons.sync),
             if (status.modes.isNotEmpty)
               _StatusLine(text: status.modes.join(' · '), icon: Icons.tune),
             if (status.notice case final notice?)
@@ -102,6 +102,8 @@ class _ChatPanelState extends State<ChatPanel> {
                 ],
               ),
             ),
+            if (status.banner case final banner?)
+              _StatusLine(text: banner, icon: Icons.sync),
           ],
         );
       },
@@ -109,8 +111,8 @@ class _ChatPanelState extends State<ChatPanel> {
   }
 }
 
-/// One line above the messages: the connection, room modes, a notice, or
-/// the missing-emotes hint.
+/// One slim line around the messages: the connection below them; room
+/// modes, a notice, or the missing-emotes hint above.
 class _StatusLine extends StatelessWidget {
   const new({required this.text, required this.icon});
 
