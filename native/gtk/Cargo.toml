@@ -1,0 +1,25 @@
+[package]
+name = "jitter_gtk"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "jitter-gtk"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+jitter_core = { path = "../core" }
+jitter_twitch = { path = "../twitch" }
+jitter_store = { path = "../store" }
+gtk = { package = "gtk4", version = "0.11.5", features = ["v4_14"] }
+adw = { package = "libadwaita", version = "0.9.2", features = ["v1_6"] }
+libmpv2 = "6.0.0"
+libloading = "0.8"
+libc = "0.2"
+async-channel = "2.5.0"
+reqwest = { version = "0.12.28", default-features = false, features = ["rustls-tls"] }
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "time"] }
