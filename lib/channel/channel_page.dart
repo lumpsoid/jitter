@@ -130,7 +130,11 @@ class _ChannelPageState extends State<ChannelPage>
             ),
             _ => Column(
               children: [
-                _Header(header: header, onOpenLive: widget.onOpenLive),
+                _Header(
+                  login: widget.login,
+                  header: header,
+                  onOpenLive: widget.onOpenLive,
+                ),
                 TabBar(
                   controller: _tabs,
                   tabs: [for (final label in _tabLabels) Tab(text: label)],
@@ -167,11 +171,17 @@ class _ChannelPageState extends State<ChannelPage>
   }
 }
 
-/// The channel's avatar and name, then whether it is live: a progress bar
-/// while it is looked up.
+/// The channel's avatar and name, then whether it is live. While it is
+/// looked up, the same tile with [login] and no avatar, so the tabs below
+/// do not move when it arrives.
 class _Header extends StatelessWidget {
-  const new({required this.header, required this.onOpenLive});
+  const new({
+    required this.login,
+    required this.header,
+    required this.onOpenLive,
+  });
 
+  final String login;
   final ChannelUpdate? header;
   final ValueChanged<String>? onOpenLive;
 
@@ -179,7 +189,11 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final header = this.header;
     if (header is! ChannelUpdateFound) {
-      return const LinearProgressIndicator();
+      return ListTile(
+        leading: const CircleAvatar(child: Icon(Icons.person)),
+        title: Text(login),
+        subtitle: const Text('Looking up the channel…'),
+      );
     }
     return ListTile(
       leading: CircleAvatar(

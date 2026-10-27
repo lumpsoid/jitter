@@ -34,9 +34,31 @@ void main() {
   testWidgets('spins until Rust answers', (tester) async {
     await pumpPage(tester, ChannelHolder());
 
-    expect(find.text('xqc'), findsOneWidget);
-    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(find.text('xqc'), findsNWidgets(2));
+    expect(find.text('Looking up the channel…'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
+  });
+
+  testWidgets('the tabs stay put while the header fills in', (tester) async {
+    final channel = ChannelHolder();
+    await pumpPage(tester, channel);
+    double tabsTop() => tester.getTopLeft(find.byType(TabBar)).dy;
+    final loading = tabsTop();
+
+    for (final live in const [
+      ChannelLiveChecking(),
+      ChannelLiveOffline(),
+      ChannelLiveLive(
+        title: 'Reacting',
+        gameName: 'Just Chatting',
+        viewersLabel: '42K viewers',
+      ),
+      ChannelLiveFailed(message: 'timed out'),
+    ]) {
+      channel.applyHeader(found(live: live));
+      await tester.pump();
+      expect(tabsTop(), loading, reason: '$live');
+    }
   });
 
   testWidgets('an unknown channel says so', (tester) async {
