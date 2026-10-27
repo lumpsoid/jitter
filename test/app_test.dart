@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/app.dart';
 import 'package:jitter/boot/boot_holder.dart';
+import 'package:jitter/categories/categories_holder.dart';
+import 'package:jitter/categories/category_holder.dart';
 import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
@@ -12,6 +14,8 @@ import 'package:jitter/top/browse_holder.dart';
 JitterApp _app(BootHolder boot) => JitterApp(
   boot: boot,
   browse: BrowseHolder(),
+  categories: CategoriesHolder(),
+  category: CategoryHolder(),
   favorites: FavoritesHolder(),
   channel: ChannelHolder(),
   playback: PlaybackHolder(),
@@ -45,6 +49,7 @@ void main() {
     expect(find.byType(NavigationBar), findsOneWidget);
     expect(find.byType(NavigationRail), findsNothing);
     expect(find.text('Top'), findsOneWidget);
+    expect(find.text('Categories'), findsOneWidget);
     expect(find.text('Favorites'), findsOneWidget);
   });
 
@@ -60,6 +65,6 @@ void main() {
     await tester.pump();
 
     final rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
-    expect(rail.selectedIndex, 1);
+    expect(rail.selectedIndex, 2);
   });
 }

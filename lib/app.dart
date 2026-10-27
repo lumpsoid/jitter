@@ -3,6 +3,8 @@ import 'dart:ui' show AppExitResponse;
 import 'package:flutter/material.dart';
 import 'package:jitter/boot/boot_failure_page.dart';
 import 'package:jitter/boot/boot_holder.dart';
+import 'package:jitter/categories/categories_holder.dart';
+import 'package:jitter/categories/category_holder.dart';
 import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
@@ -20,6 +22,9 @@ class JitterApp extends StatefulWidget {
     required this.boot,
     // Browse
     required this.browse,
+    // Categories
+    required this.categories,
+    required this.category,
     // Favorites
     required this.favorites,
     // Playback
@@ -35,6 +40,9 @@ class JitterApp extends StatefulWidget {
   final BootHolder boot;
   // Browse
   final BrowseHolder browse;
+  // Categories
+  final CategoriesHolder categories;
+  final CategoryHolder category;
   // Favorites
   final FavoritesHolder favorites;
   // Playback
@@ -92,6 +100,9 @@ class _JitterAppState extends State<JitterApp> {
           BootReady() => AppShell(
             // Browse
             browse: widget.browse,
+            // Categories
+            categories: widget.categories,
+            category: widget.category,
             // Favorites
             favorites: widget.favorites,
             // Playback

@@ -1,6 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:jitter/categories/categories_holder.dart';
+import 'package:jitter/categories/categories_page.dart';
+import 'package:jitter/categories/category_holder.dart';
+import 'package:jitter/categories/category_page.dart';
 import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/channel/channel_page.dart';
 import 'package:jitter/chat/chat_holder.dart';
@@ -32,6 +36,9 @@ class AppShell extends StatefulWidget {
   const new({
     // Browse
     required this.browse,
+    // Categories
+    required this.categories,
+    required this.category,
     // Favorites
     required this.favorites,
     // Playback
@@ -46,6 +53,9 @@ class AppShell extends StatefulWidget {
 
   // Browse
   final BrowseHolder browse;
+  // Categories
+  final CategoriesHolder categories;
+  final CategoryHolder category;
   // Favorites
   final FavoritesHolder favorites;
   // Playback: what a page needs to push a `PlayerPage`.
@@ -75,6 +85,15 @@ class _AppShellState extends State<AppShell> {
       ),
     ),
     (
+      label: 'Categories',
+      icon: Icons.category_outlined,
+      selectedIcon: Icons.category,
+      page: CategoriesPage(
+        categories: widget.categories,
+        onOpenCategory: _openCategory,
+      ),
+    ),
+    (
       label: 'Favorites',
       icon: Icons.favorite_outline,
       selectedIcon: Icons.favorite,
@@ -84,6 +103,18 @@ class _AppShellState extends State<AppShell> {
       ),
     ),
   ];
+
+  // Categories
+  void _openCategory(String id, String name) => unawaited(
+    CategoryPage.push(
+      context,
+      id: id,
+      name: name,
+      category: widget.category,
+      favorites: widget.favorites,
+      onOpenStream: _openLive,
+    ),
+  );
 
   // Channel
   void _openChannel(String login) => unawaited(

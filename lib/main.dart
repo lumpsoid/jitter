@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:jitter/app.dart';
 import 'package:jitter/boot/boot_holder.dart';
+import 'package:jitter/categories/categories_holder.dart';
+import 'package:jitter/categories/category_holder.dart';
 import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
@@ -30,6 +32,9 @@ Future<void> main() async {
 
   // Browse
   final browse = BrowseHolder()..connect();
+  // Categories
+  final categories = CategoriesHolder()..connect();
+  final category = CategoryHolder()..connect();
   // Favorites
   final favorites = FavoritesHolder()..connect();
   // Channel
@@ -45,6 +50,9 @@ Future<void> main() async {
       boot: boot,
       // Browse
       browse: browse,
+      // Categories
+      categories: categories,
+      category: category,
       // Favorites
       favorites: favorites,
       // Playback
