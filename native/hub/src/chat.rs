@@ -7,11 +7,16 @@
 //! tagged with the session. Ending the session aborts its tasks, and a
 //! result already on its way from them is dropped by its tag, so only one
 //! connection ever feeds the panel.
+//!
+//! Whether a session runs at all is core's [`ChatPanelController`]: the
+//! user can hide the panel, which ends the session, and show it again,
+//! which starts a new one.
 
 use std::time::Duration;
 
 use futures_util::StreamExt;
 use jitter_core::chat::{ChatController, Connection};
+use jitter_core::chat_panel::{ChatPanelController, ChatPanelState, SessionChange};
 use jitter_core::models::{
     ChannelLogin, ChatChange, ChatEvent, ChatMessage, Emote, EmoteProvider, EmoteScope, Fragment,
     RoomState, Seconds,
@@ -35,6 +40,8 @@ const BATCH_WINDOW: Duration = Duration::from_millis(100);
 
 /// The hub's side of the chat panel.
 pub struct ChatPanel {
+    /// Whether a session should run: a live channel plays, chat not hidden.
+    view: ChatPanelController,
     live: Option<LiveChat>,
     /// Sessions started so far; the latest one's tag.
     sessions: u64,
@@ -86,6 +93,7 @@ enum Payload {
 impl ChatPanel {
     pub fn new() -> Self {
         Self {
+            view: ChatPanelController::new(),
             live: None,
             sessions: 0,
             theme: Theme::Dark,
@@ -108,23 +116,49 @@ pub fn set_theme(panel: &mut ChatPanel, dark: bool) {
     send_snapshot(panel);
 }
 
-/// A player page opened on `target` (`None`: core rejected it). A live
-/// channel gets a new session; anything else ends the current one.
+/// A player page opened on `target` (`None`: core rejected it). A shown
+/// live channel gets a new session; anything else ends the current one.
 pub fn play(
     panel: &mut ChatPanel,
     twitch: &Twitch,
     fetch: &UnboundedSender<Fetched>,
     target: Option<&PlaybackTarget>,
 ) {
-    match target {
-        Some(PlaybackTarget::Live(login)) => start(panel, twitch, fetch, login),
-        Some(PlaybackTarget::Vod(_)) | None => stop(panel),
-    }
+    let change = panel.view.play(target);
+    apply(panel, twitch, fetch, change);
 }
 
-/// Ends the session, aborting its connection and fetches.
-pub fn stop(panel: &mut ChatPanel) {
-    panel.live = None;
+/// The player stopped: ends the session.
+pub fn stop(panel: &mut ChatPanel, twitch: &Twitch, fetch: &UnboundedSender<Fetched>) {
+    let change = panel.view.stop();
+    apply(panel, twitch, fetch, change);
+}
+
+/// `HideChat`: ends the session; the panel shows as hidden.
+pub fn hide(panel: &mut ChatPanel, twitch: &Twitch, fetch: &UnboundedSender<Fetched>) {
+    let change = panel.view.hide();
+    apply(panel, twitch, fetch, change);
+}
+
+/// `ShowChat`: joins the playing channel's chat again.
+pub fn show(panel: &mut ChatPanel, twitch: &Twitch, fetch: &UnboundedSender<Fetched>) {
+    let change = panel.view.show();
+    apply(panel, twitch, fetch, change);
+}
+
+/// Carries out core's session change, then sends the panel.
+fn apply(
+    panel: &mut ChatPanel,
+    twitch: &Twitch,
+    fetch: &UnboundedSender<Fetched>,
+    change: SessionChange,
+) {
+    match change {
+        SessionChange::Join(login) => start(panel, twitch, fetch, &login),
+        // Dropping the session aborts its connection and fetches.
+        SessionChange::Leave => panel.live = None,
+        SessionChange::Keep => {}
+    }
     send_snapshot(panel);
 }
 
@@ -147,7 +181,6 @@ fn start(
         chat: ChatController::new(),
         _tasks: tasks,
     });
-    send_snapshot(panel);
 }
 
 /// Forwards the connection's events, forever; it reconnects by itself.
@@ -332,12 +365,13 @@ fn send_batch(batch: &mut Batch) {
 /// The whole panel; whatever waited in the batch is part of it.
 fn send_snapshot(panel: &mut ChatPanel) {
     panel.batch = Batch::default();
-    match &panel.live {
-        None => ChatUpdate::Off,
-        Some(live) => ChatUpdate::Snapshot {
+    match (panel.view.state(), &panel.live) {
+        (ChatPanelState::Shown, Some(live)) => ChatUpdate::Snapshot {
             messages: lines(&live.chat, panel.theme),
             status: status(&live.chat),
         },
+        (ChatPanelState::Hidden, _) => ChatUpdate::Hidden,
+        (ChatPanelState::Off, _) | (ChatPanelState::Shown, None) => ChatUpdate::Off,
     }
     .send_signal_to_dart();
 }

@@ -13,12 +13,25 @@ pub struct SetTheme {
     pub dark: bool,
 }
 
+/// The user closed the chat panel: Rust leaves the chat and sends
+/// `Hidden`. A hidden chat stays hidden on the next player page.
+#[derive(Deserialize, DartSignal)]
+pub struct HideChat;
+
+/// The user opened the chat panel again: Rust rejoins the chat of the
+/// live channel playing.
+#[derive(Deserialize, DartSignal)]
+pub struct ShowChat;
+
 /// The chat panel. One type, so a snapshot and the diffs after it arrive
 /// in order. Messages are oldest first.
 #[derive(Serialize, RustSignal)]
 pub enum ChatUpdate {
     /// No live channel plays: there is no chat to show.
     Off,
+    /// A live channel plays but the user hid its chat: no panel, and an
+    /// action to show it.
+    Hidden,
     /// Replaces the messages and the status.
     Snapshot {
         messages: Vec<ChatLine>,

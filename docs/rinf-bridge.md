@@ -294,7 +294,9 @@ current one applies:
   closing page cannot stop the player a newer page took over.
 - Channel header: a lookup for another login, or a live check for another
   id, is ignored.
-- Chat: each `Play` of a live channel starts a session with a number. Its
+- Chat: each `Play` of a live channel, and each `ShowChat`, starts a
+  session with a number, unless core's `ChatPanelController` has the panel
+  hidden (`HideChat` ends the session). Its
   connection and emote tasks are held as `JoinHandle`s and aborted when the
   session is replaced or stopped; a result already queued from them is
   dropped because its session tag is no longer the current one.

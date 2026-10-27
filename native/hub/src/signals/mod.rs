@@ -32,7 +32,10 @@ pub use categories::{
     NextCategoryPage, OpenCategory, RefreshCategories, RefreshCategory,
 };
 // Chat
-pub use chat::{ChatFragment, ChatLine, ChatReady, ChatStatus, ChatUpdate, EmoteImage, SetTheme};
+pub use chat::{
+    ChatFragment, ChatLine, ChatReady, ChatStatus, ChatUpdate, EmoteImage, HideChat, SetTheme,
+    ShowChat,
+};
 // Favorites
 pub use favorites::{
     AddFavorite, FavoriteChannel, FavoritesReady, FavoritesUpdate, LiveFavorite, RefreshFavorites,

@@ -34,7 +34,7 @@ use crate::signals::{
 };
 // Chat
 use crate::chat::{self, ChatFetched, ChatPanel};
-use crate::signals::{ChatReady, SetTheme};
+use crate::signals::{ChatReady, HideChat, SetTheme, ShowChat};
 // Favorites
 use crate::favorites::{self, FavoritesFetched};
 use crate::signals::{AddFavorite, FavoritesReady, RefreshFavorites, RemoveFavorite};
@@ -183,6 +183,8 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
     // Chat
     let chat_ready = ChatReady::get_dart_signal_receiver();
     let set_theme = SetTheme::get_dart_signal_receiver();
+    let hide_chat = HideChat::get_dart_signal_receiver();
+    let show_chat = ShowChat::get_dart_signal_receiver();
 
     // Search
     let search_typed = SearchTyped::get_dart_signal_receiver();
@@ -249,7 +251,7 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
             Some(pack) = leave_player.recv() => {
                 // Chat: closes when the player stops.
                 if playback::leave(&mut c.playback, &mut c.resume, pack.message) {
-                    chat::stop(&mut c.chat);
+                    chat::stop(&mut c.chat, &twitch, &fetch);
                 }
             }
 
@@ -272,6 +274,8 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
             // Chat
             Some(_) = chat_ready.recv() => chat::ready(&mut c.chat),
             Some(pack) = set_theme.recv() => chat::set_theme(&mut c.chat, pack.message.dark),
+            Some(_) = hide_chat.recv() => chat::hide(&mut c.chat, &twitch, &fetch),
+            Some(_) = show_chat.recv() => chat::show(&mut c.chat, &twitch, &fetch),
             () = chat::until(chat_flush_at) => chat::flush(&mut c.chat),
 
             // Search

@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:jitter/chat/chat_holder.dart';
+import 'package:jitter/chat/chat_mode.dart';
 import 'package:jitter/chat/chat_panel.dart';
+import 'package:jitter/chat/chat_toggle.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/player/playback_title.dart';
@@ -40,7 +42,8 @@ class PlayerPage extends StatefulWidget {
   final PlaybackHolder playback;
   final MediaKitEngine player;
 
-  /// The live chat, shown while Rust has one open.
+  /// The live chat, shown while Rust has one open; the app bar can hide
+  /// and show it.
   final ChatHolder chat;
 
   /// Opens the channel being watched (a VOD's owner) by login, from the
@@ -109,6 +112,7 @@ class _PlayerPageState extends State<PlayerPage> {
                   selected: selected,
                   onSelected: _selectQuality,
                 ),
+              ChatToggle(chat: widget.chat),
             ],
           ),
           body: _layout(
@@ -122,10 +126,10 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
-  /// The video alone, or with the chat beside it (wide) or below it
-  /// (narrow).
+  /// The video alone (no chat, or hidden), or with the chat beside it
+  /// (wide) or below it (narrow).
   Widget _layout(Widget video) {
-    if (!widget.chat.on) return Center(child: video);
+    if (widget.chat.mode != ChatMode.shown) return Center(child: video);
     final chat = ChatPanel(chat: widget.chat);
     return LayoutBuilder(
       builder: (context, constraints) {

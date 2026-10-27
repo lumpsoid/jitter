@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:jitter/chat/chat_entry.dart';
+import 'package:jitter/chat/chat_mode.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:rinf/rinf.dart';
 
@@ -19,9 +20,9 @@ class ChatHolder extends ChangeNotifier {
   StreamSubscription<RustSignalPack<ChatUpdate>>? _subscription;
   bool? _dark;
 
-  /// Whether a live chat is open; false while no live channel plays.
-  bool get on => _on;
-  bool _on = false;
+  /// Whether the chat is shown, hidden by the user, or absent.
+  ChatMode get mode => _mode;
+  ChatMode _mode = ChatMode.off;
 
   /// Oldest first.
   List<ChatEntry> get messages => _messages;
@@ -50,11 +51,15 @@ class ChatHolder extends ChangeNotifier {
   void apply(ChatUpdate update) {
     switch (update) {
       case ChatUpdateOff():
-        _on = false;
+        _mode = ChatMode.off;
+        _messages = [];
+        _status = _noStatus;
+      case ChatUpdateHidden():
+        _mode = ChatMode.hidden;
         _messages = [];
         _status = _noStatus;
       case ChatUpdateSnapshot(:final messages, :final status):
-        _on = true;
+        _mode = ChatMode.shown;
         _messages = [for (final m in messages) ChatEntry(m)];
         _status = status;
       case ChatUpdateAppended(:final messages):

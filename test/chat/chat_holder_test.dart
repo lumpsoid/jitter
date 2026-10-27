@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/chat/chat_holder.dart';
+import 'package:jitter/chat/chat_mode.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 
 ChatLine line(String id, {bool deleted = false}) => ChatLine(
@@ -31,7 +32,7 @@ void main() {
   });
 
   test('is off with no messages until a snapshot', () {
-    expect(holder.on, isFalse);
+    expect(holder.mode, ChatMode.off);
     expect(holder.messages, isEmpty);
     expect(holder.status.banner, isNull);
   });
@@ -46,7 +47,7 @@ void main() {
         ),
       );
 
-    expect(holder.on, isTrue);
+    expect(holder.mode, ChatMode.shown);
     expect(ids(), ['b', 'c']);
     expect(deleted(), ['c']);
     expect(holder.status, connected);
@@ -112,7 +113,17 @@ void main() {
       ..apply(ChatUpdateSnapshot(messages: [line('a')], status: connected))
       ..apply(const ChatUpdateOff());
 
-    expect(holder.on, isFalse);
+    expect(holder.mode, ChatMode.off);
+    expect(holder.messages, isEmpty);
+    expect(holder.status.modes, isEmpty);
+  });
+
+  test('hidden closes the panel and drops its messages', () {
+    holder
+      ..apply(ChatUpdateSnapshot(messages: [line('a')], status: connected))
+      ..apply(const ChatUpdateHidden());
+
+    expect(holder.mode, ChatMode.hidden);
     expect(holder.messages, isEmpty);
     expect(holder.status.modes, isEmpty);
   });
