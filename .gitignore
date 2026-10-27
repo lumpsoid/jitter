@@ -55,3 +55,6 @@ app.*.map.json
 /lib/src/bincode
 /lib/src/serde
 /lib/src/bindings
+
+# Claude Code agent worktrees
+.claude/worktrees/
