@@ -42,6 +42,15 @@ enum Command {
         #[arg(long, default_value_t = 1)]
         pages: u32,
     },
+    /// Find channels and categories by name.
+    Search {
+        /// What to search for; several words are one search.
+        #[arg(required = true)]
+        text: Vec<String>,
+        /// How many pages of each to load.
+        #[arg(long, default_value_t = 1)]
+        pages: u32,
+    },
     /// Manage favorite channels; without a subcommand, list them with live status.
     Fav {
         #[command(subcommand)]
@@ -88,6 +97,7 @@ async fn run(command: Command) -> commands::Result<()> {
         Command::Top { pages } => commands::top::run(pages).await,
         Command::Categories { pages } => commands::categories::run(pages).await,
         Command::Category { id, pages } => commands::category::run(&id, pages).await,
+        Command::Search { text, pages } => commands::search::run(&text.join(" "), pages).await,
         Command::Fav { command } => commands::fav::run(command).await,
         Command::Vods { login, pages } => commands::vods::run(&login, pages).await,
         Command::Play(args) => commands::play::run(args).await,

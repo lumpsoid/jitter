@@ -7,6 +7,7 @@ pub mod chat;
 pub mod fav;
 pub mod play;
 pub mod resume;
+pub mod search;
 pub mod top;
 pub mod vods;
 

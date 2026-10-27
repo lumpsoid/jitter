@@ -1,0 +1,44 @@
+{
+  "data": {
+    "searchCategories": {
+      "edges": [
+        {
+          "cursor": "eyJzIjoxfQ==",
+          "node": {
+            "id": "512953",
+            "displayName": "ELDEN RING",
+            "boxArtURL": "https://static-cdn.jtvnw.net/ttv-boxart/512953-52x72.jpg",
+            "viewersCount": 2501,
+            "__typename": "Game"
+          },
+          "__typename": "SearchCategoryEdge"
+        },
+        {
+          "cursor": "eyJzIjoyfQ==",
+          "node": {
+            "id": "286173953",
+            "displayName": "Elden Ring Demake",
+            "boxArtURL": "https://static-cdn.jtvnw.net/ttv-boxart/286173953-52x72.jpg",
+            "viewersCount": null,
+            "__typename": "Game"
+          },
+          "__typename": "SearchCategoryEdge"
+        },
+        {
+          "cursor": "eyJzIjozfQ==",
+          "node": {
+            "id": "1938707659",
+            "displayName": "Elden Ring GB",
+            "boxArtURL": null,
+            "viewersCount": 0,
+            "__typename": "Game"
+          },
+          "__typename": "SearchCategoryEdge"
+        }
+      ],
+      "pageInfo": { "hasNextPage": false, "__typename": "PageInfo" },
+      "__typename": "SearchCategoryConnection"
+    }
+  },
+  "extensions": { "durationMilliseconds": 48, "requestID": "01JSEARCHGAMES" }
+}

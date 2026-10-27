@@ -219,10 +219,11 @@ running.
 **jitter: only features that hold state before any page asks have one.**
 `BrowseReady`, `CategoriesReady`, `FavoritesReady` and `ChatReady` exist:
 the top streams and top categories load at start, the favorites at boot,
-and a chat session runs while the player does. Playback, the channel page
-and the category page have none: they show nothing until a page opens, and
-that page's own intent (`Play`, `OpenChannel`, `OpenCategory`) is answered
-with the whole state, so it is the ready signal.
+and a chat session runs while the player does. Playback, the channel page,
+the category page and search have none: they show nothing until a page
+opens or the user types, and that intent (`Play`, `OpenChannel`,
+`OpenCategory`, `SearchTyped`) is answered with the whole state, so it is
+the ready signal.
 
 ### Startup
 
@@ -264,6 +265,7 @@ pub enum Fetched {
     Playback { target: PlaybackTarget, result: Result<Playback, TwitchError> },
     Channel(ChannelFetched),
     Chat(ChatFetched),
+    Search(SearchFetched),
 }
 ```
 
@@ -279,9 +281,10 @@ The loop stays free while a call is in flight, so the user may move on
 before it returns. Every result carries what it was for, and only the
 current one applies:
 
-- Paged lists (top streams, top categories, a category's streams, VODs):
-  core's `PageRequest` carries a generation; a refresh, another category
-  or another VOD kind bumps it, and `apply_page` ignores an older one.
+- Paged lists (top streams, top categories, a category's streams, VODs,
+  search results): core's `PageRequest` carries a generation; a refresh,
+  another category, another VOD kind or another search query bumps it,
+  and `apply_page` ignores an older one.
 - Playback: `apply` ignores a result for any target but the one resolving.
   Dart tags `PlayerPosition` and `LeavePlayer` with its page's target, so a
   closing page cannot stop the player a newer page took over.
@@ -311,6 +314,15 @@ Order survives because:
 
 The deadline is a `select!` arm like the brew timer: `chat::until(due)`
 sleeps until the batch is due, and is pending forever while it is empty.
+
+### Search debounce
+
+Dart sends `SearchTyped` on every keystroke. The hub holds the latest
+text until typing pauses for 300 ms (`search::DEBOUNCE`); each keystroke
+moves the deadline. The deadline is the same kind of arm as the chat
+batch (`chat::until(search::due_at(..))`). Neither Dart nor core
+debounces: core only decides what a query is (`SearchQuery`) and which
+results are current.
 
 ### The player is a platform effect
 

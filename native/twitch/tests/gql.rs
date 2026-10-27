@@ -7,14 +7,14 @@
 //! empty and missing ones).
 
 use jitter_core::models::{
-    CategoryId, ChannelId, ChannelLogin, Cursor, Seconds, Timestamp, VideoKind,
+    CategoryId, ChannelId, ChannelLogin, Cursor, SearchQuery, Seconds, Timestamp, VideoKind,
 };
 use jitter_twitch::TwitchError;
 use jitter_twitch::client::{CLIENT_ID, headers};
 use jitter_twitch::gql::users_stream::{LIVE_STATUS_BATCH, batch_variables};
 use jitter_twitch::gql::{
     browse_directories, browse_popular, channel_by_login, channel_videos, decode, game_streams,
-    persisted_body, query_body, users_stream,
+    persisted_body, query_body, search_channels, search_games, users_stream,
 };
 
 const BROWSE: &[u8] = include_bytes!("fixtures/gql_browse_popular.json");
@@ -22,6 +22,11 @@ const BROWSE: &[u8] = include_bytes!("fixtures/gql_browse_popular.json");
 // raw `GameStreams` document: not recorded.
 const DIRECTORIES: &[u8] = include_bytes!("fixtures/gql_browse_directories.json");
 const GAME_STREAMS: &[u8] = include_bytes!("fixtures/gql_game_streams.json");
+// Hand-written after the raw `SearchChannels` and `SearchGames` documents'
+// live answers (checked with `jitter search` on 2026-10-27), with a dropped
+// user, a null node and a category without box art added: not recorded.
+const SEARCH_CHANNELS: &[u8] = include_bytes!("fixtures/gql_search_channels.json");
+const SEARCH_GAMES: &[u8] = include_bytes!("fixtures/gql_search_games.json");
 const VIDEOS: &[u8] = include_bytes!("fixtures/gql_channel_videos.json");
 const USERS_STREAM: &[u8] = include_bytes!("fixtures/gql_users_stream.json");
 const CHANNEL: &[u8] = include_bytes!("fixtures/gql_channel_by_login.json");
@@ -396,5 +401,127 @@ fn game_streams_of_an_unknown_id_are_not_found() {
     assert_eq!(
         game_streams::parse(br#"{"data":{"game":null}}"#),
         Err(TwitchError::NotFound)
+    );
+}
+
+// --- SearchChannels -----------------------------------------------------------
+
+#[test]
+fn search_channels_body_is_the_raw_document_with_the_query() {
+    let query = ok(SearchQuery::parse(" lirik "));
+    let body = query_body(
+        &search_channels::QUERY,
+        search_channels::variables(&query, Some(&Cursor::new("eyJzIjoxfQ=="))),
+    );
+    assert!(
+        body["query"]
+            .as_str()
+            .is_some_and(|q| q.contains("searchUsers(userQuery: $query"))
+    );
+    assert_eq!(body["variables"]["query"], "lirik");
+    assert_eq!(body["variables"]["first"], 30);
+    assert_eq!(body["variables"]["after"], "eyJzIjoxfQ==");
+    assert!(body.get("extensions").is_none());
+}
+
+#[test]
+fn search_channels_map_users_with_followers_and_live_viewers() {
+    let page = ok(search_channels::parse(SEARCH_CHANNELS));
+    let logins: Vec<&str> = page
+        .items
+        .iter()
+        .map(|c| c.channel.login.as_str())
+        .collect();
+    // `lirikiwi` has no avatar and the last edge no node: both dropped.
+    assert_eq!(logins, ["lirik", "lirik_247", "lirikk"]);
+
+    let lirik = &page.items[0];
+    assert_eq!(lirik.channel.id.as_str(), "23161357");
+    assert_eq!(lirik.channel.display_name, "LIRIK");
+    assert_eq!(lirik.followers, Some(2_998_637));
+    assert_eq!(lirik.viewers, None);
+
+    assert_eq!(page.items[1].viewers, Some(513));
+    assert_eq!(page.items[2].followers, None);
+    assert_eq!(page.next.as_ref().map(Cursor::as_str), Some("eyJzIjo1fQ=="));
+}
+
+#[test]
+fn search_channels_end_when_twitch_says_so() {
+    let body = br#"{"data":{"searchUsers":{"edges":[
+        {"cursor":"a","node":{"id":"1","login":"a","displayName":"A","profileImageURL":"https://p/a.png"}}
+      ],"pageInfo":{"hasNextPage":false}}}}"#;
+    let page = ok(search_channels::parse(body));
+    assert_eq!(page.items.len(), 1);
+    assert_eq!(page.items[0].followers, None);
+    assert_eq!(page.items[0].viewers, None);
+    assert_eq!(page.next, None);
+}
+
+#[test]
+fn search_channels_without_results_is_an_empty_last_page() {
+    let page = ok(search_channels::parse(
+        br#"{"data":{"searchUsers":{"edges":[],"pageInfo":{"hasNextPage":false}}}}"#,
+    ));
+    assert!(page.items.is_empty());
+    assert_eq!(page.next, None);
+}
+
+#[test]
+fn search_channels_null_connection_is_a_decode_error() {
+    assert!(matches!(
+        search_channels::parse(br#"{"data":{"searchUsers":null}}"#),
+        Err(TwitchError::Decode(_))
+    ));
+}
+
+// --- SearchGames --------------------------------------------------------------
+
+#[test]
+fn search_games_body_is_the_raw_document_with_the_query() {
+    let query = ok(SearchQuery::parse("elden ring"));
+    let body = query_body(&search_games::QUERY, search_games::variables(&query, None));
+    assert!(
+        body["query"]
+            .as_str()
+            .is_some_and(|q| q.contains("searchCategories(query: $query"))
+    );
+    assert_eq!(body["variables"]["query"], "elden ring");
+    assert_eq!(body["variables"]["after"], serde_json::Value::Null);
+}
+
+#[test]
+fn search_games_map_categories_and_count_no_viewers_as_zero() {
+    let page = ok(search_games::parse(SEARCH_GAMES));
+    let names: Vec<&str> = page.items.iter().map(|c| c.name.as_str()).collect();
+    // `Elden Ring GB` has no box art: dropped.
+    assert_eq!(names, ["ELDEN RING", "Elden Ring Demake"]);
+
+    let first = &page.items[0];
+    assert_eq!(first.id.as_str(), "512953");
+    assert_eq!(first.viewers, 2501);
+    assert_eq!(
+        first.box_art(285, 380),
+        "https://static-cdn.jtvnw.net/ttv-boxart/512953-285x380.jpg"
+    );
+    assert_eq!(page.items[1].viewers, 0);
+    assert_eq!(page.next, None);
+}
+
+#[test]
+fn search_games_page_on_while_twitch_has_more() {
+    let body = br#"{"data":{"searchCategories":{"edges":[
+        {"cursor":"a","node":{"id":"1","displayName":"A","boxArtURL":"https://b/1-52x72.jpg","viewersCount":3}}
+      ],"pageInfo":{"hasNextPage":true}}}}"#;
+    let page = ok(search_games::parse(body));
+    assert_eq!(page.next.as_ref().map(Cursor::as_str), Some("a"));
+}
+
+#[test]
+fn search_games_errors_are_classified() {
+    let body = br#"{"errors":[{"message":"failed integrity check"}],"data":null}"#;
+    assert_eq!(
+        search_games::parse(body),
+        Err(TwitchError::IntegrityRequired)
     );
 }

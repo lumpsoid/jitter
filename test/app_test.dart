@@ -9,6 +9,7 @@ import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
+import 'package:jitter/search/search_holder.dart';
 import 'package:jitter/top/browse_holder.dart';
 
 JitterApp _app(BootHolder boot) => JitterApp(
@@ -21,6 +22,7 @@ JitterApp _app(BootHolder boot) => JitterApp(
   playback: PlaybackHolder(),
   player: MediaKitEngine(),
   chat: ChatHolder(),
+  search: SearchHolder(),
 );
 
 void main() {
@@ -51,6 +53,7 @@ void main() {
     expect(find.text('Top'), findsOneWidget);
     expect(find.text('Categories'), findsOneWidget);
     expect(find.text('Favorites'), findsOneWidget);
+    expect(find.text('Search'), findsOneWidget);
   });
 
   testWidgets('wide shell has a side rail', (tester) async {

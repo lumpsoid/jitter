@@ -40,13 +40,28 @@ pub fn twitch_error(error: &TwitchError) -> String {
 /// `950 viewers`, `12.3K viewers`, `1.2M viewers`. Truncated, never
 /// rounded up, so 999 999 reads `999.9K`, not `1000K`.
 pub fn viewers_label(viewers: u32) -> String {
-    let count = match viewers {
-        0..1_000 => viewers.to_string(),
-        1_000..1_000_000 => tenths(viewers / 100, "K"),
-        _ => tenths(viewers / 100_000, "M"),
-    };
     let noun = if viewers == 1 { "viewer" } else { "viewers" };
-    format!("{count} {noun}")
+    format!("{} {noun}", compact(viewers))
+}
+
+/// A follower count, compact like [`viewers_label`]: `1 follower`,
+/// `2.9M followers`.
+pub fn followers_label(followers: u32) -> String {
+    let noun = if followers == 1 {
+        "follower"
+    } else {
+        "followers"
+    };
+    format!("{} {noun}", compact(followers))
+}
+
+/// `950`, `12.3K`, `1.2M`: truncated to one decimal, never rounded up.
+fn compact(count: u32) -> String {
+    match count {
+        0..1_000 => count.to_string(),
+        1_000..1_000_000 => tenths(count / 100, "K"),
+        _ => tenths(count / 100_000, "M"),
+    }
 }
 
 /// A video's length like a player shows it: `1:02:03`, or `4:05` under an
@@ -83,7 +98,7 @@ mod tests {
     use jitter_core::models::Seconds;
     use jitter_twitch::TwitchError;
 
-    use super::{duration_label, twitch_error, uptime_label, viewers_label};
+    use super::{duration_label, followers_label, twitch_error, uptime_label, viewers_label};
 
     fn reads(error: TwitchError, message: &str) {
         assert_eq!(twitch_error(&error), message, "{error:?}");
@@ -193,5 +208,13 @@ mod tests {
         assert_eq!(viewers_label(1_000_000), "1M viewers");
         assert_eq!(viewers_label(1_250_000), "1.2M viewers");
         assert_eq!(viewers_label(u32::MAX), "4294.9M viewers");
+    }
+
+    #[test]
+    fn followers_read_like_viewers() {
+        assert_eq!(followers_label(1), "1 follower");
+        assert_eq!(followers_label(704), "704 followers");
+        assert_eq!(followers_label(39_950), "39.9K followers");
+        assert_eq!(followers_label(2_998_637), "2.9M followers");
     }
 }

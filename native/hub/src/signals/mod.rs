@@ -17,6 +17,8 @@ mod favorites;
 mod playback;
 // Channel
 mod channel;
+// Search
+mod search;
 
 pub use boot::{Boot, BootFailed, Booted};
 // Browse
@@ -45,4 +47,9 @@ pub use playback::{
 pub use channel::{
     ChannelLive, ChannelUpdate, OpenChannel, RefreshChannel, SelectVodKind, VodKind, VodTile,
     VodsMore, VodsNextPage, VodsState, VodsUpdate,
+};
+// Search
+pub use search::{
+    ChannelResult, NextSearchPage, RefreshSearch, SearchCategoriesState, SearchChannelsState,
+    SearchList, SearchMore, SearchTyped, SearchUpdate,
 };

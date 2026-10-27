@@ -19,6 +19,7 @@ use jitter_store::SqliteStore;
 use jitter_twitch::{Twitch, TwitchError};
 use rinf::{DartSignal, DartSignalPack, RustSignal, SignalReceiver};
 use tokio::sync::mpsc;
+use tokio::time::Instant;
 
 use crate::signals::{Boot, Booted};
 // Browse
@@ -43,6 +44,9 @@ use crate::signals::{LeavePlayer, Play, PlayerPosition, SelectQuality};
 // Channel
 use crate::channel::{self, ChannelFetched, ChannelPage};
 use crate::signals::{OpenChannel, RefreshChannel, SelectVodKind, VodsNextPage};
+// Search
+use crate::search::{self, SearchFetched, SearchPanel};
+use crate::signals::{NextSearchPage, RefreshSearch, SearchTyped};
 
 /// Every controller, built and loaded from one store.
 pub struct Controllers {
@@ -59,6 +63,8 @@ pub struct Controllers {
     channel: ChannelPage,
     // Chat
     chat: ChatPanel,
+    // Search
+    search: SearchPanel,
 }
 
 impl Controllers {
@@ -81,6 +87,8 @@ impl Controllers {
             channel: ChannelPage::default(),
             // Chat
             chat: ChatPanel::new(),
+            // Search
+            search: SearchPanel::default(),
         })
     }
 }
@@ -127,6 +135,8 @@ pub enum Fetched {
     Channel(ChannelFetched),
     // Chat
     Chat(ChatFetched),
+    // Search
+    Search(SearchFetched),
 }
 
 /// Runs until the runtime shuts down. Holds the only receiver of every Dart
@@ -173,9 +183,16 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
     let chat_ready = ChatReady::get_dart_signal_receiver();
     let set_theme = SetTheme::get_dart_signal_receiver();
 
+    // Search
+    let search_typed = SearchTyped::get_dart_signal_receiver();
+    let refresh_search = RefreshSearch::get_dart_signal_receiver();
+    let next_search_page = NextSearchPage::get_dart_signal_receiver();
+
     loop {
         // Chat: the batch deadline, copied out so its timer arm borrows nothing.
         let chat_flush_at = chat::flush_at(&c.chat);
+        // Search: when typing has paused long enough, copied out likewise.
+        let search_due_at = search::due_at(&c.search);
         tokio::select! {
             // Boot: already booted; a hot-restarted Dart side asks again.
             Some(_) = boot.recv() => Booted.send_signal_to_dart(),
@@ -256,6 +273,19 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
             Some(pack) = set_theme.recv() => chat::set_theme(&mut c.chat, pack.message.dark),
             () = chat::until(chat_flush_at) => chat::flush(&mut c.chat),
 
+            // Search
+            Some(pack) = search_typed.recv() => {
+                search::typed(&mut c.search, pack.message.text, Instant::now());
+            }
+            Some(pack) = refresh_search.recv() => {
+                search::refresh(&mut c.search, pack.message.list, &twitch, &fetch);
+            }
+            Some(pack) = next_search_page.recv() => {
+                search::next(&mut c.search, pack.message.list, &twitch, &fetch);
+            }
+            // The same sleep as the chat batch's: pending while nothing waits.
+            () = chat::until(search_due_at) => search::settle(&mut c.search, &twitch, &fetch),
+
             // Network results
             Some(result) = fetched.recv() => on_fetched(&mut c, result, &twitch, &fetch),
 
@@ -297,6 +327,8 @@ fn on_fetched(
         }
         // Chat
         Fetched::Chat(fetched) => chat::on_fetched(&mut c.chat, fetched),
+        // Search
+        Fetched::Search(fetched) => search::on_fetched(&mut c.search, fetched),
     }
 }
 

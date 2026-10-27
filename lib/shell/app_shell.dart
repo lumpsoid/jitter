@@ -13,6 +13,8 @@ import 'package:jitter/favorites/favorites_page.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/player/player_page.dart';
+import 'package:jitter/search/search_holder.dart';
+import 'package:jitter/search/search_page.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:jitter/top/top_page.dart';
@@ -48,6 +50,8 @@ class AppShell extends StatefulWidget {
     required this.channel,
     // Chat
     required this.chat,
+    // Search
+    required this.search,
     super.key,
   });
 
@@ -65,6 +69,8 @@ class AppShell extends StatefulWidget {
   final ChannelHolder channel;
   // Chat: shown on the player page.
   final ChatHolder chat;
+  // Search
+  final SearchHolder search;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -101,6 +107,16 @@ class _AppShellState extends State<AppShell> {
         favorites: widget.favorites,
         onOpenChannel: _openChannel,
         onOpenLive: _openLive,
+      ),
+    ),
+    (
+      label: 'Search',
+      icon: Icons.search_outlined,
+      selectedIcon: Icons.search,
+      page: SearchPage(
+        search: widget.search,
+        onOpenChannel: _openChannel,
+        onOpenCategory: _openCategory,
       ),
     ),
   ];

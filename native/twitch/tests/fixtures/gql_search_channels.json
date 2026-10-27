@@ -1,0 +1,68 @@
+{
+  "data": {
+    "searchUsers": {
+      "edges": [
+        {
+          "cursor": "eyJzIjoxfQ==",
+          "node": {
+            "id": "23161357",
+            "login": "lirik",
+            "displayName": "LIRIK",
+            "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/lirik-profile_image-300x300.png",
+            "followers": { "totalCount": 2998637, "__typename": "FollowerConnection" },
+            "stream": null,
+            "__typename": "User"
+          },
+          "__typename": "UserEdge"
+        },
+        {
+          "cursor": "eyJzIjoyfQ==",
+          "node": {
+            "id": "523847911",
+            "login": "lirik_247",
+            "displayName": "LIRIK_247",
+            "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/lirik_247-profile_image-300x300.png",
+            "followers": { "totalCount": 39950, "__typename": "FollowerConnection" },
+            "stream": { "viewersCount": 513, "__typename": "Stream" },
+            "__typename": "User"
+          },
+          "__typename": "UserEdge"
+        },
+        {
+          "cursor": "eyJzIjozfQ==",
+          "node": {
+            "id": "41157245",
+            "login": "lirikk",
+            "displayName": "Lirikk",
+            "profileImageURL": "https://static-cdn.jtvnw.net/user-default-pictures-uv/de130ab0-def7-11e9-b668-784f43822e80-profile_image-300x300.png",
+            "followers": null,
+            "stream": null,
+            "__typename": "User"
+          },
+          "__typename": "UserEdge"
+        },
+        {
+          "cursor": "eyJzIjo0fQ==",
+          "node": {
+            "id": "41157246",
+            "login": "lirikiwi",
+            "displayName": "Lirikiwi",
+            "profileImageURL": null,
+            "followers": { "totalCount": 9613, "__typename": "FollowerConnection" },
+            "stream": null,
+            "__typename": "User"
+          },
+          "__typename": "UserEdge"
+        },
+        {
+          "cursor": "eyJzIjo1fQ==",
+          "node": null,
+          "__typename": "UserEdge"
+        }
+      ],
+      "pageInfo": { "hasNextPage": true, "__typename": "PageInfo" },
+      "__typename": "SearchUserConnection"
+    }
+  },
+  "extensions": { "durationMilliseconds": 61, "requestID": "01JSEARCHCHANNELS" }
+}

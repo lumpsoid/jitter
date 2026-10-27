@@ -8,6 +8,8 @@ pub mod channel_by_login;
 pub mod channel_videos;
 pub mod game_streams;
 pub mod playback_access_token;
+pub mod search_channels;
+pub mod search_games;
 pub mod users_stream;
 
 use jitter_core::models::{CategoryId, Channel, ChannelId, ChannelLogin, GameRef, Timestamp};

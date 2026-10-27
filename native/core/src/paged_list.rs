@@ -6,8 +6,8 @@ use std::collections::HashSet;
 use std::hash::Hash;
 
 use crate::models::{
-    Category, CategoryId, FirstPage, ListState, MorePages, Page, PageRequest, Stream, Video,
-    VideoId,
+    Category, CategoryId, ChannelId, FirstPage, FoundChannel, ListState, MorePages, Page,
+    PageRequest, Stream, Video, VideoId,
 };
 
 /// An item with an id that stays the same across pages.
@@ -27,6 +27,13 @@ impl Keyed for Category {
     type Key = CategoryId;
     fn key(&self) -> &CategoryId {
         &self.id
+    }
+}
+
+impl Keyed for FoundChannel {
+    type Key = ChannelId;
+    fn key(&self) -> &ChannelId {
+        &self.channel.id
     }
 }
 
@@ -70,6 +77,13 @@ impl<T: Keyed> PagedList<T> {
             generation: self.generation,
             cursor: None,
         }
+    }
+
+    /// Empties the list back to `Idle`; results of earlier requests are
+    /// ignored from now on.
+    pub fn clear(&mut self) {
+        self.generation += 1;
+        self.state = ListState::Idle;
     }
 
     /// Checks and transitions in one call: `None` while a next page is

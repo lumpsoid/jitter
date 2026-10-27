@@ -11,6 +11,7 @@ import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/player/player_command_performer.dart';
+import 'package:jitter/search/search_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:media_kit/media_kit.dart';
@@ -41,6 +42,8 @@ Future<void> main() async {
   final channel = ChannelHolder()..connect();
   // Chat
   final chat = ChatHolder()..connect();
+  // Search
+  final search = SearchHolder()..connect();
 
   final boot = BootHolder();
   unawaited(boot.connect());
@@ -62,6 +65,8 @@ Future<void> main() async {
       channel: channel,
       // Chat
       chat: chat,
+      // Search
+      search: search,
     ),
   );
 }
