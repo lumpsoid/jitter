@@ -35,6 +35,11 @@ pub const PING_INTERVAL: Duration = Duration::from_secs(270);
 /// A PING unanswered for this long means the link is dead.
 pub const PONG_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// A connect (TCP, TLS and WebSocket handshake) that takes longer than this
+/// counts as a failed attempt and goes through the backoff, instead of
+/// waiting for the operating system to give up. jitter's own value.
+pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
 /// The first retry waits this long; each further failed attempt doubles it.
 pub const BACKOFF_START: Duration = Duration::from_secs(1);
 
@@ -229,9 +234,15 @@ impl Connection {
             tokio::time::sleep(delay).await;
         }
         log::debug!("chat: connecting to {IRC_URL}");
-        let mut socket = match connect_async(IRC_URL).await {
-            Ok((socket, _)) => socket,
-            Err(e) => return self.dropped(&format!("connect failed: {e}")),
+        let mut socket = match tokio::time::timeout(CONNECT_TIMEOUT, connect_async(IRC_URL)).await {
+            Ok(Ok((socket, _))) => socket,
+            Ok(Err(e)) => return self.dropped(&format!("connect failed: {e}")),
+            Err(_) => {
+                return self.dropped(&format!(
+                    "connect timed out after {} s",
+                    CONNECT_TIMEOUT.as_secs()
+                ));
+            }
         };
         let nick = rand::random_range(ANONYMOUS_NICKS);
         for line in [
