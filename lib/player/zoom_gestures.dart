@@ -48,6 +48,9 @@ class _ZoomGesturesState extends State<ZoomGestures> {
   /// The pinch's scale at the last update, to zoom by each step of it.
   double _pinched = 1;
 
+  /// The pointers down on the video: one drags the picture.
+  final _down = <int>{};
+
   Offset _fraction(Offset offset) {
     final size = context.size ?? Size.zero;
     if (size.isEmpty) return Offset.zero;
@@ -69,18 +72,34 @@ class _ZoomGesturesState extends State<ZoomGestures> {
     });
   }
 
+  /// A drag by one pointer, from its raw moves rather than a gesture:
+  /// media_kit's mobile controls always take a one-finger drag in the
+  /// gesture arena, even with their drag gestures off.
+  void _onMove(PointerMoveEvent event) {
+    if (_down.length != 1) return;
+    widget.zoom.value = widget.zoom.value.panBy(_fraction(event.localDelta));
+  }
+
+  /// A pinch, or a trackpad's two fingers; one pointer is [_onMove]'s.
   void _onScaleUpdate(ScaleUpdateDetails details) {
     final factor = details.scale / _pinched;
     _pinched = details.scale;
+    final pan = details.pointerCount > 1
+        ? details.focalPointDelta
+        : Offset.zero;
     widget.zoom.value = widget.zoom.value
         .zoomBy(factor, focus: _fraction(details.localFocalPoint))
-        .panBy(_fraction(details.focalPointDelta));
+        .panBy(_fraction(pan));
   }
 
   @override
   Widget build(BuildContext context) {
     return Listener(
       onPointerSignal: _onWheel,
+      onPointerDown: (event) => _down.add(event.pointer),
+      onPointerMove: _onMove,
+      onPointerUp: (event) => _down.remove(event.pointer),
+      onPointerCancel: (event) => _down.remove(event.pointer),
       child: GestureDetector(
         onScaleStart: (_) => _pinched = 1,
         onScaleUpdate: _onScaleUpdate,

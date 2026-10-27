@@ -100,6 +100,51 @@ void main() {
     expect(zoom.value, VideoZoom.none);
   });
 
+  testWidgets('a touch drag moves the picture under media_kit-like drags', (
+    tester,
+  ) async {
+    final zoom = ValueNotifier(VideoZoom.none.zoomBy(4));
+    addTearDown(zoom.dispose);
+    await tester.pumpWidget(
+      SizedBox(
+        width: 400,
+        height: 200,
+        child: ZoomGestures(
+          zoom: zoom,
+          onWheel: (_) {},
+          // As media_kit's mobile controls: both drags, always on.
+          child: GestureDetector(
+            onHorizontalDragUpdate: (_) {},
+            onVerticalDragUpdate: (_) {},
+            child: const ColoredBox(color: Color(0xFF000000)),
+          ),
+        ),
+      ),
+    );
+
+    // A touch drag: dragFrom's default.
+    await tester.dragFrom(const Offset(200, 100), const Offset(-100, 0));
+
+    expect(zoom.value.center.dx, greaterThan(0.5));
+  });
+
+  testWidgets('a pinch zooms without a drag moving it twice', (tester) async {
+    final zoom = await pumpGestures(tester);
+    final left = await tester.startGesture(const Offset(280, 100), pointer: 1);
+    final right = await tester.startGesture(const Offset(320, 100), pointer: 2);
+    for (var i = 0; i < 10; i++) {
+      await left.moveBy(const Offset(-6, 0));
+      await right.moveBy(const Offset(6, 0));
+    }
+    await left.up();
+    await right.up();
+
+    expect(zoom.value.scale, greaterThan(1.5));
+    // Spread evenly about x = 300, the picture's x = 0.75 stays under it.
+    final under = zoom.value.center.dx + 0.25 / zoom.value.scale;
+    expect(under, closeTo(0.75, 0.01));
+  });
+
   testWidgets('a drag moves the zoomed picture', (tester) async {
     final zoom = await pumpGestures(tester);
     zoom.value = VideoZoom.none.zoomBy(4);
