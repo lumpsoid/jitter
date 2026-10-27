@@ -246,7 +246,11 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
                 playback::select_quality(&mut c.playback, pack.message);
             }
             Some(pack) = player_position.recv() => {
-                playback::position(&c.playback, &mut c.resume, pack.message);
+                // Chat: a VOD's replay follows the player.
+                if let Some(at) = playback::position(&c.playback, &mut c.resume, pack.message) {
+                    let (position, duration) = (at.position, at.duration);
+                    chat::position(&mut c.chat, &twitch, &fetch, &at.target, position, duration);
+                }
             }
             Some(pack) = leave_player.recv() => {
                 // Chat: closes when the player stops.
@@ -335,7 +339,7 @@ fn on_fetched(
             channel::on_fetched(&mut c.channel, &c.resume, fetched, twitch, fetch);
         }
         // Chat
-        Fetched::Chat(fetched) => chat::on_fetched(&mut c.chat, fetched),
+        Fetched::Chat(fetched) => chat::on_fetched(&mut c.chat, twitch, fetch, fetched),
         // Search
         Fetched::Search(fetched) => search::on_fetched(&mut c.search, fetched),
     }

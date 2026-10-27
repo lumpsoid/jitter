@@ -94,16 +94,22 @@ pub fn select_quality(playback: &mut PlaybackController, signal: SelectQuality) 
     send_open(open);
 }
 
+/// Where a player is, as core's values: what a `PlayerPosition` reports.
+pub struct PlayerAt {
+    pub target: playback::PlaybackTarget,
+    pub position: Seconds,
+    pub duration: Seconds,
+}
+
 /// `PlayerPosition`: hands the position to core, which decides whether
-/// it is recorded.
+/// it is recorded. Returns the report for the chat replay; `None` when
+/// its target is invalid.
 pub fn position(
     playback: &PlaybackController,
     resume: &mut ResumeController,
     signal: PlayerPosition,
-) {
-    let Some(target) = report(playback::PlaybackTarget::try_from(signal.target)) else {
-        return;
-    };
+) -> Option<PlayerAt> {
+    let target = report(playback::PlaybackTarget::try_from(signal.target))?;
     report(record(
         playback,
         resume,
@@ -111,6 +117,11 @@ pub fn position(
         signal.position_s,
         signal.duration_s,
     ));
+    Some(PlayerAt {
+        target,
+        position: Seconds::new(signal.position_s),
+        duration: Seconds::new(signal.duration_s),
+    })
 }
 
 /// `LeavePlayer`: records the last position, then leaves; the player stops

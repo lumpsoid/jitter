@@ -13,11 +13,15 @@ fn live(name: &str) -> PlaybackTarget {
     PlaybackTarget::Live(login(name))
 }
 
-fn vod() -> PlaybackTarget {
+fn video() -> VideoId {
     let Ok(id) = VideoId::parse("123") else {
         unreachable!("valid id");
     };
-    PlaybackTarget::Vod(id)
+    id
+}
+
+fn vod() -> PlaybackTarget {
+    PlaybackTarget::Vod(video())
 }
 
 #[test]
@@ -32,14 +36,41 @@ fn a_live_channel_joins_its_chat() {
 }
 
 #[test]
-fn a_vod_or_a_rejected_target_has_no_chat() {
+fn a_vod_replays_its_chat() {
     let mut c = ChatPanelController::new();
     c.play(Some(&live("xqc")));
-    assert_eq!(c.play(Some(&vod())), SessionChange::Leave);
-    assert_eq!(c.state(), ChatPanelState::Off);
+    assert_eq!(c.play(Some(&vod())), SessionChange::Replay(video()));
+    assert_eq!(c.state(), ChatPanelState::Shown);
+}
+
+#[test]
+fn a_rejected_target_has_no_chat() {
+    let mut c = ChatPanelController::new();
     c.play(Some(&live("xqc")));
     assert_eq!(c.play(None), SessionChange::Leave);
     assert_eq!(c.state(), ChatPanelState::Off);
+    c.play(Some(&vod()));
+    assert_eq!(c.play(None), SessionChange::Leave);
+    assert_eq!(c.state(), ChatPanelState::Off);
+}
+
+#[test]
+fn hiding_a_replay_leaves_it_and_showing_replays_again() {
+    let mut c = ChatPanelController::new();
+    c.play(Some(&vod()));
+    assert_eq!(c.hide(), SessionChange::Leave);
+    assert_eq!(c.state(), ChatPanelState::Hidden);
+    assert_eq!(c.show(), SessionChange::Replay(video()));
+    assert_eq!(c.state(), ChatPanelState::Shown);
+}
+
+#[test]
+fn a_chat_hidden_on_a_channel_stays_hidden_on_a_vod() {
+    let mut c = ChatPanelController::new();
+    c.play(Some(&live("xqc")));
+    c.hide();
+    assert_eq!(c.play(Some(&vod())), SessionChange::Leave);
+    assert_eq!(c.state(), ChatPanelState::Hidden);
 }
 
 #[test]

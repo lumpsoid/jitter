@@ -12,11 +12,11 @@ const double _pauseOffset = 24;
 /// Emotes are drawn this tall, about two lines of text.
 const double _emoteHeight = 28;
 
-/// The live chat: its status lines, then the messages, newest at the
-/// bottom, then the connection bar while not connected, where new
-/// messages would arrive. Follows new messages until the user scrolls up;
-/// the list then holds still until they scroll back down or tap "Latest
-/// messages".
+/// The chat, live or a VOD's replay: its status lines, then the messages,
+/// newest at the bottom, then the connection bar while not connected (or
+/// while a replay loads), where new messages would arrive. Follows new
+/// messages until the user scrolls up; the list then holds still until they
+/// scroll back down or tap "Latest messages".
 class ChatPanel extends StatefulWidget {
   const new({required this.chat, super.key});
 

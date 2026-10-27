@@ -118,6 +118,26 @@ void main() {
     expect(holder.status.modes, isEmpty);
   });
 
+  test('a replay seek clears, loads, then refills from the new position', () {
+    const loading = ChatStatus(banner: 'Loading chat…', modes: []);
+    const replaying = ChatStatus(modes: []);
+    holder
+      ..apply(ChatUpdateSnapshot(messages: [line('a')], status: replaying))
+      ..apply(const ChatUpdateCleared())
+      ..apply(const ChatUpdateStatus(status: loading));
+
+    expect(holder.messages, isEmpty);
+    expect(holder.status.banner, 'Loading chat…');
+
+    holder
+      ..apply(ChatUpdateAppended(messages: [line('x'), line('y')]))
+      ..apply(const ChatUpdateStatus(status: replaying));
+
+    expect(holder.mode, ChatMode.shown);
+    expect(ids(), ['x', 'y']);
+    expect(holder.status.banner, isNull);
+  });
+
   test('hidden closes the panel and drops its messages', () {
     holder
       ..apply(ChatUpdateSnapshot(messages: [line('a')], status: connected))

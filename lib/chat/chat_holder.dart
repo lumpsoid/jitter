@@ -8,9 +8,9 @@ import 'package:rinf/rinf.dart';
 
 const _noStatus = ChatStatus(modes: []);
 
-/// The live chat as Rust last sent it: a snapshot folded with the diffs
-/// after it, in order. Rust bounds the list (it sends `Evicted`). Lives for
-/// the app's lifetime.
+/// The chat (a live channel's, or a VOD's replay) as Rust last sent it: a
+/// snapshot folded with the diffs after it, in order. Rust bounds the list
+/// (it sends `Evicted`). Lives for the app's lifetime.
 class ChatHolder extends ChangeNotifier {
   new({this.sendTheme = _send});
 

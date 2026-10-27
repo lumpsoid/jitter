@@ -2,7 +2,7 @@ use rinf::{DartSignal, RustSignal, SignalPiece};
 use serde::{Deserialize, Serialize};
 
 /// The chat holder is subscribed: answer with the panel as it stands
-/// (`Snapshot`, or `Off` while no live channel plays).
+/// (`Snapshot`, or `Off` while nothing plays).
 #[derive(Deserialize, DartSignal)]
 pub struct ChatReady;
 
@@ -19,18 +19,19 @@ pub struct SetTheme {
 pub struct HideChat;
 
 /// The user opened the chat panel again: Rust rejoins the chat of the
-/// live channel playing.
+/// live channel playing, or replays the VOD's from where the player is.
 #[derive(Deserialize, DartSignal)]
 pub struct ShowChat;
 
-/// The chat panel. One type, so a snapshot and the diffs after it arrive
+/// The chat panel: a live channel's chat, or a VOD's replayed in step
+/// with the player. One type, so a snapshot and the diffs after it arrive
 /// in order. Messages are oldest first.
 #[derive(Serialize, RustSignal)]
 pub enum ChatUpdate {
-    /// No live channel plays: there is no chat to show.
+    /// Nothing plays: there is no chat to show.
     Off,
-    /// A live channel plays but the user hid its chat: no panel, and an
-    /// action to show it.
+    /// A live channel or a VOD plays but the user hid its chat: no panel,
+    /// and an action to show it.
     Hidden,
     /// Replaces the messages and the status.
     Snapshot {
@@ -94,11 +95,12 @@ pub struct EmoteImage {
 /// What the panel shows around the messages.
 #[derive(Serialize, SignalPiece)]
 pub struct ChatStatus {
-    /// Shown below the messages while not connected; none when connected.
+    /// Shown below the messages while live chat is not connected, or while
+    /// a replay loads the chat for where the player is; none otherwise.
     pub banner: Option<String>,
     /// The room's modes in effect, e.g. `Slow mode (30s)`; empty when none.
     pub modes: Vec<String>,
-    /// The latest notice from Twitch, if any.
+    /// The latest notice from Twitch, or why a replay stopped, if any.
     pub notice: Option<String>,
     /// Shown when an emote provider failed to load, so missing emotes are
     /// explained.

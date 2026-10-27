@@ -42,8 +42,8 @@ class PlayerPage extends StatefulWidget {
   final PlaybackHolder playback;
   final MediaKitEngine player;
 
-  /// The live chat, shown while Rust has one open; the app bar can hide
-  /// and show it.
+  /// The chat (live, or a VOD's replay), shown while Rust has one open;
+  /// the app bar can hide and show it.
   final ChatHolder chat;
 
   /// Opens the channel being watched (a VOD's owner) by login, from the
