@@ -76,7 +76,7 @@ void main() {
 
     expect(find.text('xQc'), findsNWidgets(2));
     expect(find.text('Offline'), findsOneWidget);
-    expect(find.byIcon(Icons.star_outline), findsOneWidget);
+    expect(find.byIcon(Icons.favorite_outline), findsOneWidget);
     expect(find.text('Archive'), findsOneWidget);
     expect(find.text('Highlights'), findsOneWidget);
     expect(find.text('Uploads'), findsOneWidget);

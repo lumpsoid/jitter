@@ -108,8 +108,8 @@ void main() {
     final browse = BrowseHolder()..apply(loaded(['a', 'b']));
     await pumpPage(tester, browse, favorites: favorites);
 
-    expect(find.byIcon(Icons.star), findsOneWidget);
-    expect(find.byIcon(Icons.star_outline), findsOneWidget);
+    expect(find.byIcon(Icons.favorite), findsOneWidget);
+    expect(find.byIcon(Icons.favorite_outline), findsOneWidget);
   });
 
   testWidgets('a long press offers to copy the title, channel and game', (

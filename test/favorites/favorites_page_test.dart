@@ -56,7 +56,7 @@ void main() {
     expect(find.text('42 viewers'), findsOneWidget);
     expect(find.text('3h 12m'), findsOneWidget);
     expect(find.text('speedrun'), findsOneWidget);
-    expect(find.byIcon(Icons.star), findsNWidgets(2));
+    expect(find.byIcon(Icons.favorite), findsNWidgets(2));
     expect(
       tester.getTopLeft(find.text('Beta')).dy,
       lessThan(tester.getTopLeft(find.text('Alpha')).dy),
@@ -107,7 +107,7 @@ void main() {
     expect(find.text('Not checked yet · 1'), findsOneWidget);
     expect(find.textContaining('Offline'), findsNothing);
     expect(find.text('Alpha'), findsOneWidget);
-    expect(find.byIcon(Icons.star), findsOneWidget);
+    expect(find.byIcon(Icons.favorite), findsOneWidget);
   });
 
   testWidgets('offline and unchecked channels show their avatar in grey', (
