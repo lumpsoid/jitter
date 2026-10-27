@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:jitter/favorites/favorite_star.dart';
+import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 
 /// One live stream: its thumbnail with the viewer count over it, then the
-/// title, the channel and the game.
+/// title, the channel and the game, with the channel's favorite star.
 class StreamCardTile extends StatelessWidget {
-  const new({required this.card, this.onTap, super.key});
+  const new({
+    required this.card,
+    required this.favorites,
+    this.onTap,
+    super.key,
+  });
 
   final StreamCard card;
+  final FavoritesHolder favorites;
   final VoidCallback? onTap;
 
   @override
@@ -44,29 +52,41 @@ class StreamCardTile extends StatelessWidget {
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
-                child: Column(
+                padding: const EdgeInsets.fromLTRB(8, 6, 0, 4),
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      card.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall,
-                    ),
-                    Text(
-                      card.displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: muted,
-                    ),
-                    if (card.gameName case final game?)
-                      Text(
-                        game,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: muted,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            card.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall,
+                          ),
+                          Text(
+                            card.displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: muted,
+                          ),
+                          if (card.gameName case final game?)
+                            Text(
+                              game,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: muted,
+                            ),
+                        ],
                       ),
+                    ),
+                    FavoriteStar(
+                      favorites: favorites,
+                      channelId: card.channelId,
+                      login: card.login,
+                    ),
                   ],
                 ),
               ),

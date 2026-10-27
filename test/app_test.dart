@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/app.dart';
 import 'package:jitter/boot/boot_holder.dart';
+import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/top/browse_holder.dart';
 
@@ -12,6 +13,7 @@ void main() {
         boot: BootHolder(),
         browse: BrowseHolder(),
         favorites: FavoritesHolder(),
+        channel: ChannelHolder(),
       ),
     );
 
@@ -25,6 +27,7 @@ void main() {
         boot: boot,
         browse: BrowseHolder(),
         favorites: FavoritesHolder(),
+        channel: ChannelHolder(),
       ),
     );
     boot.fail('Storage failed: disk full');
@@ -43,6 +46,7 @@ void main() {
         boot: BootHolder()..booted(),
         browse: BrowseHolder(),
         favorites: FavoritesHolder(),
+        channel: ChannelHolder(),
       ),
     );
 
@@ -61,6 +65,7 @@ void main() {
         boot: BootHolder()..booted(),
         browse: BrowseHolder(),
         favorites: FavoritesHolder(),
+        channel: ChannelHolder(),
       ),
     );
 

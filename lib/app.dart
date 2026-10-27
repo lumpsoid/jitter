@@ -3,6 +3,7 @@ import 'dart:ui' show AppExitResponse;
 import 'package:flutter/material.dart';
 import 'package:jitter/boot/boot_failure_page.dart';
 import 'package:jitter/boot/boot_holder.dart';
+import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/shell/app_shell.dart';
 import 'package:jitter/top/browse_holder.dart';
@@ -18,6 +19,8 @@ class JitterApp extends StatefulWidget {
     required this.browse,
     // Favorites
     required this.favorites,
+    // Channel
+    required this.channel,
     super.key,
   });
 
@@ -26,6 +29,8 @@ class JitterApp extends StatefulWidget {
   final BrowseHolder browse;
   // Favorites
   final FavoritesHolder favorites;
+  // Channel
+  final ChannelHolder channel;
 
   @override
   State<JitterApp> createState() => _JitterAppState();
@@ -76,6 +81,8 @@ class _JitterAppState extends State<JitterApp> {
             browse: widget.browse,
             // Favorites
             favorites: widget.favorites,
+            // Channel
+            channel: widget.channel,
           ),
         },
       ),

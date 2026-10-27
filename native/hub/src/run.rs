@@ -25,14 +25,18 @@ use crate::browse;
 use crate::signals::{BrowseReady, NextBrowsePage, RefreshBrowse};
 // Favorites
 use crate::signals::{AddFavorite, FavoritesReady, RefreshFavorites, RemoveFavorite};
+// Channel
+use crate::channel::{self, ChannelFetched, ChannelPage};
+use crate::signals::{OpenChannel, RefreshChannel, SelectVodKind, VodsNextPage};
 
 /// Every controller, built and loaded from one store.
 pub struct Controllers {
     favorites: FavoritesController,
-    #[expect(dead_code, reason = "read by the player (G7) arms when they land")]
     resume: ResumeController,
     // Browse
     browse: BrowseController,
+    // Channel
+    channel: ChannelPage,
 }
 
 impl Controllers {
@@ -46,6 +50,8 @@ impl Controllers {
             resume: ResumeController::new(Box::new(store.clone())),
             // Browse
             browse: BrowseController::new(),
+            // Channel
+            channel: ChannelPage::default(),
         })
     }
 }
@@ -74,6 +80,8 @@ pub enum Fetched {
     },
     // Favorites
     Favorites(FavoritesFetched),
+    // Channel
+    Channel(ChannelFetched),
 }
 
 /// Runs until the runtime shuts down. Holds the only receiver of every Dart
@@ -96,6 +104,12 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
     let remove_favorite = RemoveFavorite::get_dart_signal_receiver();
     let refresh_favorites = RefreshFavorites::get_dart_signal_receiver();
 
+    // Channel
+    let open_channel = OpenChannel::get_dart_signal_receiver();
+    let refresh_channel = RefreshChannel::get_dart_signal_receiver();
+    let select_vod_kind = SelectVodKind::get_dart_signal_receiver();
+    let vods_next_page = VodsNextPage::get_dart_signal_receiver();
+
     loop {
         tokio::select! {
             // Boot: already booted; a hot-restarted Dart side asks again.
@@ -116,8 +130,24 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
                 favorites::refresh(&mut c.favorites, &twitch, &fetch);
             }
 
+            // Channel
+            Some(pack) = open_channel.recv() => {
+                let login = &pack.message.login;
+                channel::open(&mut c.channel, &c.resume, login, &twitch, &fetch);
+            }
+            Some(_) = refresh_channel.recv() => {
+                channel::refresh(&mut c.channel, &c.resume, &twitch, &fetch);
+            }
+            Some(pack) = select_vod_kind.recv() => {
+                let kind = pack.message.kind;
+                channel::select_kind(&mut c.channel, &c.resume, kind, &twitch, &fetch);
+            }
+            Some(_) = vods_next_page.recv() => {
+                channel::next(&mut c.channel, &c.resume, &twitch, &fetch);
+            }
+
             // Network results
-            Some(result) = fetched.recv() => on_fetched(&mut c, result),
+            Some(result) = fetched.recv() => on_fetched(&mut c, result, &twitch, &fetch),
 
             else => break,
         }
@@ -125,12 +155,21 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
 }
 
 /// Hands a network result to the controller that asked for it, then sends
-/// that feature's state.
-fn on_fetched(c: &mut Controllers, result: Fetched) {
+/// that feature's state. A result may start the call that follows it.
+fn on_fetched(
+    c: &mut Controllers,
+    result: Fetched,
+    twitch: &Twitch,
+    fetch: &mpsc::UnboundedSender<Fetched>,
+) {
     match result {
         // Browse
         Fetched::TopStreams { request, result } => browse::on_page(&mut c.browse, request, result),
         // Favorites
         Fetched::Favorites(fetched) => favorites::on_fetched(&mut c.favorites, fetched),
+        // Channel
+        Fetched::Channel(fetched) => {
+            channel::on_fetched(&mut c.channel, &c.resume, fetched, twitch, fetch);
+        }
     }
 }

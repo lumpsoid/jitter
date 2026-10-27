@@ -126,6 +126,7 @@ impl From<&Stream> for StreamCard {
     fn from(stream: &Stream) -> Self {
         Self {
             id: stream.id.clone(),
+            channel_id: stream.channel.id.as_str().to_owned(),
             login: stream.channel.login.as_str().to_owned(),
             display_name: stream.channel.display_name.clone(),
             title: stream.title.clone(),
@@ -183,6 +184,7 @@ mod tests {
     #[test]
     fn a_card_is_ready_to_show() -> TestResult {
         let card = StreamCard::from(&stream("s1")?);
+        assert_eq!(card.channel_id, "12");
         assert_eq!(card.login, "streamer_1");
         assert_eq!(card.display_name, "Streamer_1");
         assert_eq!(card.viewers_label, "12.3K viewers");

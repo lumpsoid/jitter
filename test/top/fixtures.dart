@@ -2,6 +2,7 @@ import 'package:jitter/src/bindings/bindings.dart';
 
 StreamCard card(String id) => StreamCard(
   id: id,
+  channelId: 'channel_$id',
   login: 'login_$id',
   displayName: 'Name $id',
   title: 'Title $id',

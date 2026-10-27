@@ -9,6 +9,8 @@ mod boot;
 mod browse;
 // Favorites
 mod favorites;
+// Channel
+mod channel;
 
 pub use boot::{Boot, BootFailed, Booted};
 // Browse
@@ -19,4 +21,9 @@ pub use browse::{
 pub use favorites::{
     AddFavorite, FavoriteRow, FavoriteStatus, FavoritesReady, FavoritesUpdate, RefreshFavorites,
     RemoveFavorite,
+};
+// Channel
+pub use channel::{
+    ChannelLive, ChannelUpdate, OpenChannel, RefreshChannel, SelectVodKind, VodKind, VodTile,
+    VodsMore, VodsNextPage, VodsState, VodsUpdate,
 };

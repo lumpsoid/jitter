@@ -3,6 +3,8 @@
 
 // Browse
 mod browse;
+// Channel
+mod channel;
 mod favorites;
 mod format;
 mod run;

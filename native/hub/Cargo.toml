@@ -22,3 +22,7 @@ jitter_twitch = { path = "../twitch" }
 rinf = "8.11.0"
 serde = { version = "1.0.219", features = ["derive"] }
 tokio = { version = "1.45.0", features = ["rt", "sync", "time", "macros"] }
+
+[dev-dependencies]
+# The fake resume store, for the VOD tiles' resume progress.
+jitter_core = { path = "../core", features = ["test-fakes"] }

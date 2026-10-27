@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:jitter/channel/channel_holder.dart';
+import 'package:jitter/channel/channel_page.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/favorites/favorites_page.dart';
 import 'package:jitter/top/browse_holder.dart';
@@ -25,6 +29,8 @@ class AppShell extends StatefulWidget {
     required this.browse,
     // Favorites
     required this.favorites,
+    // Channel
+    required this.channel,
     super.key,
   });
 
@@ -32,6 +38,8 @@ class AppShell extends StatefulWidget {
   final BrowseHolder browse;
   // Favorites
   final FavoritesHolder favorites;
+  // Channel
+  final ChannelHolder channel;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -47,7 +55,7 @@ class _AppShellState extends State<AppShell> {
       label: 'Top',
       icon: Icons.trending_up_outlined,
       selectedIcon: Icons.trending_up,
-      page: TopPage(browse: widget.browse),
+      page: TopPage(browse: widget.browse, favorites: widget.favorites),
     ),
     (
       label: 'Favorites',
@@ -55,11 +63,21 @@ class _AppShellState extends State<AppShell> {
       selectedIcon: Icons.favorite,
       page: FavoritesPage(
         favorites: widget.favorites,
-        // Opening a channel lands with the channel page (G5).
-        onOpenChannel: (_) {},
+        onOpenChannel: _openChannel,
       ),
     ),
   ];
+
+  // Channel; no `onOpenVod` / `onOpenLive` until the player lands, so
+  // VODs and the live stream are not tappable yet.
+  void _openChannel(String login) => unawaited(
+    ChannelPage.push(
+      context,
+      login: login,
+      channel: widget.channel,
+      favorites: widget.favorites,
+    ),
+  );
 
   void _select(int index) => setState(() => _selected = index);
 
