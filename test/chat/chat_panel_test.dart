@@ -81,6 +81,53 @@ void main() {
     expect(modes.bottom, lessThan(message.top));
   });
 
+  testWidgets('status lines are live regions, messages are not', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final chat = ChatHolder(sendTheme: (_) {})
+      ..apply(
+        const ChatUpdateSnapshot(
+          messages: [
+            ChatLine(
+              id: 'a',
+              name: 'alice',
+              color: 0xFFFF0000,
+              action: false,
+              deleted: false,
+              fragments: [ChatFragmentText(text: 'hi')],
+            ),
+          ],
+          status: ChatStatus(
+            banner: 'Reconnecting to chat…',
+            modes: ['Emote-only'],
+            notice: 'This room is in slow mode.',
+          ),
+        ),
+      );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: ChatPanel(chat: chat)),
+      ),
+    );
+
+    for (final line in [
+      'Reconnecting to chat…',
+      'Emote-only',
+      'This room is in slow mode.',
+    ]) {
+      expect(
+        tester.getSemantics(find.bySemanticsLabel(line)),
+        isSemantics(label: line, isLiveRegion: true),
+      );
+    }
+    expect(
+      tester.getSemantics(find.bySemanticsLabel(RegExp('alice'))),
+      isSemantics(isLiveRegion: false),
+    );
+    semantics.dispose();
+  });
+
   testWidgets('a link is announced as one, and Tab then Enter opens it', (
     tester,
   ) async {

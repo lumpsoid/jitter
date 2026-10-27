@@ -8,6 +8,7 @@ import 'package:jitter/chat/chat_toggle.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_failure.dart';
 import 'package:jitter/player/playback_holder.dart';
+import 'package:jitter/player/playback_loading.dart';
 import 'package:jitter/player/playback_title.dart';
 import 'package:jitter/player/player_shortcuts.dart';
 import 'package:jitter/player/theatre.dart';
@@ -207,7 +208,7 @@ class _PlayerPageState extends State<PlayerPage> {
       message: message,
       onRetry: _play,
     ),
-    _ => const Center(child: CircularProgressIndicator()),
+    _ => const PlaybackLoading(),
   };
 }
 

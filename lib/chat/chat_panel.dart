@@ -113,7 +113,9 @@ class _ChatPanelState extends State<ChatPanel> {
 }
 
 /// One slim line around the messages: the connection below them; room
-/// modes, a notice, or the missing-emotes hint above.
+/// modes, a notice, or the missing-emotes hint above. Each is a live region,
+/// so a screen reader announces it when it appears or changes without the
+/// user moving focus; the messages are not, so chat itself stays quiet.
 class _StatusLine extends StatelessWidget {
   const new({required this.text, required this.icon});
 
@@ -124,21 +126,25 @@ class _StatusLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = theme.colorScheme.onSurfaceVariant;
-    return ColoredBox(
-      color: theme.colorScheme.surfaceContainerHigh,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Row(
-          children: [
-            Icon(icon, size: 14, color: color),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                text,
-                style: theme.textTheme.bodySmall?.copyWith(color: color),
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      child: ColoredBox(
+        color: theme.colorScheme.surfaceContainerHigh,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Row(
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  text,
+                  style: theme.textTheme.bodySmall?.copyWith(color: color),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

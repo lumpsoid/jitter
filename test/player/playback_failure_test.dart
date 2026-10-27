@@ -34,6 +34,19 @@ void main() {
     expect(find.text('Retry'), findsOneWidget);
   });
 
+  testWidgets('a failure is a live region a screen reader announces', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await pumpFailure(tester);
+
+    expect(
+      tester.getSemantics(find.byType(PlaybackFailure)),
+      isSemantics(label: 'The stream is offline.', isLiveRegion: true),
+    );
+    semantics.dispose();
+  });
+
   testWidgets('Retry tries playback again', (tester) async {
     var retries = 0;
     await pumpFailure(tester, onRetry: () => retries++);
