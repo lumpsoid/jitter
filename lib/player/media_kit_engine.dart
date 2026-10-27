@@ -52,6 +52,28 @@ class MediaKitEngine implements PlayerEngine {
   @override
   Future<void> seek(Duration to) => _player.seek(to);
 
+  /// Moves the position by [by], within the media: not before its start,
+  /// nor past its end, which would end it.
+  Future<void> seekBy(Duration by) {
+    final to = position + by;
+    return _player.seek(
+      to < Duration.zero
+          ? Duration.zero
+          : to > duration
+          ? duration
+          : to,
+    );
+  }
+
+  /// Steps one frame [forward] or back, while paused; playing, it does
+  /// nothing, as mpv's step would pause it.
+  Future<void> stepFrame({required bool forward}) async {
+    if (_player.state.playing) return;
+    if (_player.platform case final NativePlayer mpv) {
+      await mpv.command([if (forward) 'frame-step' else 'frame-back-step']);
+    }
+  }
+
   /// Where it plays now, then each change.
   Stream<Duration> get positions async* {
     yield _player.state.position;

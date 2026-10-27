@@ -19,6 +19,7 @@ import 'package:jitter/player/sleep_timer_button.dart';
 import 'package:jitter/player/theatre.dart';
 import 'package:jitter/player/video_frame.dart';
 import 'package:jitter/player/video_zoom.dart';
+import 'package:jitter/player/vod_keys.dart';
 import 'package:jitter/player/zoom_gestures.dart';
 import 'package:jitter/player/zoom_reset.dart';
 import 'package:jitter/src/bindings/bindings.dart';
@@ -118,6 +119,9 @@ class _PlayerPageState extends State<PlayerPage> {
 
   void _turnOffSleep() => const TurnOffSleepTimer().sendSignalToRust();
 
+  void _toggleFullscreen() =>
+      unawaited(_videoKey.currentState?.toggleFullscreen());
+
   void _toggleTheatre() => setState(() => _theatre = !_theatre);
 
   void _exitTheatre() => setState(() => _theatre = false);
@@ -144,8 +148,7 @@ class _PlayerPageState extends State<PlayerPage> {
     return PlayerShortcuts(
       onToggleChat: widget.chat.toggle,
       onToggleMute: () => unawaited(widget.player.toggleMute()),
-      onToggleFullscreen: () =>
-          unawaited(_videoKey.currentState?.toggleFullscreen()),
+      onToggleFullscreen: _toggleFullscreen,
       onTogglePlay: () => unawaited(widget.player.togglePlaying()),
       onToggleTheatre: _toggleTheatre,
       onZoomIn: () => _zoomBy(zoomStep),
@@ -230,6 +233,9 @@ class _PlayerPageState extends State<PlayerPage> {
             live: live,
             player: widget.player,
             onGoTo: _goTo,
+            onToggleFullscreen: _toggleFullscreen,
+            onExitFullscreen: () =>
+                unawaited(_videoKey.currentState?.exitFullscreen()),
             child: Video(
               key: _videoKey,
               controller: widget.player.controller,
@@ -284,7 +290,8 @@ class _QualityMenu extends StatelessWidget {
 }
 
 /// media_kit's controls (play/pause, volume, fullscreen; on desktop space,
-/// `f` and the arrow keys). A live stream has no seek bar and no position;
+/// `f` and the arrow keys, a VOD's as [vodKeys] has them; on a phone a
+/// VOD's double tap). A live stream has no seek bar and no position;
 /// a VOD has the page's [SeekBar], which Shift and Ctrl or a finger taken
 /// up from it slow, and its [PositionReadout], which goes to a typed time.
 /// On desktop media_kit's wheel and drag for the volume over the video are
@@ -296,6 +303,8 @@ class _Controls extends StatelessWidget {
     required this.live,
     required this.player,
     required this.onGoTo,
+    required this.onToggleFullscreen,
+    required this.onExitFullscreen,
     required this.child,
   });
 
@@ -304,6 +313,11 @@ class _Controls extends StatelessWidget {
 
   /// Sends a time typed into the VOD's [PositionReadout].
   final ValueChanged<String> onGoTo;
+
+  /// For a VOD's keys, `f` and Escape: media_kit's own go through the
+  /// controls, which a key map cannot reach.
+  final VoidCallback onToggleFullscreen;
+  final VoidCallback onExitFullscreen;
   final Widget child;
 
   @override
@@ -326,8 +340,11 @@ class _Controls extends StatelessWidget {
       // media_kit's own buttons, with the page's seek bar as part of the
       // button bar, so a touch on it is not a touch on the video: under
       // the buttons on a phone, as media_kit's own bar is.
+      // A double tap on either side goes back or on media_kit's 10 s, as
+      // the arrow keys ([vodSeekStep]).
       final mobile = MaterialVideoControlsThemeData(
         displaySeekBar: false,
+        seekOnDoubleTap: true,
         buttonBarHeight: _buttonBarHeight + seekBarHeight,
         bottomButtonBar: [
           Expanded(
@@ -352,6 +369,17 @@ class _Controls extends StatelessWidget {
       final desktop = MaterialDesktopVideoControlsThemeData(
         modifyVolumeOnScroll: false,
         displaySeekBar: false,
+        keyboardShortcuts: vodKeys(
+          onTogglePlay: () => unawaited(player.togglePlaying()),
+          onPlay: () => unawaited(player.play()),
+          onPause: () => unawaited(player.pause()),
+          onSeekBy: (by) => unawaited(player.seekBy(by)),
+          onStepFrame: (forward) =>
+              unawaited(player.stepFrame(forward: forward)),
+          onNudgeVolume: (by) => unawaited(player.nudgeVolume(by)),
+          onToggleFullscreen: onToggleFullscreen,
+          onExitFullscreen: onExitFullscreen,
+        ),
         buttonBarHeight: _buttonBarHeight + seekBarHeight,
         bottomButtonBar: [
           Expanded(
