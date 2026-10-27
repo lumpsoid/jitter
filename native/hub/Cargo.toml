@@ -17,7 +17,8 @@ workspace = true
 
 [dependencies]
 jitter_core = { path = "../core" }
+jitter_store = { path = "../store" }
 jitter_twitch = { path = "../twitch" }
 rinf = "8.11.0"
 serde = { version = "1.0.219", features = ["derive"] }
-tokio = { version = "1.45.0", features = ["rt", "macros", "time"] }
+tokio = { version = "1.45.0", features = ["rt", "sync", "time", "macros"] }
