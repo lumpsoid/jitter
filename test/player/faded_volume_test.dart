@@ -44,4 +44,19 @@ void main() {
     expect(volume.toggleMute(current: 0), 30);
     expect(volume.end(), 60);
   });
+
+  test('a nudge moves the volume within 0–100', () {
+    final volume = FadedVolume();
+
+    expect(volume.nudge(5, current: 60), 65);
+    expect(volume.nudge(5, current: 98), 100);
+    expect(volume.nudge(-5, current: 3), 0);
+  });
+
+  test('a nudge mid-fade moves the user volume under the fade', () {
+    final volume = FadedVolume()..fade(0.5, current: 80);
+
+    expect(volume.nudge(10, current: 40), 45);
+    expect(volume.end(), 90);
+  });
 }

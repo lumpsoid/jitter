@@ -28,6 +28,14 @@ class FadedVolume {
     return user;
   }
 
+  /// The user's volume moved by [by], kept within 0–100, the player now
+  /// at [current]. Mid-fade it moves the user's volume under the fade.
+  double nudge(double by, {required double current}) {
+    final user = ((_user ?? current) + by).clamp(0.0, 100.0);
+    if (_user != null) _user = user;
+    return user * _level;
+  }
+
   /// Mutes, or unmutes back to the volume it was muted at, the player now
   /// at [current]. Mid-fade it mutes the user's volume under the fade.
   double toggleMute({required double current}) {

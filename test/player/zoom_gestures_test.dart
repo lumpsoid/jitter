@@ -1,12 +1,17 @@
 import 'package:flutter/gestures.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/player/video_zoom.dart';
 import 'package:jitter/player/zoom_gestures.dart';
 
 /// Pumps the gestures over a 400×200 box at the top-left of the screen,
-/// its left half kept from them by [KeepsWheel].
-Future<ValueNotifier<VideoZoom>> pumpGestures(WidgetTester tester) async {
+/// its left half kept from them by [KeepsWheel]. Each plain wheel notch
+/// they pass on is added to [wheeled].
+Future<ValueNotifier<VideoZoom>> pumpGestures(
+  WidgetTester tester, {
+  List<int>? wheeled,
+}) async {
   final zoom = ValueNotifier(VideoZoom.none);
   addTearDown(zoom.dispose);
   await tester.pumpWidget(
@@ -19,6 +24,7 @@ Future<ValueNotifier<VideoZoom>> pumpGestures(WidgetTester tester) async {
           height: 200,
           child: ZoomGestures(
             zoom: zoom,
+            onWheel: (notches) => wheeled?.add(notches),
             child: const Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -38,34 +44,59 @@ Future<ValueNotifier<VideoZoom>> pumpGestures(WidgetTester tester) async {
   return zoom;
 }
 
+/// Scrolls one notch up (or down) at [at].
+Future<void> wheel(WidgetTester tester, Offset at, {bool up = true}) async {
+  final pointer = TestPointer(1, PointerDeviceKind.mouse);
+  await tester.sendEventToBinding(pointer.hover(at));
+  await tester.sendEventToBinding(pointer.scroll(Offset(0, up ? -20 : 20)));
+}
+
 void main() {
-  testWidgets('the wheel zooms in and out about the pointer', (tester) async {
-    final zoom = await pumpGestures(tester);
-    final pointer = TestPointer(1, PointerDeviceKind.mouse);
+  testWidgets('Ctrl and the wheel zoom in and out about the pointer', (
+    tester,
+  ) async {
+    final wheeled = <int>[];
+    final zoom = await pumpGestures(tester, wheeled: wheeled);
     const at = Offset(300, 50);
 
-    await tester.sendEventToBinding(pointer.hover(at));
-    await tester.sendEventToBinding(pointer.scroll(const Offset(0, -20)));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await wheel(tester, at);
 
     expect(
       zoom.value,
       VideoZoom.none.zoomBy(zoomStep, focus: const Offset(0.75, 0.25)),
     );
 
-    await tester.sendEventToBinding(pointer.scroll(const Offset(0, 20)));
+    await wheel(tester, at, up: false);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
 
+    expect(zoom.value, VideoZoom.none);
+    expect(wheeled, isEmpty);
+  });
+
+  testWidgets('the wheel alone is passed on, not zoomed', (tester) async {
+    final wheeled = <int>[];
+    final zoom = await pumpGestures(tester, wheeled: wheeled);
+
+    await wheel(tester, const Offset(300, 50));
+    await wheel(tester, const Offset(300, 50), up: false);
+
+    expect(wheeled, [1, -1]);
     expect(zoom.value, VideoZoom.none);
   });
 
-  testWidgets('the wheel over a KeepsWheel child does not zoom', (
+  testWidgets("the wheel over a KeepsWheel child is the child's alone", (
     tester,
   ) async {
-    final zoom = await pumpGestures(tester);
-    final pointer = TestPointer(1, PointerDeviceKind.mouse);
+    final wheeled = <int>[];
+    final zoom = await pumpGestures(tester, wheeled: wheeled);
 
-    await tester.sendEventToBinding(pointer.hover(const Offset(100, 100)));
-    await tester.sendEventToBinding(pointer.scroll(const Offset(0, -20)));
+    await wheel(tester, const Offset(100, 100));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await wheel(tester, const Offset(100, 100));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
 
+    expect(wheeled, isEmpty);
     expect(zoom.value, VideoZoom.none);
   });
 

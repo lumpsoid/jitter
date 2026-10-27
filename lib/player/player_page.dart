@@ -18,11 +18,16 @@ import 'package:jitter/player/theatre.dart';
 import 'package:jitter/player/video_frame.dart';
 import 'package:jitter/player/video_zoom.dart';
 import 'package:jitter/player/zoom_gestures.dart';
+import 'package:jitter/player/zoom_reset.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 /// How often the page reports the player's position; Rust throttles saves.
 const _reportEvery = Duration(seconds: 1);
+
+/// How far one wheel notch over the video moves the volume (of 0–100), as
+/// media_kit's volume button does.
+const double _wheelVolumeStep = 5;
 
 /// Plays [target]: sends `Play` when it opens and `LeavePlayer` when it
 /// closes; Rust opens and stops the player. Push it with `Navigator.push`.
@@ -202,20 +207,28 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Widget _video(PlaybackUpdate state) => switch (state) {
-    PlaybackUpdateReady(:final live) => ZoomGestures(
-      zoom: _zoom,
-      child: _Controls(
-        live: live,
-        child: Video(
-          key: _videoKey,
-          controller: widget.player.controller,
-          // Leaving media_kit's fullscreen from theatre goes back to
-          // theatre's screen, not out of fullscreen.
-          onExitFullscreen: _theatre
-              ? returnToTheatreScreen
-              : defaultExitNativeFullscreen,
+    PlaybackUpdateReady(:final live) => Stack(
+      fit: StackFit.expand,
+      children: [
+        ZoomGestures(
+          zoom: _zoom,
+          onWheel: (notches) =>
+              unawaited(widget.player.nudgeVolume(notches * _wheelVolumeStep)),
+          child: _Controls(
+            live: live,
+            child: Video(
+              key: _videoKey,
+              controller: widget.player.controller,
+              // Leaving media_kit's fullscreen from theatre goes back to
+              // theatre's screen, not out of fullscreen.
+              onExitFullscreen: _theatre
+                  ? returnToTheatreScreen
+                  : defaultExitNativeFullscreen,
+            ),
+          ),
         ),
-      ),
+        Positioned(top: 8, right: 8, child: ZoomReset(zoom: _zoom)),
+      ],
     ),
     PlaybackUpdateFailed(:final message) => PlaybackFailure(
       message: message,
@@ -258,8 +271,10 @@ class _QualityMenu extends StatelessWidget {
 
 /// media_kit's controls (play/pause, volume, fullscreen; on desktop space,
 /// `f` and the arrow keys). A live stream has no seek bar and no position.
-/// On desktop the wheel and a drag over the video are the zoom's, not the
-/// volume's; the wheel over the volume button sets the volume only.
+/// On desktop media_kit's wheel and drag for the volume over the video are
+/// off: the page's own wheel sets the volume, through the sleep timer's
+/// fade, and the drag moves the zoomed picture. The wheel over the volume
+/// button is the button's alone.
 class _Controls extends StatelessWidget {
   const new({required this.live, required this.child});
 

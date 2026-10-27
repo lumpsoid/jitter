@@ -1,23 +1,31 @@
 import 'package:flutter/gestures.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:jitter/player/video_zoom.dart';
 
-/// Zooms the video it covers through [zoom]: the wheel zooms about the
-/// pointer, a pinch about its middle, and a drag moves the zoomed picture.
+/// Zooms the video it covers through [zoom]: Ctrl and the wheel zoom about
+/// the pointer, a pinch about its middle, and a drag moves the zoomed
+/// picture. The wheel alone is left to [onWheel], up as positive.
 /// The frame is the box this fills; the picture is assumed to fill it.
 class ZoomGestures extends StatefulWidget {
-  const new({required this.zoom, required this.child, super.key});
+  const new({
+    required this.zoom,
+    required this.onWheel,
+    required this.child,
+    super.key,
+  });
 
   final ValueNotifier<VideoZoom> zoom;
+  final ValueChanged<int> onWheel;
   final Widget child;
 
   @override
   State<ZoomGestures> createState() => _ZoomGesturesState();
 }
 
-/// Keeps the wheel over [child] from zooming the video: it claims each
-/// wheel event before [ZoomGestures] can, and leaves it to [child]'s own
-/// handling (media_kit's volume button sets the volume on it directly).
+/// Keeps the wheel over [child] from [ZoomGestures]: it claims each wheel
+/// event before they can, and leaves it to [child]'s own handling
+/// (media_kit's volume button sets the volume on it directly).
 class KeepsWheel extends StatelessWidget {
   const new({required this.child, super.key});
 
@@ -49,11 +57,15 @@ class _ZoomGesturesState extends State<ZoomGestures> {
   void _onWheel(PointerSignalEvent event) {
     if (event is! PointerScrollEvent || event.scrollDelta.dy == 0) return;
     GestureBinding.instance.pointerSignalResolver.register(event, (_) {
-      final factor = event.scrollDelta.dy < 0 ? zoomStep : 1 / zoomStep;
-      widget.zoom.value = widget.zoom.value.zoomBy(
-        factor,
-        focus: _fraction(event.localPosition),
-      );
+      final up = event.scrollDelta.dy < 0;
+      if (HardwareKeyboard.instance.isControlPressed) {
+        widget.zoom.value = widget.zoom.value.zoomBy(
+          up ? zoomStep : 1 / zoomStep,
+          focus: _fraction(event.localPosition),
+        );
+      } else {
+        widget.onWheel(up ? 1 : -1);
+      }
     });
   }
 

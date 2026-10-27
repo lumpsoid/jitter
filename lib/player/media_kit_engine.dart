@@ -54,6 +54,10 @@ class MediaKitEngine implements PlayerEngine {
   Future<void> toggleMute() =>
       _player.setVolume(_volume.toggleMute(current: _player.state.volume));
 
+  /// Moves the volume by [by] (of 0–100); mid-fade, under the fade.
+  Future<void> nudgeVolume(double by) =>
+      _player.setVolume(_volume.nudge(by, current: _player.state.volume));
+
   /// Shows the picture zoomed by [zoom]. libmpv draws it, so media_kit's
   /// controls stay unzoomed over it; it holds across `open`s until reset.
   Future<void> setZoom(VideoZoom zoom) async {
