@@ -45,9 +45,9 @@ pub use favorites::{
 };
 // Playback
 pub use playback::{
-    AppBackgrounded, AppForegrounded, ArmSleepTimer, LeavePlayer, Play, PlaybackChannel,
-    PlaybackDetails, PlaybackLive, PlaybackSleep, PlaybackTarget, PlaybackUpdate, PlayerCommand,
-    PlayerPosition, QualityOption, SelectQuality, SleepPreset, TurnOffSleepTimer,
+    AppBackgrounded, AppForegrounded, ArmSleepTimer, GoToTime, GoToTimeAnswer, LeavePlayer, Play,
+    PlaybackChannel, PlaybackDetails, PlaybackLive, PlaybackSleep, PlaybackTarget, PlaybackUpdate,
+    PlayerCommand, PlayerPosition, QualityOption, SelectQuality, SleepPreset, TurnOffSleepTimer,
 };
 // Channel
 pub use channel::{

@@ -25,6 +25,9 @@ class _FakeEngine implements PlayerEngine {
   Future<void> setFade(double level) async => calls.add('fade $level');
 
   @override
+  Future<void> seek(Duration to) async => calls.add('seek ${to.inSeconds}');
+
+  @override
   Duration get position => Duration.zero;
 
   @override
@@ -68,6 +71,12 @@ void main() {
     await performer.perform(const PlayerCommandStop());
 
     expect(engine.calls, ['fade 0.5', 'fade 0.25', 'stop']);
+  });
+
+  test('a seek goes to the position, in seconds', () async {
+    await performer.perform(const PlayerCommandSeek(positionS: 5025));
+
+    expect(engine.calls, ['seek 5025']);
   });
 
   test('a failed call does not hold up the next', () async {

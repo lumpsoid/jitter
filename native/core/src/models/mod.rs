@@ -94,7 +94,7 @@ pub use room_state_update::RoomStateUpdate;
 pub use search_kind::SearchKind;
 pub use search_query::{SearchQuery, SearchQueryError};
 pub use search_requests::SearchRequests;
-pub use seconds::Seconds;
+pub use seconds::{ClockError, Seconds};
 pub use setting::Setting;
 pub use settings::Settings;
 pub use sleep_timer::{SLEEP_FADE, SLEEP_FADE_STEP, SleepStep, SleepTimer};

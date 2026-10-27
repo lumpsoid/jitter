@@ -2,7 +2,7 @@
 //! every page that shows the same value shows it the same way.
 
 use chrono::{Datelike, Local, NaiveDate, TimeZone};
-use jitter_core::models::{Seconds, Timestamp};
+use jitter_core::models::{ClockError, Seconds, Timestamp};
 use jitter_twitch::TwitchError;
 
 /// What the user reads when a Twitch call failed: one sentence per
@@ -76,6 +76,19 @@ pub fn duration_label(duration: Seconds) -> String {
     }
 }
 
+/// Why a typed time is not one to go to: `Type a time, like 1:23:45 or
+/// 1h23m.`, or `The VOD ends at 5:12:03.`
+pub fn clock_error(error: ClockError) -> String {
+    match error {
+        ClockError::Empty | ClockError::Malformed => {
+            "Type a time, like 1:23:45 or 1h23m.".to_owned()
+        }
+        ClockError::PastEnd { duration } => {
+            format!("The VOD ends at {}.", duration_label(duration))
+        }
+    }
+}
+
 /// How long a stream has been live, to the minute: `3h 12m`, or `12m`
 /// under an hour (`0m` in its first minute). Hours do not roll into days.
 pub fn uptime_label(uptime: Seconds) -> String {
@@ -126,12 +139,27 @@ fn tenths(tenths: u32, suffix: &str) -> String {
 #[cfg(test)]
 mod tests {
     use chrono::NaiveDate;
-    use jitter_core::models::Seconds;
+    use jitter_core::models::{ClockError, Seconds};
     use jitter_twitch::TwitchError;
 
     use super::{
-        date_label, duration_label, followers_label, twitch_error, uptime_label, viewers_label,
+        clock_error, date_label, duration_label, followers_label, twitch_error, uptime_label,
+        viewers_label,
     };
+
+    #[test]
+    fn a_typed_time_says_what_to_type_or_where_the_vod_ends() {
+        assert_eq!(
+            clock_error(ClockError::Malformed),
+            "Type a time, like 1:23:45 or 1h23m."
+        );
+        assert_eq!(
+            clock_error(ClockError::PastEnd {
+                duration: Seconds::new(18723)
+            }),
+            "The VOD ends at 5:12:03."
+        );
+    }
 
     fn reads(error: TwitchError, message: &str) {
         assert_eq!(twitch_error(&error), message, "{error:?}");

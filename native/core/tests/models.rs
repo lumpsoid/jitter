@@ -2,9 +2,9 @@ use std::time::{Duration, Instant};
 
 use jitter_core::models::{
     Category, CategoryId, CategoryIdError, Channel, ChannelId, ChannelIdError, ChannelLogin,
-    ChannelLoginError, FadeLevel, LiveDetails, Playback, QualityKind, Resolution, SLEEP_FADE,
-    SLEEP_FADE_STEP, Seconds, SleepStep, SleepTimer, Stream, Timestamp, Variant, VideoId,
-    VideoIdError,
+    ChannelLoginError, ClockError, FadeLevel, LiveDetails, Playback, QualityKind, Resolution,
+    SLEEP_FADE, SLEEP_FADE_STEP, Seconds, SleepStep, SleepTimer, Stream, Timestamp, Variant,
+    VideoId, VideoIdError,
 };
 
 fn login(s: &str) -> ChannelLogin {
@@ -389,4 +389,69 @@ fn an_emote_without_a_still_shows_its_url_either_way() {
     let emote = emote_with(None);
     assert_eq!(emote.image_url(true), "https://e/animated");
     assert_eq!(emote.image_url(false), "https://e/animated");
+}
+
+fn clock(input: &str) -> Result<u32, ClockError> {
+    Seconds::parse_clock(input).map(Seconds::get)
+}
+
+#[test]
+fn a_clock_reads_hours_minutes_and_seconds() {
+    assert_eq!(clock("1:23:45"), Ok(5025));
+    assert_eq!(clock("23:45"), Ok(1425));
+    assert_eq!(clock("45"), Ok(45));
+    assert_eq!(clock(" 0:05 "), Ok(5));
+    assert_eq!(clock("90:00"), Ok(5400));
+}
+
+#[test]
+fn units_read_in_any_subset_largest_first() {
+    assert_eq!(clock("1h23m45s"), Ok(5025));
+    assert_eq!(clock("1h23m"), Ok(4980));
+    assert_eq!(clock("1h 23m"), Ok(4980));
+    assert_eq!(clock("1H23M"), Ok(4980));
+    assert_eq!(clock("90m"), Ok(5400));
+    assert_eq!(clock("45s"), Ok(45));
+    assert_eq!(clock("2h5s"), Ok(7205));
+}
+
+#[test]
+fn a_typo_is_not_a_time() {
+    assert_eq!(clock(""), Err(ClockError::Empty));
+    assert_eq!(clock("   "), Err(ClockError::Empty));
+    for typo in [
+        "1:75",
+        "1:2:3:4",
+        ":30",
+        "1::30",
+        "1h75m",
+        "23m1h",
+        "1h1h",
+        "1x",
+        "h",
+        "1 h",
+        "-5",
+        "1.5h",
+        "1:30s",
+        "99999999999",
+    ] {
+        assert_eq!(clock(typo), Err(ClockError::Malformed), "{typo}");
+    }
+}
+
+#[test]
+fn a_position_goes_no_further_than_the_end() {
+    let duration = Seconds::new(3600);
+    assert_eq!(
+        Seconds::parse_position("1:00:00", duration),
+        Ok(Seconds::new(3600))
+    );
+    assert_eq!(
+        Seconds::parse_position("1:00:01", duration),
+        Err(ClockError::PastEnd { duration })
+    );
+    assert_eq!(
+        Seconds::parse_position("9h", Seconds::ZERO),
+        Ok(Seconds::new(32400))
+    );
 }

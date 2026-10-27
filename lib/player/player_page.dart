@@ -12,6 +12,7 @@ import 'package:jitter/player/playback_loading.dart';
 import 'package:jitter/player/playback_title.dart';
 import 'package:jitter/player/player_layout.dart';
 import 'package:jitter/player/player_shortcuts.dart';
+import 'package:jitter/player/position_readout.dart';
 import 'package:jitter/player/seek_bar.dart';
 import 'package:jitter/player/sleep_stopped.dart';
 import 'package:jitter/player/sleep_timer_button.dart';
@@ -103,6 +104,13 @@ class _PlayerPageState extends State<PlayerPage> {
   void _selectQuality(String name) => SelectQuality(
     name: name,
     positionS: widget.player.position.inSeconds,
+  ).sendSignalToRust();
+
+  /// Asks Rust to read a typed time and seek there; the dialog it was
+  /// typed in hears the answer.
+  void _goTo(String text) => GoToTime(
+    text: text,
+    durationS: widget.player.duration.inSeconds,
   ).sendSignalToRust();
 
   void _armSleep(int minutes) =>
@@ -221,6 +229,7 @@ class _PlayerPageState extends State<PlayerPage> {
           child: _Controls(
             live: live,
             player: widget.player,
+            onGoTo: _goTo,
             child: Video(
               key: _videoKey,
               controller: widget.player.controller,
@@ -277,16 +286,24 @@ class _QualityMenu extends StatelessWidget {
 /// media_kit's controls (play/pause, volume, fullscreen; on desktop space,
 /// `f` and the arrow keys). A live stream has no seek bar and no position;
 /// a VOD has the page's [SeekBar], which Shift and Ctrl or a finger taken
-/// up from it slow.
+/// up from it slow, and its [PositionReadout], which goes to a typed time.
 /// On desktop media_kit's wheel and drag for the volume over the video are
 /// off: the page's own wheel sets the volume, through the sleep timer's
 /// fade, and the drag moves the zoomed picture. The wheel over the volume
 /// button is the button's alone.
 class _Controls extends StatelessWidget {
-  const new({required this.live, required this.player, required this.child});
+  const new({
+    required this.live,
+    required this.player,
+    required this.onGoTo,
+    required this.child,
+  });
 
   final bool live;
   final MediaKitEngine player;
+
+  /// Sends a time typed into the VOD's [PositionReadout].
+  final ValueChanged<String> onGoTo;
   final Widget child;
 
   @override
@@ -298,6 +315,14 @@ class _Controls extends StatelessWidget {
         buffers: () => player.buffers,
         onSeek: (to) => unawaited(player.seek(to)),
       );
+      PositionReadout readout({required double fontSize}) => PositionReadout(
+        positions: () => player.positions,
+        durations: () => player.durations,
+        answers: () =>
+            GoToTimeAnswer.rustSignalStream.map((pack) => pack.message),
+        onGoTo: onGoTo,
+        fontSize: fontSize,
+      );
       // media_kit's own buttons, with the page's seek bar as part of the
       // button bar, so a touch on it is not a touch on the video: under
       // the buttons on a phone, as media_kit's own bar is.
@@ -308,12 +333,12 @@ class _Controls extends StatelessWidget {
           Expanded(
             child: Column(
               children: [
-                const Expanded(
+                Expanded(
                   child: Row(
                     children: [
-                      MaterialPositionIndicator(),
-                      Spacer(),
-                      MaterialFullscreenButton(),
+                      readout(fontSize: 14),
+                      const Spacer(),
+                      const MaterialFullscreenButton(),
                     ],
                   ),
                 ),
@@ -333,16 +358,16 @@ class _Controls extends StatelessWidget {
             child: Column(
               children: [
                 bar,
-                const Expanded(
+                Expanded(
                   child: Row(
                     children: [
-                      MaterialDesktopSkipPreviousButton(),
-                      MaterialDesktopPlayOrPauseButton(),
-                      MaterialDesktopSkipNextButton(),
-                      KeepsWheel(child: MaterialDesktopVolumeButton()),
-                      MaterialDesktopPositionIndicator(),
-                      Spacer(),
-                      MaterialDesktopFullscreenButton(),
+                      const MaterialDesktopSkipPreviousButton(),
+                      const MaterialDesktopPlayOrPauseButton(),
+                      const MaterialDesktopSkipNextButton(),
+                      const KeepsWheel(child: MaterialDesktopVolumeButton()),
+                      readout(fontSize: 12),
+                      const Spacer(),
+                      const MaterialDesktopFullscreenButton(),
                     ],
                   ),
                 ),

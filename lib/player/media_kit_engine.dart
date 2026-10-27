@@ -49,6 +49,7 @@ class MediaKitEngine implements PlayerEngine {
     yield* _player.stream.playing;
   }
 
+  @override
   Future<void> seek(Duration to) => _player.seek(to);
 
   /// Where it plays now, then each change.

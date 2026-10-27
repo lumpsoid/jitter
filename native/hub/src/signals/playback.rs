@@ -34,6 +34,15 @@ pub struct PlayerPosition {
     pub duration_s: u32,
 }
 
+/// The user typed a time to go to in the VOD playing, `duration_s` long
+/// (0 until the player has loaded). Answered with [`GoToTimeAnswer`] and,
+/// when it is a time, a [`PlayerCommand::Seek`].
+#[derive(Deserialize, DartSignal)]
+pub struct GoToTime {
+    pub text: String,
+    pub duration_s: u32,
+}
+
 /// The player page for `target` closed, with the player's last position.
 #[derive(Deserialize, DartSignal)]
 pub struct LeavePlayer {
@@ -88,6 +97,17 @@ pub enum PlaybackUpdate {
     Failed {
         message: String,
     },
+}
+
+/// The answer to [`GoToTime`], once each, for the box the time was typed
+/// in: not view state, so apart from [`PlaybackUpdate`]. Nothing else
+/// waits on its order.
+#[derive(Serialize, RustSignal)]
+pub enum GoToTimeAnswer {
+    /// The player seeks there.
+    Went,
+    /// Not a time in this VOD; `message` says why, ready to show.
+    Rejected { message: String },
 }
 
 /// The player page's sleep timer menu.
@@ -161,6 +181,10 @@ pub enum PlayerCommand {
         start_s: u32,
     },
     Stop,
+    /// Go to `position_s` in the VOD playing.
+    Seek {
+        position_s: u32,
+    },
     /// Play at `level` (0.0 silence – 1.0) times the user's own volume,
     /// which stays the user's: the sleep timer's fade-out. An `Open` or a
     /// `Stop` ends the fade, as does a `level` of 1.0.

@@ -16,13 +16,14 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
 
 use crate::format::{
-    sleep_left_label, sleep_preset_label, streamed_label, twitch_error, uptime_label, viewers_label,
+    clock_error, sleep_left_label, sleep_preset_label, streamed_label, twitch_error, uptime_label,
+    viewers_label,
 };
 use crate::run::Fetched;
 use crate::signals::{
-    AppBackgrounded, AppForegrounded, ArmSleepTimer, LeavePlayer, PlaybackChannel, PlaybackDetails,
-    PlaybackLive, PlaybackSleep, PlaybackTarget, PlaybackUpdate, PlayerCommand, PlayerPosition,
-    QualityOption, SelectQuality, SleepPreset,
+    AppBackgrounded, AppForegrounded, ArmSleepTimer, GoToTime, GoToTimeAnswer, LeavePlayer,
+    PlaybackChannel, PlaybackDetails, PlaybackLive, PlaybackSleep, PlaybackTarget, PlaybackUpdate,
+    PlayerCommand, PlayerPosition, QualityOption, SelectQuality, SleepPreset,
 };
 
 /// `Play`: starts resolving `target` through twitch, and loading what it
@@ -116,6 +117,24 @@ pub fn select_quality(playback: &mut PlaybackController, signal: SelectQuality) 
     let open = playback.switch_quality(&signal.name, Seconds::new(signal.position_s));
     send_state(playback);
     send_open(open);
+}
+
+/// `GoToTime`: core reads the typed time; the player seeks there, or the
+/// box it was typed in says why not.
+pub fn go_to_time(signal: GoToTime) {
+    match Seconds::parse_position(&signal.text, Seconds::new(signal.duration_s)) {
+        Ok(at) => {
+            PlayerCommand::Seek {
+                position_s: at.get(),
+            }
+            .send_signal_to_dart();
+            GoToTimeAnswer::Went.send_signal_to_dart();
+        }
+        Err(e) => GoToTimeAnswer::Rejected {
+            message: clock_error(e),
+        }
+        .send_signal_to_dart(),
+    }
 }
 
 /// `AppBackgrounded`: the player carries on with what core picks for

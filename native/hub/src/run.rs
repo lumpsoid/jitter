@@ -42,7 +42,7 @@ use crate::signals::{AddFavorite, FavoritesReady, RefreshFavorites, RemoveFavori
 // Playback
 use crate::playback;
 use crate::signals::{
-    AppBackgrounded, AppForegrounded, ArmSleepTimer, LeavePlayer, Play, PlayerPosition,
+    AppBackgrounded, AppForegrounded, ArmSleepTimer, GoToTime, LeavePlayer, Play, PlayerPosition,
     SelectQuality, TurnOffSleepTimer,
 };
 // Channel
@@ -186,6 +186,7 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
     // Playback
     let play = Play::get_dart_signal_receiver();
     let select_quality = SelectQuality::get_dart_signal_receiver();
+    let go_to_time = GoToTime::get_dart_signal_receiver();
     let player_position = PlayerPosition::get_dart_signal_receiver();
     let leave_player = LeavePlayer::get_dart_signal_receiver();
     let arm_sleep_timer = ArmSleepTimer::get_dart_signal_receiver();
@@ -270,6 +271,7 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
             Some(pack) = select_quality.recv() => {
                 playback::select_quality(&mut c.playback, pack.message);
             }
+            Some(pack) = go_to_time.recv() => playback::go_to_time(pack.message),
             Some(pack) = player_position.recv() => {
                 // Chat: a VOD's replay follows the player.
                 if let Some(at) = playback::position(&c.playback, &mut c.resume, pack.message) {
