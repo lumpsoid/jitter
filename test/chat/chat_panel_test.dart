@@ -143,4 +143,72 @@ void main() {
     expect(opened, ['https://www.a.b']);
     semantics.dispose();
   });
+
+  testWidgets('marks a deleted message as deleted, not only faded', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final chat = ChatHolder(sendTheme: (_) {})
+      ..apply(
+        const ChatUpdateSnapshot(
+          messages: [
+            ChatLine(
+              id: 'a',
+              name: 'alice',
+              color: 0xFFFF0000,
+              action: false,
+              deleted: false,
+              fragments: [ChatFragmentText(text: 'hi')],
+            ),
+            ChatLine(
+              id: 'b',
+              name: 'bob',
+              color: 0xFF0000FF,
+              action: false,
+              deleted: false,
+              fragments: [
+                ChatFragmentText(text: 'bad words '),
+                ChatFragmentLink(text: 'x.y', url: 'https://x.y'),
+              ],
+            ),
+          ],
+          status: ChatStatus(modes: []),
+        ),
+      )
+      ..apply(const ChatUpdateMarked(ids: ['b']));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: ChatPanel(chat: chat)),
+      ),
+    );
+
+    expect(find.textContaining('(deleted)'), findsOneWidget);
+    expect(find.textContaining('alice'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('bob.*deleted.*bad words')), findsOne);
+    expect(find.bySemanticsLabel(RegExp('alice.*deleted')), findsNothing);
+    expect(find.byType(Opacity), findsNothing);
+
+    final rich = tester.widget<RichText>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText &&
+            widget.text.toPlainText().contains('bad words'),
+      ),
+    );
+    final struck = <String>[];
+    rich.text.visitChildren((span) {
+      final decoration = span.style?.decoration;
+      if (span is TextSpan &&
+          decoration != null &&
+          decoration.contains(TextDecoration.lineThrough)) {
+        struck.add(span.text ?? '');
+      }
+      return true;
+    });
+    expect(struck, contains('bad words '));
+    final link = tester.widget<Text>(find.text('x.y')).style?.decoration;
+    expect(link?.contains(TextDecoration.lineThrough), isTrue);
+    expect(link?.contains(TextDecoration.underline), isTrue);
+    semantics.dispose();
+  });
 }

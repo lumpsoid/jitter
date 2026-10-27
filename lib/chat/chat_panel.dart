@@ -145,7 +145,10 @@ class _StatusLine extends StatelessWidget {
 }
 
 /// `name: body`, or `name body` in the name's colour for a `/me`. A
-/// deleted message is greyed out.
+/// deleted message keeps its name, then reads "(deleted)" and strikes its
+/// body through in a muted, still readable colour. The marker comes before
+/// the body so a screen reader announces it first, ahead of any link, which
+/// is its own semantics node.
 class _Message extends StatelessWidget {
   const new({required this.entry});
 
@@ -154,31 +157,48 @@ class _Message extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final line = entry.line;
+    final deleted = entry.deleted;
+    final colors = Theme.of(context).colorScheme;
     final nameColor = Color(line.color);
     final style = DefaultTextStyle.of(context).style;
-    final body = line.action ? style.copyWith(color: nameColor) : style;
+    final body = switch ((deleted, line.action)) {
+      (true, _) => style.copyWith(
+        color: colors.onSurfaceVariant,
+        decoration: TextDecoration.lineThrough,
+      ),
+      (false, true) => style.copyWith(color: nameColor),
+      (false, false) => style,
+    };
     final linkStyle = body.copyWith(
-      color: Theme.of(context).colorScheme.primary,
-      decoration: TextDecoration.underline,
+      color: colors.primary,
+      decoration: TextDecoration.combine([
+        TextDecoration.underline,
+        if (deleted) TextDecoration.lineThrough,
+      ]),
     );
-    return Opacity(
-      opacity: entry.deleted ? 0.4 : 1,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        child: Text.rich(
-          TextSpan(
-            children: [
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: line.name,
+              style: TextStyle(color: nameColor, fontWeight: FontWeight.bold),
+            ),
+            TextSpan(text: line.action ? ' ' : ': '),
+            if (deleted)
               TextSpan(
-                text: line.name,
-                style: TextStyle(color: nameColor, fontWeight: FontWeight.bold),
+                text: '(deleted) ',
+                style: style.copyWith(
+                  color: colors.onSurfaceVariant,
+                  fontStyle: FontStyle.italic,
+                ),
               ),
-              TextSpan(text: line.action ? ' ' : ': '),
-              for (final fragment in line.fragments)
-                _fragment(fragment, body, linkStyle),
-            ],
-          ),
-          style: body,
+            for (final fragment in line.fragments)
+              _fragment(fragment, body, linkStyle),
+          ],
         ),
+        style: body,
       ),
     );
   }
@@ -226,8 +246,8 @@ class _Link extends StatelessWidget {
       container: true,
       link: true,
       linkUrl: Uri.tryParse(url),
-      // Its own ink layer, so the tint stays under a deleted message's
-      // opacity.
+      // Its own ink layer, so the tint draws inside the message's text
+      // rather than on a Material further up.
       child: Material(
         type: MaterialType.transparency,
         child: InkWell(
