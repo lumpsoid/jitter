@@ -18,6 +18,7 @@ Future<List<String>> pumpShortcuts(
         onToggleMute: () => pressed.add('mute'),
         onToggleFullscreen: () => pressed.add('fullscreen'),
         onTogglePlay: () => pressed.add('play'),
+        onToggleTheatre: () => pressed.add('theatre'),
         child: Scaffold(
           body: Column(
             children: [
@@ -52,8 +53,9 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.keyM);
     await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
     await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyT);
 
-    expect(pressed, ['chat', 'mute', 'fullscreen', 'play']);
+    expect(pressed, ['chat', 'mute', 'fullscreen', 'play', 'theatre']);
   });
 
   testWidgets('Space plays or pauses while a button has the focus', (
@@ -75,6 +77,7 @@ void main() {
     await tester.pump();
 
     await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyT);
     await tester.sendKeyEvent(LogicalKeyboardKey.space);
 
     expect(pressed, isEmpty);

@@ -10,6 +10,7 @@ import 'package:jitter/player/playback_failure.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/player/playback_title.dart';
 import 'package:jitter/player/player_shortcuts.dart';
+import 'package:jitter/player/theatre.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
@@ -62,6 +63,10 @@ class _PlayerPageState extends State<PlayerPage> {
   /// The video, for the fullscreen key; unattached until playback is ready.
   final _videoKey = GlobalKey<VideoState>();
 
+  /// Whether the page is in theatre: no app bar, the screen fullscreen.
+  /// The page's own layout, not Rust's: it is gone when the page closes.
+  bool _theatre = false;
+
   @override
   void initState() {
     super.initState();
@@ -84,6 +89,10 @@ class _PlayerPageState extends State<PlayerPage> {
     positionS: widget.player.position.inSeconds,
   ).sendSignalToRust();
 
+  void _toggleTheatre() => setState(() => _theatre = !_theatre);
+
+  void _exitTheatre() => setState(() => _theatre = false);
+
   @override
   void dispose() {
     _reporter.cancel();
@@ -103,37 +112,49 @@ class _PlayerPageState extends State<PlayerPage> {
       onToggleFullscreen: () =>
           unawaited(_videoKey.currentState?.toggleFullscreen()),
       onTogglePlay: () => unawaited(widget.player.togglePlaying()),
+      onToggleTheatre: _toggleTheatre,
       child: ListenableBuilder(
         listenable: Listenable.merge([widget.playback, widget.chat]),
         builder: (context, _) {
           final state = widget.playback.state;
           return Scaffold(
-            appBar: AppBar(
-              title: PlaybackTitle(
-                title: widget.title,
-                onOpenChannel: widget.onOpenChannel,
-                details: switch (state) {
-                  PlaybackUpdateReady(:final details) => details,
-                  _ => null,
-                },
-              ),
-              actions: [
-                if (state case PlaybackUpdateReady(
-                  :final qualities,
-                  :final selected,
-                ))
-                  _QualityMenu(
-                    qualities: qualities,
-                    selected: selected,
-                    onSelected: _selectQuality,
+            appBar: _theatre
+                ? null
+                : AppBar(
+                    title: PlaybackTitle(
+                      title: widget.title,
+                      onOpenChannel: widget.onOpenChannel,
+                      details: switch (state) {
+                        PlaybackUpdateReady(:final details) => details,
+                        _ => null,
+                      },
+                    ),
+                    actions: [
+                      if (state case PlaybackUpdateReady(
+                        :final qualities,
+                        :final selected,
+                      ))
+                        _QualityMenu(
+                          qualities: qualities,
+                          selected: selected,
+                          onSelected: _selectQuality,
+                        ),
+                      ChatToggle(chat: widget.chat),
+                      IconButton(
+                        tooltip: 'Theatre mode',
+                        icon: const Icon(Icons.fit_screen_outlined),
+                        onPressed: _toggleTheatre,
+                      ),
+                    ],
                   ),
-                ChatToggle(chat: widget.chat),
-              ],
-            ),
-            body: _layout(
-              AspectRatio(
-                aspectRatio: 16 / 9,
-                child: ColoredBox(color: Colors.black, child: _video(state)),
+            body: Theatre(
+              on: _theatre,
+              onExit: _exitTheatre,
+              child: _layout(
+                AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: ColoredBox(color: Colors.black, child: _video(state)),
+                ),
               ),
             ),
           );
@@ -172,7 +193,15 @@ class _PlayerPageState extends State<PlayerPage> {
   Widget _video(PlaybackUpdate state) => switch (state) {
     PlaybackUpdateReady(:final live) => _Controls(
       live: live,
-      child: Video(key: _videoKey, controller: widget.player.controller),
+      child: Video(
+        key: _videoKey,
+        controller: widget.player.controller,
+        // Leaving media_kit's fullscreen from theatre goes back to theatre's
+        // screen, not out of fullscreen.
+        onExitFullscreen: _theatre
+            ? returnToTheatreScreen
+            : defaultExitNativeFullscreen,
+      ),
     ),
     PlaybackUpdateFailed(:final message) => PlaybackFailure(
       message: message,

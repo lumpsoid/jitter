@@ -2,7 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 /// The player page's keys, wherever on the page the focus is: `c` the
-/// chat, `m` mute, `f` fullscreen, Space play/pause. Not while a text
+/// chat, `m` mute, `f` fullscreen, `t` theatre, Space play/pause. Not while a text
 /// field has the focus, so it can be typed in. A key the focused widget
 /// handles itself (media_kit's video takes Space and `f`) does not reach
 /// these, so it fires once.
@@ -12,6 +12,7 @@ class PlayerShortcuts extends StatelessWidget {
     required this.onToggleMute,
     required this.onToggleFullscreen,
     required this.onTogglePlay,
+    required this.onToggleTheatre,
     required this.child,
     super.key,
   });
@@ -20,6 +21,7 @@ class PlayerShortcuts extends StatelessWidget {
   final VoidCallback onToggleMute;
   final VoidCallback onToggleFullscreen;
   final VoidCallback onTogglePlay;
+  final VoidCallback onToggleTheatre;
   final Widget child;
 
   @override
@@ -32,6 +34,7 @@ class PlayerShortcuts extends StatelessWidget {
           onToggleFullscreen,
         ),
         const SingleActivator(LogicalKeyboardKey.space): _Press(onTogglePlay),
+        const SingleActivator(LogicalKeyboardKey.keyT): _Press(onToggleTheatre),
       },
       child: Actions(
         actions: {_Press: _PressAction()},
