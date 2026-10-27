@@ -166,6 +166,7 @@ fn channel(favorite: &Favorite) -> FavoriteChannel {
         channel_id: favorite.channel_id.as_str().to_owned(),
         login: favorite.login.as_str().to_owned(),
         display_name: favorite.display_name.clone(),
+        avatar_url: favorite.avatar_url.clone(),
     }
 }
 
@@ -182,6 +183,7 @@ mod tests {
             channel_id: ChannelId::parse(id).map_err(|e| format!("{e:?}"))?,
             login: ChannelLogin::parse(name).map_err(|e| format!("{e:?}"))?,
             display_name: name.to_owned(),
+            avatar_url: None,
             added_at: Timestamp::from_unix(0),
         })
     }
@@ -247,6 +249,20 @@ mod tests {
         assert_eq!(live.len(), 1);
         assert_eq!(logins(&offline), ["beta"]);
         assert_eq!(logins(&unchecked), ["gamma"]);
+        Ok(())
+    }
+
+    #[test]
+    fn an_idle_favorite_carries_its_stored_avatar_or_none() -> TestResult {
+        let with = Favorite {
+            avatar_url: Some("https://a/beta.png".to_owned()),
+            ..favorite("2", "beta")?
+        };
+        assert_eq!(
+            channel(&with).avatar_url.as_deref(),
+            Some("https://a/beta.png")
+        );
+        assert_eq!(channel(&favorite("3", "gamma")?).avatar_url, None);
         Ok(())
     }
 }

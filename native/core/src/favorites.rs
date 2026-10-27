@@ -105,6 +105,7 @@ impl FavoritesController {
     /// its entry. A failed write leaves the list unchanged.
     pub fn add(&mut self, channel: Channel, now: Timestamp) -> Result<(), StoreError> {
         let favorite = Favorite {
+            avatar_url: channel.avatar().map(str::to_owned),
             channel_id: channel.id,
             login: channel.login,
             display_name: channel.display_name,
@@ -154,8 +155,10 @@ impl FavoritesController {
     /// flight does not come back.
     ///
     /// A live channel whose login or display name changed is renamed in the
-    /// store. Live status is applied even if a rename fails; that favorite
-    /// keeps its old name and the first failure is returned.
+    /// store, and one whose avatar changed gets the new avatar. A live
+    /// channel with no avatar keeps the stored one. Live status is applied
+    /// even if a write fails; that favorite keeps its old cache and the
+    /// first failure is returned.
     pub fn apply_live(&mut self, streams: Vec<Stream>) -> Result<(), StoreError> {
         let mut live: HashMap<ChannelId, Stream> = streams
             .into_iter()
@@ -169,21 +172,31 @@ impl FavoritesController {
             };
             let favorite = &mut entry.favorite;
             let channel = &stream.channel;
-            if favorite.login != channel.login || favorite.display_name != channel.display_name {
-                match self
-                    .store
-                    .rename(&channel.id, &channel.login, &channel.display_name)
+            let mut keep_first_error = |written: Result<(), StoreError>| {
+                if let Err(e) = written
+                    && result.is_ok()
                 {
-                    Ok(()) => {
-                        favorite.login = channel.login.clone();
-                        favorite.display_name.clone_from(&channel.display_name);
-                    }
-                    Err(e) => {
-                        if result.is_ok() {
-                            result = Err(e);
-                        }
-                    }
+                    result = Err(e);
                 }
+            };
+            if favorite.login != channel.login || favorite.display_name != channel.display_name {
+                keep_first_error(
+                    self.store
+                        .rename(&channel.id, &channel.login, &channel.display_name)
+                        .map(|()| {
+                            favorite.login = channel.login.clone();
+                            favorite.display_name.clone_from(&channel.display_name);
+                        }),
+                );
+            }
+            if let Some(avatar) = channel.avatar()
+                && favorite.avatar_url.as_deref() != Some(avatar)
+            {
+                keep_first_error(
+                    self.store
+                        .set_avatar(&channel.id, avatar)
+                        .map(|()| favorite.avatar_url = Some(avatar.to_owned())),
+                );
             }
             entry.liveness = Liveness::Live(Box::new(stream));
         }

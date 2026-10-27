@@ -6,7 +6,8 @@ use crate::ports::StoreError;
 ///
 /// The database is shared by every head on the machine, so a write must
 /// never bring back a row another process removed. That is why there is no
-/// upsert: `add` only inserts, `rename` only updates, `remove` only deletes.
+/// upsert: `add` only inserts, `rename` and `set_avatar` only update, `remove`
+/// only deletes.
 pub trait FavoritesStore: Send {
     fn load_all(&self) -> Result<Vec<Favorite>, StoreError>;
 
@@ -23,6 +24,10 @@ pub trait FavoritesStore: Send {
         login: &ChannelLogin,
         display_name: &str,
     ) -> Result<(), StoreError>;
+
+    /// Updates the cached avatar URL of the stored channel `id`. Never
+    /// inserts, like [`FavoritesStore::rename`].
+    fn set_avatar(&mut self, id: &ChannelId, avatar_url: &str) -> Result<(), StoreError>;
 
     /// Deletes the channel `id`. An unknown id is not an error.
     fn remove(&mut self, id: &ChannelId) -> Result<(), StoreError>;

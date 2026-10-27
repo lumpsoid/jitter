@@ -55,10 +55,13 @@ pub struct LiveFavorite {
     pub uptime_label: Option<String>,
 }
 
-/// A favorite that is not live: what the store keeps, with no avatar.
+/// A favorite that is not live: what the store keeps.
 #[derive(Serialize, SignalPiece)]
 pub struct FavoriteChannel {
     pub channel_id: String,
     pub login: String,
     pub display_name: String,
+    /// The avatar last seen; `None` until the channel is added or seen live
+    /// with one.
+    pub avatar_url: Option<String>,
 }

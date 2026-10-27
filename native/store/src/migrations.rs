@@ -14,10 +14,16 @@ struct Migration {
 }
 
 /// In ascending version order starting at 1.
-const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    sql: V1_SCHEMA,
-}];
+const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        sql: V1_SCHEMA,
+    },
+    Migration {
+        version: 2,
+        sql: V2_FAVORITE_AVATARS,
+    },
+];
 
 /// v1: favorite channels (login and display name are display caches; the
 /// key is the channel id) and VOD resume points. Times are Unix seconds,
@@ -36,6 +42,12 @@ CREATE TABLE resume_points (
     duration_s INTEGER NOT NULL,
     saved_at   INTEGER NOT NULL
 );
+";
+
+/// v2: a favorite's avatar URL, another display cache. Nullable: rows from
+/// v1 have none until the channel is next seen live.
+const V2_FAVORITE_AVATARS: &str = "
+ALTER TABLE favorites ADD COLUMN avatar_url TEXT;
 ";
 
 /// Applies every pending migration in one transaction: the database ends at
@@ -86,10 +98,10 @@ mod tests {
     }
 
     #[test]
-    fn empty_database_ends_at_v1_with_both_tables() -> TestResult {
+    fn empty_database_ends_at_v2_with_both_tables() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 1);
+        assert_eq!(user_version(&conn)?, 2);
         assert_eq!(tables(&conn)?, ["favorites", "resume_points"]);
         Ok(())
     }
@@ -98,20 +110,37 @@ mod tests {
     fn migrating_a_migrated_database_changes_nothing() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
         migrate(&mut conn)?;
-        conn.execute("INSERT INTO favorites VALUES ('1', 'a', 'A', 0)", [])?;
+        conn.execute("INSERT INTO favorites VALUES ('1', 'a', 'A', 0, NULL)", [])?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 1);
+        assert_eq!(user_version(&conn)?, 2);
         let rows: i64 = conn.query_row("SELECT COUNT(*) FROM favorites", [], |r| r.get(0))?;
         assert_eq!(rows, 1);
         Ok(())
     }
 
     #[test]
+    fn a_v1_database_gains_a_null_avatar_and_keeps_its_rows() -> TestResult {
+        let mut conn = Connection::open_in_memory()?;
+        conn.execute_batch(V1_SCHEMA)?;
+        conn.pragma_update(None, "user_version", 1)?;
+        conn.execute("INSERT INTO favorites VALUES ('1', 'a', 'A', 7)", [])?;
+        migrate(&mut conn)?;
+        assert_eq!(user_version(&conn)?, 2);
+        let row: (String, Option<String>, i64) = conn.query_row(
+            "SELECT login, avatar_url, added_at FROM favorites WHERE channel_id = '1'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )?;
+        assert_eq!(row, ("a".to_owned(), None, 7));
+        Ok(())
+    }
+
+    #[test]
     fn newer_database_is_refused_and_left_alone() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
-        conn.pragma_update(None, "user_version", 2)?;
+        conn.pragma_update(None, "user_version", 3)?;
         assert!(migrate(&mut conn).is_err());
-        assert_eq!(user_version(&conn)?, 2);
+        assert_eq!(user_version(&conn)?, 3);
         assert!(tables(&conn)?.is_empty());
         Ok(())
     }

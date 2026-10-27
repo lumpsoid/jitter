@@ -233,6 +233,7 @@ mod tests {
             channel_id: vinesauce.id,
             login: vinesauce.login,
             display_name: vinesauce.display_name,
+            avatar_url: None,
             added_at: Timestamp::from_unix(0),
         }]);
         let mut favorites = FavoritesController::new(Box::new(store));

@@ -110,6 +110,49 @@ void main() {
     expect(find.byIcon(Icons.star), findsOneWidget);
   });
 
+  testWidgets('offline and unchecked channels show their avatar in grey', (
+    tester,
+  ) async {
+    final holder = FavoritesHolder()
+      ..apply(
+        snapshot(
+          offline: [channel('1', 'Alpha', avatarUrl: 'https://cdn/1.png')],
+          unchecked: [channel('2', 'Beta', avatarUrl: 'https://cdn/2.png')],
+        ),
+      );
+    await pumpPage(tester, holder);
+
+    Matcher network(String url) =>
+        isA<NetworkImage>().having((i) => i.url, 'url', url);
+    final avatars = tester
+        .widgetList<CircleAvatar>(find.byType(CircleAvatar))
+        .map((a) => a.foregroundImage);
+    expect(avatars, [
+      network('https://cdn/1.png'),
+      network('https://cdn/2.png'),
+    ]);
+    expect(
+      find.ancestor(
+        of: find.byType(CircleAvatar),
+        matching: find.byType(ColorFiltered),
+      ),
+      findsNWidgets(2),
+    );
+  });
+
+  testWidgets('a channel with no stored avatar shows its initial', (
+    tester,
+  ) async {
+    final holder = FavoritesHolder()
+      ..apply(snapshot(offline: [channel('1', 'Alpha')]));
+    await pumpPage(tester, holder);
+
+    final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar));
+    expect(avatar.foregroundImage, isNull);
+    expect(find.text('A'), findsOneWidget);
+    expect(find.byType(ColorFiltered), findsNothing);
+  });
+
   testWidgets('shows a failure as a snackbar', (tester) async {
     final holder = FavoritesHolder()..apply(snapshot());
     await pumpPage(tester, holder);

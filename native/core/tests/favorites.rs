@@ -31,8 +31,18 @@ fn favorite(raw_id: &str, name: &str) -> Favorite {
         channel_id: c.id,
         login: c.login,
         display_name: c.display_name,
+        avatar_url: None,
         added_at: Timestamp::from_unix(0),
     }
+}
+
+fn with_avatar(mut channel: Channel, url: &str) -> Channel {
+    url.clone_into(&mut channel.avatar_url);
+    channel
+}
+
+fn stored_avatar(store: &FakeFavoritesStore) -> Option<String> {
+    store.favorites().first().and_then(|f| f.avatar_url.clone())
 }
 
 fn stream(channel: Channel, viewers: u32) -> Stream {
@@ -164,6 +174,82 @@ fn a_failing_rename_write_still_applies_live_status_and_returns_err() {
     assert_eq!(entry.favorite.login, login("oldname"));
     assert_eq!(entry.favorite.display_name, "oldname");
     assert_eq!(store.favorites()[0].login, login("oldname"));
+}
+
+#[test]
+fn add_saves_the_channels_avatar_and_an_empty_one_as_none() {
+    let store = FakeFavoritesStore::default();
+    let mut controller = loaded(&store);
+    let now = Timestamp::from_unix(1);
+    assert_eq!(
+        controller.add(with_avatar(channel("1", "alpha"), "https://a/1.png"), now),
+        Ok(())
+    );
+    assert_eq!(controller.add(channel("2", "beta"), now), Ok(()));
+    let avatars: Vec<Option<String>> = store
+        .favorites()
+        .into_iter()
+        .map(|f| f.avatar_url)
+        .collect();
+    assert_eq!(avatars, [Some("https://a/1.png".to_owned()), None]);
+    assert_eq!(
+        controller.entries()[0].favorite.avatar_url.as_deref(),
+        Some("https://a/1.png")
+    );
+}
+
+#[test]
+fn apply_live_refreshes_a_changed_avatar_in_the_store_and_the_list() {
+    let store = FakeFavoritesStore::with_favorites(vec![favorite("1", "alpha")]);
+    let mut controller = loaded(&store);
+    assert_eq!(
+        controller.apply_live(vec![stream(
+            with_avatar(channel("1", "alpha"), "https://a/new.png"),
+            5
+        )]),
+        Ok(())
+    );
+    assert_eq!(stored_avatar(&store).as_deref(), Some("https://a/new.png"));
+    assert_eq!(
+        controller.entries()[0].favorite.avatar_url.as_deref(),
+        Some("https://a/new.png")
+    );
+    // Only the avatar changed, so no rename was written.
+    assert!(store.renamed().is_empty());
+}
+
+#[test]
+fn a_live_result_without_an_avatar_keeps_the_stored_one() {
+    let stored = Favorite {
+        avatar_url: Some("https://a/old.png".to_owned()),
+        ..favorite("1", "alpha")
+    };
+    let store = FakeFavoritesStore::with_favorites(vec![stored]);
+    let mut controller = loaded(&store);
+    assert_eq!(
+        controller.apply_live(vec![stream(channel("1", "alpha"), 5)]),
+        Ok(())
+    );
+    assert_eq!(stored_avatar(&store).as_deref(), Some("https://a/old.png"));
+    assert_eq!(
+        controller.entries()[0].favorite.avatar_url.as_deref(),
+        Some("https://a/old.png")
+    );
+}
+
+#[test]
+fn a_failing_avatar_write_still_applies_live_status_and_returns_err() {
+    let store = FakeFavoritesStore::with_favorites(vec![favorite("1", "alpha")]).failing_writes();
+    let mut controller = loaded(&store);
+    let result = controller.apply_live(vec![stream(
+        with_avatar(channel("1", "alpha"), "https://a/new.png"),
+        5,
+    )]);
+    assert!(result.is_err());
+    let entry = &controller.entries()[0];
+    assert!(matches!(entry.liveness, Liveness::Live(_)));
+    assert_eq!(entry.favorite.avatar_url, None);
+    assert_eq!(stored_avatar(&store), None);
 }
 
 #[test]

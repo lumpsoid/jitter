@@ -45,6 +45,7 @@ fn entry(channel_id: &str, login: &str, liveness: Liveness) -> FavoriteEntry {
             channel_id: c.id,
             login: c.login,
             display_name: c.display_name,
+            avatar_url: None,
             added_at: Timestamp::from_unix(0),
         },
         liveness,

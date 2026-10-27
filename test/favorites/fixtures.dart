@@ -1,10 +1,12 @@
 import 'package:jitter/src/bindings/bindings.dart';
 
-FavoriteChannel channel(String id, String name) => FavoriteChannel(
-  channelId: id,
-  login: name.toLowerCase(),
-  displayName: name,
-);
+FavoriteChannel channel(String id, String name, {String? avatarUrl}) =>
+    FavoriteChannel(
+      channelId: id,
+      login: name.toLowerCase(),
+      displayName: name,
+      avatarUrl: avatarUrl,
+    );
 
 LiveFavorite live(String id, String name) => LiveFavorite(
   stream: StreamCard(

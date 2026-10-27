@@ -4,7 +4,7 @@ use crate::models::{ChannelId, ChannelLogin, Favorite};
 use crate::ports::{FavoritesStore, StoreError};
 
 /// In-memory [`FavoritesStore`] that keeps the port's contract: `add` never
-/// overwrites, `rename` never inserts. Can be told to fail loads or writes,
+/// overwrites, `rename` and `set_avatar` never insert. Can be told to fail loads or writes,
 /// and records which ids were passed to `rename`.
 #[derive(Debug, Clone, Default)]
 pub struct FakeFavoritesStore {
@@ -39,7 +39,7 @@ impl FakeFavoritesStore {
         }
     }
 
-    /// Every `add`, `rename` and `remove` returns `Err` and stores nothing.
+    /// Every `add`, `rename`, `set_avatar` and `remove` returns `Err` and stores nothing.
     pub fn failing_writes(self) -> Self {
         Self {
             fail_writes: true,
@@ -106,6 +106,19 @@ impl FavoritesStore for FakeFavoritesStore {
         {
             stored.login = login.clone();
             display_name.clone_into(&mut stored.display_name);
+        }
+        Ok(())
+    }
+
+    fn set_avatar(&mut self, id: &ChannelId, avatar_url: &str) -> Result<(), StoreError> {
+        self.check_write()?;
+        if let Some(stored) = self
+            .lock()
+            .favorites
+            .iter_mut()
+            .find(|f| f.channel_id == *id)
+        {
+            stored.avatar_url = Some(avatar_url.to_owned());
         }
         Ok(())
     }

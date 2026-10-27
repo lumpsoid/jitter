@@ -54,8 +54,14 @@ fn favorite(raw_id: &str, name: &str, added_at: i64) -> Favorite {
         channel_id: c.id,
         login: c.login,
         display_name: c.display_name,
+        avatar_url: None,
         added_at: Timestamp::from_unix(added_at),
     }
+}
+
+fn with_avatar(mut channel: Channel, url: &str) -> Channel {
+    url.clone_into(&mut channel.avatar_url);
+    channel
 }
 
 fn stream(channel: Channel, viewers: u32) -> Stream {
@@ -146,7 +152,7 @@ fn a_corrupt_row_fails_the_load() -> TestResult {
     let (_dir, path) = fresh_file()?;
     let store = SqliteStore::open(&path)?;
     Connection::open(&path)?.execute(
-        "INSERT INTO favorites VALUES ('not-a-number', 'a', 'A', 0)",
+        "INSERT INTO favorites VALUES ('not-a-number', 'a', 'A', 0, NULL)",
         [],
     )?;
     assert!(store.load_all().is_err());
@@ -161,6 +167,41 @@ fn favorites_controller_over_the_store() -> TestResult {
     controller.add(channel("1", "Alpha"), Timestamp::from_unix(5))?;
     controller.apply_live(vec![stream(channel("1", "AlphaNew"), 7)])?;
     assert_eq!(store.load_all()?, [favorite("1", "AlphaNew", 5)]);
+    Ok(())
+}
+
+#[test]
+fn set_avatar_updates_the_avatar_only_and_never_inserts() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.add(&favorite("1", "Alpha", 10))?;
+    store.set_avatar(&id("1"), "https://a/1.png")?;
+    store.set_avatar(&id("2"), "https://a/2.png")?;
+    let expected = Favorite {
+        avatar_url: Some("https://a/1.png".to_owned()),
+        ..favorite("1", "Alpha", 10)
+    };
+    assert_eq!(store.load_all()?, [expected]);
+    Ok(())
+}
+
+#[test]
+fn the_controller_saves_the_avatar_on_add_and_refreshes_it_when_live() -> TestResult {
+    let store = SqliteStore::open_in_memory()?;
+    let mut controller = FavoritesController::new(Box::new(store.clone()));
+    controller.load()?;
+    controller.add(
+        with_avatar(channel("1", "Alpha"), "https://a/old.png"),
+        Timestamp::from_unix(5),
+    )?;
+    let avatar = |store: &SqliteStore| -> Result<Option<String>, Box<dyn std::error::Error>> {
+        Ok(store.load_all()?.first().and_then(|f| f.avatar_url.clone()))
+    };
+    assert_eq!(avatar(&store)?.as_deref(), Some("https://a/old.png"));
+    controller.apply_live(vec![stream(
+        with_avatar(channel("1", "Alpha"), "https://a/new.png"),
+        7,
+    )])?;
+    assert_eq!(avatar(&store)?.as_deref(), Some("https://a/new.png"));
     Ok(())
 }
 
@@ -222,7 +263,40 @@ fn reopening_a_migrated_file_keeps_its_rows() -> TestResult {
     drop(store);
     let store = SqliteStore::open(&path)?;
     assert_eq!(store.load_all()?, [favorite("1", "Alpha", 10)]);
-    assert_eq!(user_version(&path)?, 1);
+    assert_eq!(user_version(&path)?, 2);
+    Ok(())
+}
+
+#[test]
+fn a_v1_file_is_migrated_and_its_favorites_load_without_an_avatar() -> TestResult {
+    let (_dir, path) = fresh_file()?;
+    let v1 = Connection::open(&path)?;
+    v1.execute_batch(
+        "CREATE TABLE favorites (
+             channel_id   TEXT PRIMARY KEY NOT NULL,
+             login        TEXT NOT NULL,
+             display_name TEXT NOT NULL,
+             added_at     INTEGER NOT NULL
+         );
+         CREATE TABLE resume_points (
+             video_id   TEXT PRIMARY KEY NOT NULL,
+             position_s INTEGER NOT NULL,
+             duration_s INTEGER NOT NULL,
+             saved_at   INTEGER NOT NULL
+         );
+         INSERT INTO favorites VALUES ('1', 'alpha', 'Alpha', 10);
+         PRAGMA user_version = 1;",
+    )?;
+    drop(v1);
+    let mut store = SqliteStore::open(&path)?;
+    assert_eq!(user_version(&path)?, 2);
+    assert_eq!(store.load_all()?, [favorite("1", "Alpha", 10)]);
+    store.set_avatar(&id("1"), "https://a/1.png")?;
+    let expected = Favorite {
+        avatar_url: Some("https://a/1.png".to_owned()),
+        ..favorite("1", "Alpha", 10)
+    };
+    assert_eq!(store.load_all()?, [expected]);
     Ok(())
 }
 
@@ -270,7 +344,7 @@ fn two_connections_opening_a_fresh_file_at_once_both_succeed() -> TestResult {
             let opened = handle.join().map_err(|_| "open thread panicked")?;
             assert_eq!(opened, Ok(()));
         }
-        assert_eq!(user_version(&path)?, 1);
+        assert_eq!(user_version(&path)?, 2);
     }
     Ok(())
 }

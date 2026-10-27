@@ -172,8 +172,9 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// A channel that is not live: its initial in a circle and its name, with
-/// the favorite star in the corner. [dimmed] greys it out (known offline).
+/// A channel that is not live: its avatar in greyscale (or its initial when
+/// no avatar is stored) and its name, with the favorite star in the corner.
+/// [dimmed] fades it out (known offline).
 class _ChannelTile extends StatelessWidget {
   const new({
     required this.channel,
@@ -203,15 +204,7 @@ class _ChannelTile extends StatelessWidget {
                 padding: const EdgeInsets.all(8),
                 child: Column(
                   children: [
-                    CircleAvatar(
-                      radius: 28,
-                      backgroundColor:
-                          theme.colorScheme.surfaceContainerHighest,
-                      foregroundColor: theme.colorScheme.onSurfaceVariant,
-                      child: Text(
-                        name.characters.take(1).toUpperCase().toString(),
-                      ),
-                    ),
+                    _avatar(theme, name),
                     const SizedBox(height: 6),
                     Text(
                       name,
@@ -241,4 +234,30 @@ class _ChannelTile extends StatelessWidget {
       ],
     );
   }
+
+  /// The stored avatar in greyscale (the channel is not live), over its
+  /// initial: the initial shows when there is no avatar or it fails to load.
+  Widget _avatar(ThemeData theme, String name) {
+    final url = channel.avatarUrl;
+    final avatar = CircleAvatar(
+      radius: 28,
+      backgroundColor: theme.colorScheme.surfaceContainerHighest,
+      foregroundColor: theme.colorScheme.onSurfaceVariant,
+      foregroundImage: url == null ? null : NetworkImage(url),
+      // A failed avatar falls back to the initial.
+      onForegroundImageError: url == null ? null : (_, _) {},
+      child: Text(name.characters.take(1).toUpperCase().toString()),
+    );
+    return url == null
+        ? avatar
+        : ColorFiltered(colorFilter: _greyscale, child: avatar);
+  }
 }
+
+/// Luminance-weighted greyscale (Rec. 709), alpha untouched.
+const ColorFilter _greyscale = ColorFilter.matrix(<double>[
+  0.2126, 0.7152, 0.0722, 0, 0, //
+  0.2126, 0.7152, 0.0722, 0, 0, //
+  0.2126, 0.7152, 0.0722, 0, 0, //
+  0, 0, 0, 1, 0, //
+]);
