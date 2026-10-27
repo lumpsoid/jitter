@@ -130,6 +130,13 @@ impl UserNode {
     }
 }
 
+/// A user's `followers { totalCount }`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct Followers {
+    pub(crate) total_count: Option<u32>,
+}
+
 /// The category fields a stream links by (`game { id displayName }`). A
 /// game missing either, or with an id core rejects, maps to `None`: the
 /// stream is kept, in no category.

@@ -4,7 +4,7 @@ use jitter_core::models::{Cursor, FoundChannel, Page, SearchQuery};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{PAGE_SIZE, RawQuery, UserNode};
+use super::{Followers, PAGE_SIZE, RawQuery, UserNode};
 use crate::client::Twitch;
 use crate::error::TwitchError;
 
@@ -98,12 +98,6 @@ struct Node {
     user: UserNode,
     followers: Option<Followers>,
     stream: Option<LiveStream>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Followers {
-    total_count: Option<u32>,
 }
 
 /// A user with a stream is live.

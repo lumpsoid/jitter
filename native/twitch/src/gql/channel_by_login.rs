@@ -1,20 +1,20 @@
 //! Channel lookup by login: a raw document written by us (no persisted
 //! query for it; accepted anonymously, Phase 2). It also reads the user's
-//! `description`, which only the channel page keeps:
-//! [`Twitch::channel_profile`] returns it, [`Twitch::channel`] drops it.
+//! `description` and follower count, which only the channel page keeps:
+//! [`Twitch::channel_profile`] returns them, [`Twitch::channel`] drops them.
 
 use jitter_core::models::{Channel, ChannelLogin, ChannelProfile};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{RawQuery, UserNode};
+use super::{Followers, RawQuery, UserNode};
 use crate::client::Twitch;
 use crate::error::TwitchError;
 
 pub const QUERY: RawQuery = RawQuery {
     operation: "ChannelByLogin",
     document: "query($login: String!) { user(login: $login) { id login displayName \
-               profileImageURL(width: 50) description } }",
+               profileImageURL(width: 50) description followers { totalCount } } }",
 };
 
 pub fn variables(login: &ChannelLogin) -> Value {
@@ -37,6 +37,7 @@ fn map(data: Data) -> Result<ChannelProfile, TwitchError> {
     Ok(ChannelProfile {
         channel,
         description: user.description.filter(|d| !d.trim().is_empty()),
+        followers: user.followers.and_then(|f| f.total_count),
     })
 }
 
@@ -46,7 +47,8 @@ impl Twitch {
         Ok(self.channel_profile(login).await?.channel)
     }
 
-    /// The channel with this login, with its description.
+    /// The channel with this login, with its description and follower
+    /// count.
     pub async fn channel_profile(
         &self,
         login: &ChannelLogin,
@@ -65,4 +67,5 @@ struct User {
     #[serde(flatten)]
     node: UserNode,
     description: Option<String>,
+    followers: Option<Followers>,
 }

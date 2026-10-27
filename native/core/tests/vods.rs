@@ -57,7 +57,9 @@ fn new_controller_is_idle_until_refreshed() {
 fn switching_kind_mid_flight_ignores_the_old_first_page() {
     let mut c = VodsController::new(login("xqc"), VideoKind::Archive);
     let archives = c.begin_refresh();
-    let highlights = c.show_kind(VideoKind::Highlight);
+    let Some(highlights) = c.show_kind(VideoKind::Highlight) else {
+        unreachable!("another kind starts over");
+    };
     assert_eq!(c.kind(), VideoKind::Highlight);
 
     c.apply_page(archives, Ok(page(&["1"], VideoKind::Archive, None)));
@@ -75,10 +77,22 @@ fn switching_kind_while_next_page_loads_ignores_that_page() {
     let Some(old_next) = c.begin_next() else {
         unreachable!("page 2 available");
     };
-    let uploads = c.show_kind(VideoKind::Upload);
+    let Some(uploads) = c.show_kind(VideoKind::Upload) else {
+        unreachable!("another kind starts over");
+    };
     c.apply_page(uploads, Ok(page(&["5"], VideoKind::Upload, Some("u1"))));
     c.apply_page(old_next, Ok(page(&["2"], VideoKind::Archive, None)));
     assert_eq!(ids(&c), ["5"]);
+    assert!(c.begin_next().is_some());
+}
+
+#[test]
+fn showing_the_kind_already_shown_keeps_its_list() {
+    let mut c = VodsController::new(login("xqc"), VideoKind::Archive);
+    let r = c.begin_refresh();
+    c.apply_page(r, Ok(page(&["1"], VideoKind::Archive, Some("c1"))));
+    assert_eq!(c.show_kind(VideoKind::Archive), None);
+    assert_eq!(ids(&c), ["1"]);
     assert!(c.begin_next().is_some());
 }
 

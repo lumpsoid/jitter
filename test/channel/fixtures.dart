@@ -15,15 +15,17 @@ VodsUpdate loadedVods(
   state: VodsStateLoaded(vods: [for (final id in ids) vod(id)], more: more),
 );
 
-/// `xqc`, with no description unless given one.
+/// `xqc`, with no description or follower count unless given them.
 ChannelUpdate found({
   ChannelLive live = const ChannelLiveOffline(),
   String? description,
+  String? followersLabel,
 }) => ChannelUpdateFound(
   channelId: '12',
   login: 'xqc',
   displayName: 'xQc',
   avatarUrl: 'https://cdn/avatar.png',
   description: description,
+  followersLabel: followersLabel,
   live: live,
 );

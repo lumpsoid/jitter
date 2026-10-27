@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:jitter/channel/channel_description.dart';
+import 'package:jitter/channel/channel_about.dart';
 import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/channel/vod_tile_view.dart';
 import 'package:jitter/favorites/favorite_star.dart';
@@ -9,13 +9,13 @@ import 'package:jitter/src/bindings/bindings.dart';
 /// Scrolled this close to the end, the list asks for the next page.
 const double _nextPageExtent = 800;
 
-/// The VOD tabs, in [VodKind]'s order.
-const List<String> _tabLabels = ['Archive', 'Highlights', 'Uploads'];
+/// The VOD tabs, in [VodKind]'s order, then the About tab.
+const List<String> _tabLabels = ['Archive', 'Highlights', 'Uploads', 'About'];
 
 /// One channel: its header (avatar, name, favorite star, live stream if
-/// any, description) above its VODs in tabs, refreshed by pulling down and
-/// paged by scrolling. Shows what [channel] holds: [push] opens [login] in it
-/// first.
+/// any) above its VODs in tabs and its About tab, refreshed by pulling down
+/// and paged by scrolling. Shows what [channel] holds: [push] opens [login]
+/// in it first.
 class ChannelPage extends StatefulWidget {
   const new({
     required this.login,
@@ -76,14 +76,17 @@ class _ChannelPageState extends State<ChannelPage>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: VodKind.values.length, vsync: this)
+    _tabs = TabController(length: _tabLabels.length, vsync: this)
       ..addListener(_onTab);
   }
 
+  /// The VOD kind the selected tab lists; `null`: the About tab.
+  VodKind? get _kind => VodKind.values.elementAtOrNull(_tabs.index);
+
+  // Coming back from About to the kind already listed, Rust keeps its list.
   void _onTab() {
-    if (!_tabs.indexIsChanging) {
-      widget.channel.selectKind(VodKind.values[_tabs.index]);
-    }
+    if (_tabs.indexIsChanging) return;
+    if (_kind case final kind?) widget.channel.selectKind(kind);
   }
 
   @override
@@ -96,7 +99,7 @@ class _ChannelPageState extends State<ChannelPage>
   Widget build(BuildContext context) {
     final channel = widget.channel;
     return ListenableBuilder(
-      listenable: channel,
+      listenable: Listenable.merge([channel, _tabs]),
       builder: (context, _) {
         final header = channel.header;
         return Scaffold(
@@ -133,7 +136,27 @@ class _ChannelPageState extends State<ChannelPage>
                   tabs: [for (final label in _tabLabels) Tab(text: label)],
                 ),
                 Expanded(
-                  child: _Vods(channel: channel, onOpenVod: widget.onOpenVod),
+                  child: switch ((_kind, header)) {
+                    (VodKind(), _) => _Vods(
+                      channel: channel,
+                      onOpenVod: widget.onOpenVod,
+                    ),
+                    (
+                      null,
+                      ChannelUpdateFound(
+                        :final followersLabel,
+                        :final description,
+                      ),
+                    ) =>
+                      ChannelAbout(
+                        followersLabel: followersLabel,
+                        description: description,
+                        onRefresh: channel.refresh,
+                      ),
+                    (null, _) => const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  },
                 ),
               ],
             ),
@@ -144,8 +167,8 @@ class _ChannelPageState extends State<ChannelPage>
   }
 }
 
-/// The channel's avatar and name, then whether it is live, then its
-/// description when it has one: a progress bar while it is looked up.
+/// The channel's avatar and name, then whether it is live: a progress bar
+/// while it is looked up.
 class _Header extends StatelessWidget {
   const new({required this.header, required this.onOpenLive});
 
@@ -158,7 +181,7 @@ class _Header extends StatelessWidget {
     if (header is! ChannelUpdateFound) {
       return const LinearProgressIndicator();
     }
-    final tile = ListTile(
+    return ListTile(
       leading: CircleAvatar(
         foregroundImage: NetworkImage(header.avatarUrl),
         // An avatar that fails to load leaves the icon.
@@ -174,15 +197,6 @@ class _Header extends StatelessWidget {
         },
       ),
     );
-    return switch (header.description) {
-      final description? => Column(
-        children: [
-          tile,
-          ChannelDescription(text: description),
-        ],
-      ),
-      null => tile,
-    };
   }
 }
 

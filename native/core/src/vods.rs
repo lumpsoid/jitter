@@ -44,10 +44,15 @@ impl VodsController {
         self.list.begin_refresh()
     }
 
-    /// Switches to another kind and starts over from its first page.
-    pub fn show_kind(&mut self, kind: VideoKind) -> PageRequest {
+    /// Switches to another kind and starts over from its first page. The
+    /// kind already shown keeps its list: `None`, nothing to fetch (the
+    /// page coming back to its VOD tab from its About tab).
+    pub fn show_kind(&mut self, kind: VideoKind) -> Option<PageRequest> {
+        if kind == self.kind {
+            return None;
+        }
         self.kind = kind;
-        self.list.begin_refresh()
+        Some(self.list.begin_refresh())
     }
 
     /// Switches to another channel and kind at once, as opening a channel

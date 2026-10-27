@@ -3,8 +3,8 @@
 //! Bodies Twitch did not produce during recording are hand-written here and
 //! marked as such: the `failed integrity check` and generic error bodies,
 //! the browse edges with a null broadcaster and a null game, and the
-//! channel lookup's `description` (added to the recorded user, and the
-//! empty and missing ones).
+//! channel lookup's `description` and `followers` (added to the recorded
+//! user, and the empty and missing ones).
 
 use jitter_core::models::{
     CategoryId, ChannelId, ChannelLogin, Cursor, SearchQuery, Seconds, Timestamp, VideoKind,
@@ -261,11 +261,23 @@ fn channel_lookup_maps_the_user() {
         profile.description.as_deref(),
         Some("THE BEST AT ABSOLUTELY EVERYTHING. THE JUICER. LEADER OF THE JUICER SQUAD.")
     );
+    assert_eq!(profile.followers, Some(12_345_678));
 }
 
 #[test]
-fn channel_lookup_asks_for_the_description() {
-    assert!(channel_by_login::QUERY.document.contains(" description "));
+fn channel_lookup_asks_for_the_description_and_followers() {
+    let document = channel_by_login::QUERY.document;
+    assert!(document.contains(" description "));
+    assert!(document.contains(" followers { totalCount } "));
+}
+
+#[test]
+fn a_missing_follower_count_is_none() {
+    let missing = channel_body("");
+    assert_eq!(
+        ok(channel_by_login::parse(missing.as_bytes())).followers,
+        None
+    );
 }
 
 /// Hand-written: the recorded user with the empty `description` Twitch

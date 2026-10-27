@@ -24,11 +24,13 @@ fn channel(channel_id: &str, name: &str) -> Channel {
     }
 }
 
-/// The channel page's lookup result: `channel` with no description.
+/// The channel page's lookup result: `channel` with no description and no
+/// follower count.
 fn profile(channel_id: &str, name: &str) -> ChannelProfile {
     ChannelProfile {
         channel: channel(channel_id, name),
         description: None,
+        followers: None,
     }
 }
 
@@ -76,20 +78,20 @@ fn a_found_channel_asks_for_its_live_check() {
 }
 
 #[test]
-fn a_found_channel_keeps_its_description_through_its_live_check() {
+fn a_found_channel_keeps_its_profile_through_its_live_check() {
     let mut c = ChannelController::new();
     c.open(login("xqc"));
     let about = ChannelProfile {
         channel: channel("1", "xqc"),
         description: Some("The juicer.".to_owned()),
+        followers: Some(39_950),
     };
-    c.apply_channel(&login("xqc"), Ok(about));
+    c.apply_channel(&login("xqc"), Ok(about.clone()));
     c.apply_live(&id("1"), Ok(vec![]));
     assert_eq!(
         c.state(),
         &ChannelState::Found {
-            channel: channel("1", "xqc"),
-            description: Some("The juicer.".to_owned()),
+            profile: about,
             live: LiveStatus::Offline,
         }
     );

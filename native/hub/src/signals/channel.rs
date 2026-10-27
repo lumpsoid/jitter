@@ -14,7 +14,8 @@ pub struct OpenChannel {
 #[derive(Deserialize, DartSignal)]
 pub struct RefreshChannel;
 
-/// List the open channel's VODs of `kind` instead (a tab).
+/// List the open channel's VODs of `kind` instead (a tab). Rust ignores
+/// the kind already listed, so Dart may send it on every VOD tab it shows.
 #[derive(Deserialize, DartSignal)]
 pub struct SelectVodKind {
     pub kind: VodKind,
@@ -46,14 +47,17 @@ pub enum ChannelUpdate {
     /// The lookup failed: `message`, with a Retry that sends
     /// `RefreshChannel`.
     Failed { login: String, message: String },
-    /// The channel. A `FavoriteStar` for it reads `channel_id` and `login`.
+    /// The channel. A `FavoriteStar` for it reads `channel_id` and `login`;
+    /// its About tab shows `followers_label` and `description`.
     Found {
         channel_id: String,
         login: String,
         display_name: String,
         avatar_url: String,
-        /// The channel's "about" text; `None`: it has none, show nothing.
+        /// The channel's "about" text; `None`: it has none.
         description: Option<String>,
+        /// `2.9M followers`; `None`: Twitch sent no count, show nothing.
+        followers_label: Option<String>,
         live: ChannelLive,
     },
 }

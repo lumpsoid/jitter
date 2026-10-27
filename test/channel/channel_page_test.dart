@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:jitter/channel/channel_description.dart';
+import 'package:jitter/channel/channel_about.dart';
 import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/channel/channel_page.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
@@ -80,6 +80,7 @@ void main() {
     expect(find.text('Archive'), findsOneWidget);
     expect(find.text('Highlights'), findsOneWidget);
     expect(find.text('Uploads'), findsOneWidget);
+    expect(find.text('About'), findsOneWidget);
     expect(find.text('Title 1'), findsOneWidget);
     expect(find.text('1:02:03'), findsNWidgets(2));
     // Only the VOD that would resume has a bar.
@@ -89,50 +90,39 @@ void main() {
     expect([for (final b in bars) b.value], [0.25]);
   });
 
-  testWidgets('a channel without a description shows none', (tester) async {
+  testWidgets('the About tab shows the followers and description', (
+    tester,
+  ) async {
+    final channel = ChannelHolder()
+      ..applyHeader(
+        found(description: 'The juicer.', followersLabel: '12.3M followers'),
+      )
+      ..applyVods(loadedVods(['1']));
+    await pumpPage(tester, channel);
+
+    // The description is the About tab's, not the header's.
+    expect(find.text('The juicer.'), findsNothing);
+
+    await tester.tap(find.text('About'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ChannelAbout), findsOneWidget);
+    expect(find.text('12.3M followers'), findsOneWidget);
+    expect(find.text('The juicer.'), findsOneWidget);
+    expect(find.text('Title 1'), findsNothing);
+  });
+
+  testWidgets('the About tab of a channel without a description says so', (
+    tester,
+  ) async {
     final channel = ChannelHolder()
       ..applyHeader(found())
       ..applyVods(loadedVods(['1']));
     await pumpPage(tester, channel);
+    await tester.tap(find.text('About'));
+    await tester.pumpAndSettle();
 
-    expect(find.byType(ChannelDescription), findsNothing);
-  });
-
-  testWidgets('a short description shows whole, with no toggle', (
-    tester,
-  ) async {
-    final channel = ChannelHolder()
-      ..applyHeader(found(description: 'The juicer.'))
-      ..applyVods(loadedVods(['1']));
-    await pumpPage(tester, channel);
-
-    expect(find.text('The juicer.'), findsOneWidget);
-    expect(find.text('Show more'), findsNothing);
-  });
-
-  testWidgets('a long description is collapsed and expands', (tester) async {
-    final long = List.filled(
-      12,
-      'The best at absolutely everything.',
-    ).join('\n');
-    final channel = ChannelHolder()
-      ..applyHeader(found(description: long))
-      ..applyVods(loadedVods(['1']));
-    await pumpPage(tester, channel);
-
-    Text text() => tester.widget<Text>(find.text(long));
-    expect(text().maxLines, 3);
-    expect(find.text('Show more'), findsOneWidget);
-
-    await tester.tap(find.text('Show more'));
-    await tester.pump();
-    expect(text().maxLines, isNull);
-    expect(find.text('Show less'), findsOneWidget);
-
-    await tester.tap(find.text('Show less'));
-    await tester.pump();
-    expect(text().maxLines, 3);
-    expect(find.text('Show more'), findsOneWidget);
+    expect(find.text('No description.'), findsOneWidget);
+    expect(find.textContaining('followers'), findsNothing);
   });
 
   testWidgets('tapping a VOD hands on its id', (tester) async {

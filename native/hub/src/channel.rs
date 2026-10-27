@@ -17,7 +17,7 @@ use jitter_twitch::{Twitch, TwitchError};
 use rinf::RustSignal;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::format::{duration_label, twitch_error, viewers_label};
+use crate::format::{duration_label, followers_label, twitch_error, viewers_label};
 use crate::run::Fetched;
 use crate::signals::{
     ChannelLive, ChannelUpdate, VodKind, VodTile, VodsMore, VodsState, VodsUpdate,
@@ -95,7 +95,7 @@ pub fn refresh(
 }
 
 /// `SelectVodKind`: lists the open channel's VODs of `kind` from the first
-/// page.
+/// page, unless core says that kind is already listed.
 pub fn select_kind(
     page: &mut ChannelPage,
     resume: &ResumeController,
@@ -103,8 +103,10 @@ pub fn select_kind(
     twitch: &Twitch,
     fetch: &UnboundedSender<Fetched>,
 ) {
-    if let Some(vods) = page.vods.as_mut() {
-        let request = vods.show_kind(kind.into());
+    let Some(vods) = page.vods.as_mut() else {
+        return;
+    };
+    if let Some(request) = vods.show_kind(kind.into()) {
         spawn_vods(vods, request, twitch, fetch);
         VodsUpdate::since(None, vods.state(), resume).send_signal_to_dart();
     }
@@ -230,16 +232,13 @@ impl From<&ChannelState> for ChannelUpdate {
                 login: login.as_str().to_owned(),
                 message: message.clone(),
             },
-            ChannelState::Found {
-                channel,
-                description,
-                live,
-            } => Self::Found {
-                channel_id: channel.id.as_str().to_owned(),
-                login: channel.login.as_str().to_owned(),
-                display_name: channel.display_name.clone(),
-                avatar_url: channel.avatar_url.clone(),
-                description: description.clone(),
+            ChannelState::Found { profile, live } => Self::Found {
+                channel_id: profile.channel.id.as_str().to_owned(),
+                login: profile.channel.login.as_str().to_owned(),
+                display_name: profile.channel.display_name.clone(),
+                avatar_url: profile.channel.avatar_url.clone(),
+                description: profile.description.clone(),
+                followers_label: profile.followers.map(followers_label),
                 live: live.into(),
             },
         }
@@ -445,7 +444,7 @@ mod tests {
     #[test]
     fn another_kind_is_a_loading_snapshot() -> TestResult {
         let mut vods = loaded()?;
-        vods.show_kind(VodKind::Upload.into());
+        assert!(vods.show_kind(VodKind::Upload.into()).is_some());
         assert_eq!(vods.kind(), VideoKind::Upload);
         let update = VodsUpdate::since(None, vods.state(), &no_resume());
         assert!(matches!(
@@ -458,7 +457,7 @@ mod tests {
     }
 
     #[test]
-    fn a_found_header_carries_the_description() -> TestResult {
+    fn a_found_header_carries_the_description_and_followers() -> TestResult {
         let mut header = ChannelController::new();
         header.open(login()?);
         let channel = video("1")?.channel;
@@ -468,13 +467,18 @@ mod tests {
             Ok(ChannelProfile {
                 channel,
                 description,
+                followers: Some(39_950),
             }),
         );
         let update = ChannelUpdate::from(header.state());
         assert!(matches!(
             update,
-            ChannelUpdate::Found { description: Some(d), live: ChannelLive::Checking, .. }
-                if d == "The juicer."
+            ChannelUpdate::Found {
+                description: Some(d),
+                followers_label: Some(f),
+                live: ChannelLive::Checking,
+                ..
+            } if d == "The juicer." && f == "39.9K followers"
         ));
         Ok(())
     }

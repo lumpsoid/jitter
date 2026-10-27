@@ -5,7 +5,10 @@
       "login": "xqc",
       "displayName": "xQc",
       "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/xqc-profile_image-9298dca608632101-50x50.jpeg",
-      "description": "THE BEST AT ABSOLUTELY EVERYTHING. THE JUICER. LEADER OF THE JUICER SQUAD."
+      "description": "THE BEST AT ABSOLUTELY EVERYTHING. THE JUICER. LEADER OF THE JUICER SQUAD.",
+      "followers": {
+        "totalCount": 12345678
+      }
     }
   },
   "extensions": {
