@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:jitter/channel/channel_description.dart';
 import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/channel/vod_tile_view.dart';
 import 'package:jitter/favorites/favorite_star.dart';
@@ -12,8 +13,8 @@ const double _nextPageExtent = 800;
 const List<String> _tabLabels = ['Archive', 'Highlights', 'Uploads'];
 
 /// One channel: its header (avatar, name, favorite star, live stream if
-/// any) above its VODs in tabs, refreshed by pulling down and paged by
-/// scrolling. Shows what [channel] holds: [push] opens [login] in it
+/// any, description) above its VODs in tabs, refreshed by pulling down and
+/// paged by scrolling. Shows what [channel] holds: [push] opens [login] in it
 /// first.
 class ChannelPage extends StatefulWidget {
   const new({
@@ -143,8 +144,8 @@ class _ChannelPageState extends State<ChannelPage>
   }
 }
 
-/// The channel's avatar and name, then whether it is live: a progress bar
-/// while it is looked up.
+/// The channel's avatar and name, then whether it is live, then its
+/// description when it has one: a progress bar while it is looked up.
 class _Header extends StatelessWidget {
   const new({required this.header, required this.onOpenLive});
 
@@ -157,7 +158,7 @@ class _Header extends StatelessWidget {
     if (header is! ChannelUpdateFound) {
       return const LinearProgressIndicator();
     }
-    return ListTile(
+    final tile = ListTile(
       leading: CircleAvatar(
         foregroundImage: NetworkImage(header.avatarUrl),
         // An avatar that fails to load leaves the icon.
@@ -173,6 +174,15 @@ class _Header extends StatelessWidget {
         },
       ),
     );
+    return switch (header.description) {
+      final description? => Column(
+        children: [
+          tile,
+          ChannelDescription(text: description),
+        ],
+      ),
+      null => tile,
+    };
   }
 }
 

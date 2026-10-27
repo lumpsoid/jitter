@@ -2,11 +2,19 @@ use jitter_core::models::{FirstPage, ListState, MorePages, PageRequest, VideoKin
 use jitter_core::vods::VodsController;
 use jitter_twitch::Twitch;
 
-use super::{Result, login, twitch};
+use super::{Result, ctx, login, twitch};
 
+/// Prints the channel's description, when it has one, then its VODs.
 pub async fn run(login_input: &str, pages: u32) -> Result<()> {
     let login = login(login_input)?;
     let twitch = twitch()?;
+    let profile = twitch
+        .channel_profile(&login)
+        .await
+        .map_err(ctx(format!("looking up {login}")))?;
+    if let Some(description) = &profile.description {
+        println!("{description}\n");
+    }
     let mut vods = VodsController::new(login, VideoKind::Archive);
     let request = vods.begin_refresh();
     fetch(&twitch, &mut vods, request).await;

@@ -1,9 +1,9 @@
-//! The channel page's header: the channel looked up by login, then whether
-//! it is live. Pure state; heads look the channel up and check it through
-//! twitch and hand the results in. Opening another channel makes results
-//! for the one before it stale.
+//! The channel page's header: the channel and its description looked up by
+//! login, then whether it is live. Pure state; heads look the channel up
+//! and check it through twitch and hand the results in. Opening another
+//! channel makes results for the one before it stale.
 
-use crate::models::{Channel, ChannelId, ChannelLogin, Stream};
+use crate::models::{Channel, ChannelId, ChannelLogin, ChannelProfile, Stream};
 
 /// Why a channel lookup gave no channel.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,6 +39,8 @@ pub enum ChannelState {
     },
     Found {
         channel: Channel,
+        /// The channel's "about" text; `None` when it has none.
+        description: Option<String>,
         live: LiveStatus,
     },
 }
@@ -89,7 +91,7 @@ impl ChannelController {
     pub fn apply_channel(
         &mut self,
         login: &ChannelLogin,
-        result: Result<Channel, ChannelLookupError>,
+        result: Result<ChannelProfile, ChannelLookupError>,
     ) -> Option<ChannelId> {
         let ChannelState::Loading { login: current } = &self.state else {
             return None;
@@ -98,10 +100,17 @@ impl ChannelController {
             return None;
         }
         let (state, check) = match result {
-            Ok(channel) => {
+            Ok(ChannelProfile {
+                channel,
+                description,
+            }) => {
                 let id = channel.id.clone();
-                let live = LiveStatus::Checking;
-                (ChannelState::Found { channel, live }, Some(id))
+                let found = ChannelState::Found {
+                    channel,
+                    description,
+                    live: LiveStatus::Checking,
+                };
+                (found, Some(id))
             }
             Err(ChannelLookupError::NotFound) => (
                 ChannelState::NotFound {
@@ -125,7 +134,7 @@ impl ChannelController {
     /// offline when there is none. Ignored unless that channel is open and
     /// being checked.
     pub fn apply_live(&mut self, id: &ChannelId, result: Result<Vec<Stream>, String>) {
-        let ChannelState::Found { channel, live } = &mut self.state else {
+        let ChannelState::Found { channel, live, .. } = &mut self.state else {
             return;
         };
         if channel.id != *id || *live != LiveStatus::Checking {

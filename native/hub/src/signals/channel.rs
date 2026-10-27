@@ -52,6 +52,8 @@ pub enum ChannelUpdate {
         login: String,
         display_name: String,
         avatar_url: String,
+        /// The channel's "about" text; `None`: it has none, show nothing.
+        description: Option<String>,
         live: ChannelLive,
     },
 }

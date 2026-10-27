@@ -8,8 +8,8 @@
 
 use jitter_core::channel::{ChannelController, ChannelLookupError, ChannelState, LiveStatus};
 use jitter_core::models::{
-    Channel, ChannelId, ChannelLogin, FirstPage, ListState, MorePages, Page, PageRequest, Stream,
-    Video, VideoKind,
+    ChannelId, ChannelLogin, ChannelProfile, FirstPage, ListState, MorePages, Page, PageRequest,
+    Stream, Video, VideoKind,
 };
 use jitter_core::resume::ResumeController;
 use jitter_core::vods::{FIRST_KIND, VodsController};
@@ -36,7 +36,7 @@ pub enum ChannelFetched {
     /// The lookup an `OpenChannel` or `RefreshChannel` started.
     Channel {
         login: ChannelLogin,
-        result: Result<Channel, TwitchError>,
+        result: Result<ChannelProfile, TwitchError>,
     },
     /// The live check of a found channel.
     Live {
@@ -171,7 +171,7 @@ fn lookup_error(error: TwitchError) -> ChannelLookupError {
 fn spawn_lookup(login: ChannelLogin, twitch: &Twitch, fetch: &UnboundedSender<Fetched>) {
     let (twitch, fetch) = (twitch.clone(), fetch.clone());
     tokio::spawn(async move {
-        let result = twitch.channel(&login).await;
+        let result = twitch.channel_profile(&login).await;
         let _ = fetch.send(Fetched::Channel(ChannelFetched::Channel { login, result }));
     });
 }
@@ -230,11 +230,16 @@ impl From<&ChannelState> for ChannelUpdate {
                 login: login.as_str().to_owned(),
                 message: message.clone(),
             },
-            ChannelState::Found { channel, live } => Self::Found {
+            ChannelState::Found {
+                channel,
+                description,
+                live,
+            } => Self::Found {
                 channel_id: channel.id.as_str().to_owned(),
                 login: channel.login.as_str().to_owned(),
                 display_name: channel.display_name.clone(),
                 avatar_url: channel.avatar_url.clone(),
+                description: description.clone(),
                 live: live.into(),
             },
         }
@@ -331,7 +336,7 @@ impl VodTile {
 #[cfg(test)]
 mod tests {
     use jitter_core::fakes::FakeResumeStore;
-    use jitter_core::models::{Cursor, ResumePoint, Seconds, Timestamp, VideoId};
+    use jitter_core::models::{Channel, Cursor, ResumePoint, Seconds, Timestamp, VideoId};
 
     use super::*;
 
@@ -448,6 +453,28 @@ mod tests {
             VodsUpdate::Snapshot {
                 state: VodsState::Loading
             }
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn a_found_header_carries_the_description() -> TestResult {
+        let mut header = ChannelController::new();
+        header.open(login()?);
+        let channel = video("1")?.channel;
+        let description = Some("The juicer.".to_owned());
+        header.apply_channel(
+            &login()?,
+            Ok(ChannelProfile {
+                channel,
+                description,
+            }),
+        );
+        let update = ChannelUpdate::from(header.state());
+        assert!(matches!(
+            update,
+            ChannelUpdate::Found { description: Some(d), live: ChannelLive::Checking, .. }
+                if d == "The juicer."
         ));
         Ok(())
     }

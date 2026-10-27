@@ -47,7 +47,7 @@ enum Command {
         #[command(subcommand)]
         command: Option<FavCommand>,
     },
-    /// List a channel's past broadcasts.
+    /// Print a channel's description and list its past broadcasts.
     Vods {
         login: String,
         /// How many pages to load.

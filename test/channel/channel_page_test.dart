@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jitter/channel/channel_description.dart';
 import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/channel/channel_page.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
@@ -86,6 +87,52 @@ void main() {
       find.byType(LinearProgressIndicator),
     );
     expect([for (final b in bars) b.value], [0.25]);
+  });
+
+  testWidgets('a channel without a description shows none', (tester) async {
+    final channel = ChannelHolder()
+      ..applyHeader(found())
+      ..applyVods(loadedVods(['1']));
+    await pumpPage(tester, channel);
+
+    expect(find.byType(ChannelDescription), findsNothing);
+  });
+
+  testWidgets('a short description shows whole, with no toggle', (
+    tester,
+  ) async {
+    final channel = ChannelHolder()
+      ..applyHeader(found(description: 'The juicer.'))
+      ..applyVods(loadedVods(['1']));
+    await pumpPage(tester, channel);
+
+    expect(find.text('The juicer.'), findsOneWidget);
+    expect(find.text('Show more'), findsNothing);
+  });
+
+  testWidgets('a long description is collapsed and expands', (tester) async {
+    final long = List.filled(
+      12,
+      'The best at absolutely everything.',
+    ).join('\n');
+    final channel = ChannelHolder()
+      ..applyHeader(found(description: long))
+      ..applyVods(loadedVods(['1']));
+    await pumpPage(tester, channel);
+
+    Text text() => tester.widget<Text>(find.text(long));
+    expect(text().maxLines, 3);
+    expect(find.text('Show more'), findsOneWidget);
+
+    await tester.tap(find.text('Show more'));
+    await tester.pump();
+    expect(text().maxLines, isNull);
+    expect(find.text('Show less'), findsOneWidget);
+
+    await tester.tap(find.text('Show less'));
+    await tester.pump();
+    expect(text().maxLines, 3);
+    expect(find.text('Show more'), findsOneWidget);
   });
 
   testWidgets('tapping a VOD hands on its id', (tester) async {

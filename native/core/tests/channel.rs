@@ -1,5 +1,5 @@
 use jitter_core::channel::{ChannelController, ChannelLookupError, ChannelState, LiveStatus};
-use jitter_core::models::{Channel, ChannelId, ChannelLogin, Stream};
+use jitter_core::models::{Channel, ChannelId, ChannelLogin, ChannelProfile, Stream};
 
 fn login(value: &str) -> ChannelLogin {
     let Ok(login) = ChannelLogin::parse(value) else {
@@ -24,6 +24,14 @@ fn channel(channel_id: &str, name: &str) -> Channel {
     }
 }
 
+/// The channel page's lookup result: `channel` with no description.
+fn profile(channel_id: &str, name: &str) -> ChannelProfile {
+    ChannelProfile {
+        channel: channel(channel_id, name),
+        description: None,
+    }
+}
+
 fn stream(channel_id: &str, name: &str) -> Stream {
     Stream {
         id: format!("s{channel_id}"),
@@ -40,7 +48,7 @@ fn stream(channel_id: &str, name: &str) -> Stream {
 fn found() -> ChannelController {
     let mut c = ChannelController::new();
     c.open(login("xqc"));
-    c.apply_channel(&login("xqc"), Ok(channel("1", "xqc")));
+    c.apply_channel(&login("xqc"), Ok(profile("1", "xqc")));
     c
 }
 
@@ -62,9 +70,29 @@ fn a_found_channel_asks_for_its_live_check() {
             login: login("xqc")
         }
     );
-    let check = c.apply_channel(&login("xqc"), Ok(channel("1", "xqc")));
+    let check = c.apply_channel(&login("xqc"), Ok(profile("1", "xqc")));
     assert_eq!(check, Some(id("1")));
     assert_eq!(live(&c), &LiveStatus::Checking);
+}
+
+#[test]
+fn a_found_channel_keeps_its_description_through_its_live_check() {
+    let mut c = ChannelController::new();
+    c.open(login("xqc"));
+    let about = ChannelProfile {
+        channel: channel("1", "xqc"),
+        description: Some("The juicer.".to_owned()),
+    };
+    c.apply_channel(&login("xqc"), Ok(about));
+    c.apply_live(&id("1"), Ok(vec![]));
+    assert_eq!(
+        c.state(),
+        &ChannelState::Found {
+            channel: channel("1", "xqc"),
+            description: Some("The juicer.".to_owned()),
+            live: LiveStatus::Offline,
+        }
+    );
 }
 
 #[test]
@@ -103,7 +131,7 @@ fn a_lookup_of_a_channel_no_longer_open_is_ignored() {
     let mut c = ChannelController::new();
     c.open(login("xqc"));
     c.open(login("shroud"));
-    let check = c.apply_channel(&login("xqc"), Ok(channel("1", "xqc")));
+    let check = c.apply_channel(&login("xqc"), Ok(profile("1", "xqc")));
     assert_eq!(check, None);
     assert_eq!(
         c.state(),

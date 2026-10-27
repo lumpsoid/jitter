@@ -2,7 +2,9 @@
 //!
 //! Bodies Twitch did not produce during recording are hand-written here and
 //! marked as such: the `failed integrity check` and generic error bodies,
-//! and the browse edges with a null broadcaster and a null game.
+//! the browse edges with a null broadcaster and a null game, and the
+//! channel lookup's `description` (added to the recorded user, and the
+//! empty and missing ones).
 
 use jitter_core::models::{
     CategoryId, ChannelId, ChannelLogin, Cursor, Seconds, Timestamp, VideoKind,
@@ -245,10 +247,48 @@ fn users_stream_yields_only_the_live_id() {
 
 #[test]
 fn channel_lookup_maps_the_user() {
-    let channel = ok(channel_by_login::parse(CHANNEL));
+    let profile = ok(channel_by_login::parse(CHANNEL));
+    let channel = profile.channel;
     assert_eq!(channel.id.as_str(), "71092938");
     assert_eq!(channel.login.as_str(), "xqc");
     assert_eq!(channel.display_name, "xQc");
+    assert_eq!(
+        profile.description.as_deref(),
+        Some("THE BEST AT ABSOLUTELY EVERYTHING. THE JUICER. LEADER OF THE JUICER SQUAD.")
+    );
+}
+
+#[test]
+fn channel_lookup_asks_for_the_description() {
+    assert!(channel_by_login::QUERY.document.contains(" description "));
+}
+
+/// Hand-written: the recorded user with the empty `description` Twitch
+/// sends for a channel without one, and with none at all.
+fn channel_body(description: &str) -> String {
+    format!(
+        r#"{{"data":{{"user":{{"id":"71092938","login":"xqc","displayName":"xQc",
+            "profileImageURL":"https://cdn/xqc.jpeg"{description}}}}}}}"#
+    )
+}
+
+#[test]
+fn an_empty_description_is_none() {
+    let empty = channel_body(r#","description":"""#);
+    assert_eq!(
+        ok(channel_by_login::parse(empty.as_bytes())).description,
+        None
+    );
+    let blank = channel_body(r#","description":"  ""#);
+    assert_eq!(
+        ok(channel_by_login::parse(blank.as_bytes())).description,
+        None
+    );
+    let missing = channel_body("");
+    assert_eq!(
+        ok(channel_by_login::parse(missing.as_bytes())).description,
+        None
+    );
 }
 
 #[test]
