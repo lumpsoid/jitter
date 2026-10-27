@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:jitter/chat/chat_holder.dart';
+import 'package:jitter/chat/chat_panel.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
@@ -8,6 +10,12 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 /// How often the page reports the player's position; Rust throttles saves.
 const _reportEvery = Duration(seconds: 1);
+
+/// From this width the chat sits beside the video, below it otherwise.
+const double _chatBesideMinWidth = 840;
+
+/// The chat's width beside the video.
+const double _chatWidth = 340;
 
 /// Plays [target]: sends `Play` when it opens and `LeavePlayer` when it
 /// closes; Rust opens and stops the player. Push it with `Navigator.push`.
@@ -17,6 +25,7 @@ class PlayerPage extends StatefulWidget {
     required this.title,
     required this.playback,
     required this.player,
+    required this.chat,
     super.key,
   });
 
@@ -28,6 +37,9 @@ class PlayerPage extends StatefulWidget {
 
   final PlaybackHolder playback;
   final MediaKitEngine player;
+
+  /// The live chat, shown while Rust has one open.
+  final ChatHolder chat;
 
   @override
   State<PlayerPage> createState() => _PlayerPageState();
@@ -68,7 +80,7 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: widget.playback,
+      listenable: Listenable.merge([widget.playback, widget.chat]),
       builder: (context, _) {
         final state = widget.playback.state;
         return Scaffold(
@@ -86,14 +98,39 @@ class _PlayerPageState extends State<PlayerPage> {
                 ),
             ],
           ),
-          // The video alone for now; a chat panel goes beside it (wide) or
-          // below it (narrow).
-          body: Center(
-            child: AspectRatio(
+          body: _layout(
+            AspectRatio(
               aspectRatio: 16 / 9,
               child: ColoredBox(color: Colors.black, child: _video(state)),
             ),
           ),
+        );
+      },
+    );
+  }
+
+  /// The video alone, or with the chat beside it (wide) or below it
+  /// (narrow).
+  Widget _layout(Widget video) {
+    if (!widget.chat.on) return Center(child: video);
+    final chat = ChatPanel(chat: widget.chat);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= _chatBesideMinWidth) {
+          return Row(
+            children: [
+              Expanded(child: Center(child: video)),
+              const VerticalDivider(width: 1),
+              SizedBox(width: _chatWidth, child: chat),
+            ],
+          );
+        }
+        return Column(
+          children: [
+            video,
+            const Divider(height: 1),
+            Expanded(child: chat),
+          ],
         );
       },
     );

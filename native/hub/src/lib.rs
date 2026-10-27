@@ -5,6 +5,8 @@
 mod browse;
 // Channel
 mod channel;
+// Chat
+mod chat;
 mod favorites;
 mod format;
 // Playback

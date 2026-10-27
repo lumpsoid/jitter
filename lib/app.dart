@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:jitter/boot/boot_failure_page.dart';
 import 'package:jitter/boot/boot_holder.dart';
 import 'package:jitter/channel/channel_holder.dart';
+import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
@@ -26,6 +27,8 @@ class JitterApp extends StatefulWidget {
     required this.player,
     // Channel
     required this.channel,
+    // Chat
+    required this.chat,
     super.key,
   });
 
@@ -39,6 +42,8 @@ class JitterApp extends StatefulWidget {
   final MediaKitEngine player;
   // Channel
   final ChannelHolder channel;
+  // Chat
+  final ChatHolder chat;
 
   @override
   State<JitterApp> createState() => _JitterAppState();
@@ -94,6 +99,8 @@ class _JitterAppState extends State<JitterApp> {
             player: widget.player,
             // Channel
             channel: widget.channel,
+            // Chat
+            chat: widget.chat,
           ),
         },
       ),

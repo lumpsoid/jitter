@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/channel/channel_page.dart';
+import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/favorites/favorites_page.dart';
 import 'package:jitter/player/media_kit_engine.dart';
@@ -38,6 +39,8 @@ class AppShell extends StatefulWidget {
     required this.player,
     // Channel
     required this.channel,
+    // Chat
+    required this.chat,
     super.key,
   });
 
@@ -50,6 +53,8 @@ class AppShell extends StatefulWidget {
   final MediaKitEngine player;
   // Channel
   final ChannelHolder channel;
+  // Chat: shown on the player page.
+  final ChatHolder chat;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -106,6 +111,7 @@ class _AppShellState extends State<AppShell> {
           title: title,
           playback: widget.playback,
           player: widget.player,
+          chat: widget.chat,
         ),
       ),
     );

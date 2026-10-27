@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:jitter/app.dart';
 import 'package:jitter/boot/boot_holder.dart';
 import 'package:jitter/channel/channel_holder.dart';
+import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
@@ -33,6 +34,8 @@ Future<void> main() async {
   final favorites = FavoritesHolder()..connect();
   // Channel
   final channel = ChannelHolder()..connect();
+  // Chat
+  final chat = ChatHolder()..connect();
 
   final boot = BootHolder();
   unawaited(boot.connect());
@@ -49,6 +52,8 @@ Future<void> main() async {
       player: player,
       // Channel
       channel: channel,
+      // Chat
+      chat: chat,
     ),
   );
 }

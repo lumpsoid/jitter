@@ -20,20 +20,24 @@ use crate::signals::{
 };
 
 /// `Play`: starts resolving `target` through twitch; the result comes back
-/// as [`Fetched::Playback`]. A target core rejects fails at once.
+/// as [`Fetched::Playback`]. A target core rejects fails at once. Returns
+/// the target now playing, `None` when it was rejected.
 pub fn play(
     playback: &mut PlaybackController,
     twitch: &Twitch,
     fetch: &UnboundedSender<Fetched>,
     target: PlaybackTarget,
-) {
+) -> Option<playback::PlaybackTarget> {
     let target = match playback::PlaybackTarget::try_from(target) {
         Ok(target) => target,
-        Err(message) => return PlaybackUpdate::Failed { message }.send_signal_to_dart(),
+        Err(message) => {
+            PlaybackUpdate::Failed { message }.send_signal_to_dart();
+            return None;
+        }
     };
     playback.begin(target.clone());
     PlaybackUpdate::from(playback.state()).send_signal_to_dart();
-    let (twitch, fetch) = (twitch.clone(), fetch.clone());
+    let (twitch, fetch, playing) = (twitch.clone(), fetch.clone(), target.clone());
     tokio::spawn(async move {
         let result = match &target {
             playback::PlaybackTarget::Live(login) => twitch.live(login).await,
@@ -41,6 +45,7 @@ pub fn play(
         };
         let _ = fetch.send(Fetched::Playback { target, result });
     });
+    Some(playing)
 }
 
 /// A resolve finished: shows the result and, if it is the one being
@@ -95,14 +100,14 @@ pub fn position(
 }
 
 /// `LeavePlayer`: records the last position, then leaves; the player stops
-/// unless a later page already took it over.
+/// unless a later page already took it over. Returns whether it stopped.
 pub fn leave(
     playback: &mut PlaybackController,
     resume: &mut ResumeController,
     signal: LeavePlayer,
-) {
+) -> bool {
     let Some(target) = report(playback::PlaybackTarget::try_from(signal.target)) else {
-        return;
+        return false;
     };
     report(record(
         playback,
@@ -111,10 +116,12 @@ pub fn leave(
         signal.position_s,
         signal.duration_s,
     ));
-    if playback.leave(&target) {
+    let left = playback.leave(&target);
+    if left {
         PlaybackUpdate::from(playback.state()).send_signal_to_dart();
         PlayerCommand::Stop.send_signal_to_dart();
     }
+    left
 }
 
 fn send_open(open: Option<Open>) {
