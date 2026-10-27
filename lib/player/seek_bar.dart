@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:jitter/player/live.dart';
 import 'package:jitter/player/scrub.dart';
 import 'package:jitter/player/scrub_trail.dart';
 
@@ -46,13 +47,12 @@ class SeekBar extends StatefulWidget {
     super.key,
   });
 
-  /// Where it plays, how long the VOD is and how far it has buffered:
-  /// each now, then each change. Each call is a new stream: media_kit's
-  /// controls keep this one widget and mount it anew each time they show,
-  /// and each mount listens from the start.
-  final Stream<Duration> Function() positions;
-  final Stream<Duration> Function() durations;
-  final Stream<Duration> Function() buffers;
+  /// Where it plays, how long the VOD is and how far it has buffered.
+  /// The controls keep this one widget and mount it anew each time they
+  /// show; each mount reads them now and listens from then on.
+  final Live<Duration> positions;
+  final Live<Duration> durations;
+  final Live<Duration> buffers;
 
   /// Seeks to a click's spot at once, and to a drag's where it rests and
   /// where it ends.
@@ -63,9 +63,9 @@ class SeekBar extends StatefulWidget {
 }
 
 class _SeekBarState extends State<SeekBar> {
-  Duration _position = Duration.zero;
-  Duration _duration = Duration.zero;
-  Duration _buffer = Duration.zero;
+  late Duration _position = widget.positions.now();
+  late Duration _duration = widget.durations.now();
+  late Duration _buffer = widget.buffers.now();
   late final List<StreamSubscription<Duration>> _subscriptions;
 
   /// Where over the bar the pointer hovers, or null when off it.
@@ -100,9 +100,9 @@ class _SeekBarState extends State<SeekBar> {
   void initState() {
     super.initState();
     _subscriptions = [
-      widget.positions().listen((at) => setState(() => _position = at)),
-      widget.durations().listen((at) => setState(() => _duration = at)),
-      widget.buffers().listen((at) => setState(() => _buffer = at)),
+      widget.positions.changes().listen((at) => setState(() => _position = at)),
+      widget.durations.changes().listen((at) => setState(() => _duration = at)),
+      widget.buffers.changes().listen((at) => setState(() => _buffer = at)),
     ];
     HardwareKeyboard.instance.addHandler(_onKey);
   }

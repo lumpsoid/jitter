@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:jitter/player/go_to_time_dialog.dart';
+import 'package:jitter/player/live.dart';
 import 'package:jitter/player/seek_bar.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 
@@ -18,10 +19,10 @@ class PositionReadout extends StatefulWidget {
     super.key,
   });
 
-  /// Each call a new stream, as [SeekBar]'s: media_kit mounts this anew
-  /// each time its controls show.
-  final Stream<Duration> Function() positions;
-  final Stream<Duration> Function() durations;
+  /// Read now and listened to at each mount, as [SeekBar]'s: the controls
+  /// mount this anew each time they show.
+  final Live<Duration> positions;
+  final Live<Duration> durations;
 
   /// Rust's answers to [onGoTo], for the dialog.
   final Stream<GoToTimeAnswer> Function() answers;
@@ -37,16 +38,16 @@ class PositionReadout extends StatefulWidget {
 }
 
 class _PositionReadoutState extends State<PositionReadout> {
-  Duration _position = Duration.zero;
-  Duration _duration = Duration.zero;
+  late Duration _position = widget.positions.now();
+  late Duration _duration = widget.durations.now();
   late final List<StreamSubscription<Duration>> _subscriptions;
 
   @override
   void initState() {
     super.initState();
     _subscriptions = [
-      widget.positions().listen((at) => setState(() => _position = at)),
-      widget.durations().listen((at) => setState(() => _duration = at)),
+      widget.positions.changes().listen((at) => setState(() => _position = at)),
+      widget.durations.changes().listen((at) => setState(() => _duration = at)),
     ];
   }
 

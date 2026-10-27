@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:jitter/player/faded_volume.dart';
+import 'package:jitter/player/live.dart';
 import 'package:jitter/player/player_engine.dart';
 import 'package:jitter/player/video_zoom.dart';
 import 'package:media_kit/media_kit.dart';
@@ -74,17 +75,17 @@ class MediaKitEngine implements PlayerEngine {
     }
   }
 
-  /// Where it plays now, then each change.
-  Stream<Duration> get positions async* {
-    yield _player.state.position;
-    yield* _player.stream.position;
-  }
+  /// Where it plays.
+  Live<Duration> get positions => Live(
+    now: () => _player.state.position,
+    changes: () => _player.stream.position,
+  );
 
-  /// How long the media is now, then each change.
-  Stream<Duration> get durations async* {
-    yield _player.state.duration;
-    yield* _player.stream.duration;
-  }
+  /// How long the media is: zero until it has loaded.
+  Live<Duration> get durations => Live(
+    now: () => _player.state.duration,
+    changes: () => _player.stream.duration,
+  );
 
   /// Whether it waits for the media to load now, then each change.
   Stream<bool> get bufferings async* {
@@ -92,11 +93,11 @@ class MediaKitEngine implements PlayerEngine {
     yield* _player.stream.buffering;
   }
 
-  /// How far it has buffered now, then each change.
-  Stream<Duration> get buffers async* {
-    yield _player.state.buffer;
-    yield* _player.stream.buffer;
-  }
+  /// How far it has buffered.
+  Live<Duration> get buffers => Live(
+    now: () => _player.state.buffer,
+    changes: () => _player.stream.buffer,
+  );
 
   /// Mutes, or unmutes back to the volume it was muted at; mid-fade, under
   /// the fade.

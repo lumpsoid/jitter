@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jitter/player/live.dart';
 import 'package:jitter/player/position_readout.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 
@@ -16,8 +17,14 @@ Future<List<String>> pumpReadout(
     MaterialApp(
       home: Scaffold(
         body: PositionReadout(
-          positions: () => Stream.value(const Duration(hours: 1)),
-          durations: () => Stream.value(const Duration(hours: 6)),
+          positions: Live(
+            now: () => const Duration(hours: 1),
+            changes: Stream.empty,
+          ),
+          durations: Live(
+            now: () => const Duration(hours: 6),
+            changes: Stream.empty,
+          ),
           answers: () => answers.stream,
           onGoTo: sent.add,
           fontSize: 14,
@@ -42,6 +49,37 @@ void main() {
 
     expect(find.text('1:00:00 / 6:00:00'), findsOneWidget);
     expect(find.byTooltip('Go to a time'), findsOneWidget);
+  });
+
+  testWidgets('its first frame reads the time now, then follows it', (
+    tester,
+  ) async {
+    final positions = StreamController<Duration>.broadcast();
+    addTearDown(positions.close);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PositionReadout(
+            positions: Live(
+              now: () => const Duration(hours: 1),
+              changes: () => positions.stream,
+            ),
+            durations: Live(
+              now: () => const Duration(hours: 6),
+              changes: Stream.empty,
+            ),
+            answers: () => answers.stream,
+            onGoTo: (_) {},
+            fontSize: 14,
+          ),
+        ),
+      ),
+    );
+    expect(find.text('1:00:00 / 6:00:00'), findsOneWidget);
+
+    positions.add(const Duration(hours: 2));
+    await tester.pump();
+    expect(find.text('2:00:00 / 6:00:00'), findsOneWidget);
   });
 
   testWidgets('a tap asks for a time, sent with Enter or Go', (tester) async {

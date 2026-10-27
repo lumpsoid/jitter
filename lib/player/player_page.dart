@@ -117,16 +117,16 @@ class _PlayerPageState extends State<PlayerPage> {
 
   /// A VOD's seek bar, for either controls.
   SeekBar _seekBar() => SeekBar(
-    positions: () => widget.player.positions,
-    durations: () => widget.player.durations,
-    buffers: () => widget.player.buffers,
+    positions: widget.player.positions,
+    durations: widget.player.durations,
+    buffers: widget.player.buffers,
     onSeek: (to) => unawaited(widget.player.seek(to)),
   );
 
   /// A VOD's readout, in media_kit's size: smaller on desktop.
   PositionReadout _readout({required double fontSize}) => PositionReadout(
-    positions: () => widget.player.positions,
-    durations: () => widget.player.durations,
+    positions: widget.player.positions,
+    durations: widget.player.durations,
     answers: () => GoToTimeAnswer.rustSignalStream.map((pack) => pack.message),
     onGoTo: _goTo,
     fontSize: fontSize,

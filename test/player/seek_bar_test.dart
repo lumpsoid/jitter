@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jitter/player/live.dart';
 import 'package:jitter/player/seek_bar.dart';
 
 const _vod = Duration(hours: 6);
@@ -27,9 +28,12 @@ Future<List<Duration>> pumpBar(WidgetTester tester) async {
           child: SizedBox(
             width: 1000,
             child: SeekBar(
-              positions: () => Stream.value(const Duration(hours: 1)),
-              durations: () => Stream.value(_vod),
-              buffers: () => Stream.value(Duration.zero),
+              positions: Live(
+                now: () => const Duration(hours: 1),
+                changes: Stream.empty,
+              ),
+              durations: Live(now: () => _vod, changes: Stream.empty),
+              buffers: Live(now: () => Duration.zero, changes: Stream.empty),
               onSeek: seeks.add,
             ),
           ),
@@ -236,9 +240,12 @@ void main() {
   testWidgets('one bar mounted again listens again', (tester) async {
     // As media_kit's controls do: one widget, mounted each time they show.
     final bar = SeekBar(
-      positions: () => Stream.value(const Duration(hours: 1)),
-      durations: () => Stream.value(_vod),
-      buffers: () => Stream.value(Duration.zero),
+      positions: Live(
+        now: () => const Duration(hours: 1),
+        changes: Stream.empty,
+      ),
+      durations: Live(now: () => _vod, changes: Stream.empty),
+      buffers: Live(now: () => Duration.zero, changes: Stream.empty),
       onSeek: (_) {},
     );
     Widget shown({required bool on}) => Directionality(
