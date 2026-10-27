@@ -64,7 +64,7 @@ fn print_event(chat: &ChatController, event: &ChatEvent, channel: &str) {
 }
 
 /// `12:34:56 name: text [Emote] text`, or `12:34:56 * name text` for /me.
-fn render(chat: &ChatController, message: &ChatMessage) -> String {
+pub(super) fn render(chat: &ChatController, message: &ChatMessage) -> String {
     let body: String = chat
         .fragments(message)
         .into_iter()

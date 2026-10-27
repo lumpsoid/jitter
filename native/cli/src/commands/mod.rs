@@ -6,6 +6,7 @@ pub mod category;
 pub mod chat;
 pub mod fav;
 pub mod play;
+pub mod replay;
 pub mod resume;
 pub mod search;
 pub mod top;

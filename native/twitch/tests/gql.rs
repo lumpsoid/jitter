@@ -7,8 +7,8 @@
 //! user, and the empty and missing ones).
 
 use jitter_core::models::{
-    CategoryId, ChannelId, ChannelLogin, Cursor, SearchQuery, Seconds, Timestamp, VideoId,
-    VideoKind,
+    CategoryId, ChannelId, ChannelLogin, Cursor, ReplayFrom, Rgb, SearchQuery, Seconds, Timestamp,
+    VideoId, VideoKind,
 };
 use jitter_twitch::TwitchError;
 use jitter_twitch::client::{CLIENT_ID, headers};
@@ -16,6 +16,7 @@ use jitter_twitch::gql::users_stream::{LIVE_STATUS_BATCH, batch_variables};
 use jitter_twitch::gql::{
     browse_directories, browse_popular, channel_by_login, channel_videos, decode, game_streams,
     persisted_body, playback_details, query_body, search_channels, search_games, users_stream,
+    video_comments,
 };
 
 const BROWSE: &[u8] = include_bytes!("fixtures/gql_browse_popular.json");
@@ -40,6 +41,11 @@ const CHANNEL_UNKNOWN: &[u8] = include_bytes!("fixtures/gql_channel_by_login_unk
 const DETAILS_LIVE: &[u8] = include_bytes!("fixtures/gql_playback_details_live.json");
 const DETAILS_VOD: &[u8] = include_bytes!("fixtures/gql_playback_details_vod.json");
 const BOGUS_HASH: &[u8] = include_bytes!("fixtures/gql_persisted_bogus_hash.json");
+// Recorded from `VideoCommentsByOffsetOrCursor` for VOD 2909822254 at
+// `contentOffsetSeconds` 3570 on 2026-10-27, cut from 59 edges to six
+// (the first three, two with emotes, the last), with a third edge whose
+// `commenter` is null added by hand: partly not recorded.
+const VIDEO_COMMENTS: &[u8] = include_bytes!("fixtures/gql_video_comments.json");
 
 fn ok<T, E: std::fmt::Debug>(result: Result<T, E>) -> T {
     match result {
@@ -645,5 +651,106 @@ fn search_games_errors_are_classified() {
     assert_eq!(
         search_games::parse(body),
         Err(TwitchError::IntegrityRequired)
+    );
+}
+
+// --- video comments --------------------------------------------------------
+
+#[test]
+fn video_comments_variables_ask_by_offset_or_by_cursor() {
+    let id = ok(VideoId::parse("2909822254"));
+    let vars = video_comments::variables(&id, &ReplayFrom::Offset(Seconds::new(3570)));
+    assert_eq!(vars["videoID"], "2909822254");
+    assert_eq!(vars["contentOffsetSeconds"], 3570);
+    assert!(vars.get("cursor").is_none());
+    let vars = video_comments::variables(&id, &ReplayFrom::After(Cursor::new("c1")));
+    assert_eq!(vars["videoID"], "2909822254");
+    assert_eq!(vars["cursor"], "c1");
+    assert!(vars.get("contentOffsetSeconds").is_none());
+}
+
+#[test]
+fn video_comments_map_offset_sender_text_and_time() {
+    let page = ok(video_comments::parse(VIDEO_COMMENTS));
+    let ids: Vec<&str> = page.items.iter().map(|c| c.message.id.as_str()).collect();
+    // The comment without a commenter is dropped.
+    assert_eq!(
+        ids,
+        [
+            "331e9e5c-26bb-4004-891f-4fd0fcaece59",
+            "ed076f2c-8ef6-49a6-8a97-f83ace8d140e",
+            "ccb49375-4c73-475b-8996-3e7d341289aa",
+            "0339b28f-86cd-4579-ac28-2a8cdfe18458",
+            "6a50f12b-91c4-413e-b0b4-a21d1d91413b",
+            "bf6a9800-2701-415a-9ec9-c21491ec4235",
+        ]
+    );
+    let first = &page.items[0];
+    assert_eq!(first.offset, Seconds::new(3569));
+    let sender = &first.message.sender;
+    assert_eq!(sender.user_id, ok(ChannelId::parse("483102143")));
+    assert_eq!(sender.display_name, "RoyJamming");
+    assert_eq!(sender.color, Rgb::parse_hex("#FF69B4"));
+    // The empty badge Twitch sends beside the real one is dropped.
+    let badges: Vec<(&str, &str)> = sender
+        .badges
+        .iter()
+        .map(|b| (b.set_id.as_str(), b.version.as_str()))
+        .collect();
+    assert_eq!(badges, [("bits", "100")]);
+    assert_eq!(first.message.text, "@xQc fix the camera and chat  \u{34f}");
+    assert!(first.message.emotes.is_empty());
+    assert!(!first.message.action);
+    assert!(!first.message.deleted);
+    // 2026-10-24T21:50:16.102Z, to the second.
+    assert_eq!(first.message.sent_at, Timestamp::from_unix(1_792_878_616));
+    assert_eq!(page.items[5].offset, Seconds::new(3577));
+}
+
+#[test]
+fn video_comments_place_each_emote_fragment_as_a_span() {
+    let page = ok(video_comments::parse(VIDEO_COMMENTS));
+    let fossabot = &page.items[4].message;
+    assert!(fossabot.text.starts_with("xqcLook Did you know"));
+    let chars: Vec<char> = fossabot.text.chars().collect();
+    let names: Vec<String> = fossabot
+        .emotes
+        .iter()
+        .map(|s| chars[s.start..=s.end].iter().collect())
+        .collect();
+    assert_eq!(names, ["xqcLook", "xqcL", "xqcJuice", "xqcRage"]);
+    let look = &fossabot.emotes[0];
+    assert_eq!((look.start, look.end), (0, 6));
+    assert_eq!(look.emote.name, "xqcLook");
+    assert_eq!(look.emote.id, "1035670");
+    assert_eq!(
+        look.emote.url,
+        "https://static-cdn.jtvnw.net/emoticons/v2/1035670/default/dark/2.0"
+    );
+    assert!(!look.emote.zero_width);
+}
+
+#[test]
+fn video_comments_page_on_from_the_last_edge() {
+    let page = ok(video_comments::parse(VIDEO_COMMENTS));
+    assert_eq!(
+        page.next.as_ref().map(Cursor::as_str),
+        Some(
+            "eyJpZCI6ImJmNmE5ODAwLTI3MDEtNDE1YS05ZWM5LWMyMTQ5MWVjNDIzNSIsImhrIjoiYnJvYWRjYXN0OjMyMDg5ODM0MjQ5MiIsInNrIjoiQUFBRFFRcUJQd0FZNFpXY0o3aGlBQSJ9"
+        )
+    );
+    let last = br#"{"data":{"video":{"comments":{"edges":[
+        {"cursor":"a","node":null}
+      ],"pageInfo":{"hasNextPage":false}}}}}"#;
+    let page = ok(video_comments::parse(last));
+    assert!(page.items.is_empty());
+    assert_eq!(page.next, None);
+}
+
+#[test]
+fn video_comments_of_an_unknown_vod_are_not_found() {
+    assert_eq!(
+        video_comments::parse(br#"{"data":{"video":null}}"#),
+        Err(TwitchError::NotFound)
     );
 }

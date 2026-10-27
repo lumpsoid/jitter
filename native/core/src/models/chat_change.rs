@@ -16,7 +16,8 @@ pub enum ChatChange {
     Rerender,
     /// The room's modes changed; the controller holds them.
     RoomChanged,
-    /// The connection changed; the controller holds it.
+    /// The connection changed; the controller holds it. For a VOD's
+    /// replay, whether it waits for a page or has failed changed.
     ConnectionChanged,
     /// A NOTICE arrived; the controller holds its text.
     NoticeChanged,

@@ -65,9 +65,21 @@ enum Command {
     },
     /// Resolve a live channel or VOD and print its qualities or one URL.
     Play(PlayArgs),
-    /// Print a channel's live chat, emotes as `[name]`, until interrupted.
+    /// Print a channel's live chat, emotes as `[name]`, until interrupted;
+    /// or, with `--vod`, a VOD's chat replayed over a stretch of the video.
     Chat {
-        login: String,
+        /// Channel login whose live chat to print.
+        #[arg(required_unless_present = "vod", conflicts_with = "vod")]
+        login: Option<String>,
+        /// Replay this VOD's chat instead.
+        #[arg(long)]
+        vod: Option<String>,
+        /// With `--vod`: the position, in seconds, the player starts at.
+        #[arg(long, requires = "vod", default_value_t = 0)]
+        at: u32,
+        /// With `--vod`: how many seconds of playback to replay from `--at`.
+        #[arg(long = "for", requires = "vod", default_value_t = 60)]
+        span: u32,
         /// Also print the connection's log (PING/PONG, reconnects) to stderr.
         #[arg(long, short)]
         verbose: bool,
@@ -101,7 +113,17 @@ async fn run(command: Command) -> commands::Result<()> {
         Command::Fav { command } => commands::fav::run(command).await,
         Command::Vods { login, pages } => commands::vods::run(&login, pages).await,
         Command::Play(args) => commands::play::run(args).await,
-        Command::Chat { login, verbose } => commands::chat::run(&login, verbose).await,
+        Command::Chat {
+            login,
+            vod,
+            at,
+            span,
+            verbose,
+        } => match (login, vod) {
+            (_, Some(id)) => commands::replay::run(&id, at, span).await,
+            (Some(login), None) => commands::chat::run(&login, verbose).await,
+            (None, None) => Err("give a channel login or --vod <id>".to_owned()),
+        },
         Command::Resume {
             id,
             position_s,
