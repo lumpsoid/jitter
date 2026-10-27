@@ -86,6 +86,12 @@ class MediaKitEngine implements PlayerEngine {
     yield* _player.stream.duration;
   }
 
+  /// Whether it waits for the media to load now, then each change.
+  Stream<bool> get bufferings async* {
+    yield _player.state.buffering;
+    yield* _player.stream.buffering;
+  }
+
   /// How far it has buffered now, then each change.
   Stream<Duration> get buffers async* {
     yield _player.state.buffer;

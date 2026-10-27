@@ -20,6 +20,7 @@ import 'package:jitter/player/theatre.dart';
 import 'package:jitter/player/video_frame.dart';
 import 'package:jitter/player/video_zoom.dart';
 import 'package:jitter/player/vod_keys.dart';
+import 'package:jitter/player/vod_phone_controls.dart';
 import 'package:jitter/player/zoom_gestures.dart';
 import 'package:jitter/player/zoom_reset.dart';
 import 'package:jitter/src/bindings/bindings.dart';
@@ -32,7 +33,7 @@ const _reportEvery = Duration(seconds: 1);
 /// media_kit's volume button does.
 const double _wheelVolumeStep = 5;
 
-/// media_kit's button bar height, its default on desktop and on phones.
+/// media_kit's desktop button bar height, its default.
 const double _buttonBarHeight = 56;
 
 /// Plays [target]: sends `Play` when it opens and `LeavePlayer` when it
@@ -113,6 +114,39 @@ class _PlayerPageState extends State<PlayerPage> {
     text: text,
     durationS: widget.player.duration.inSeconds,
   ).sendSignalToRust();
+
+  /// A VOD's seek bar, for either controls.
+  SeekBar _seekBar() => SeekBar(
+    positions: () => widget.player.positions,
+    durations: () => widget.player.durations,
+    buffers: () => widget.player.buffers,
+    onSeek: (to) => unawaited(widget.player.seek(to)),
+  );
+
+  /// A VOD's readout, in media_kit's size: smaller on desktop.
+  PositionReadout _readout({required double fontSize}) => PositionReadout(
+    positions: () => widget.player.positions,
+    durations: () => widget.player.durations,
+    answers: () => GoToTimeAnswer.rustSignalStream.map((pack) => pack.message),
+    onGoTo: _goTo,
+    fontSize: fontSize,
+  );
+
+  /// A VOD's controls: the page's own on a phone ([VodPhoneControls]),
+  /// media_kit's desktop ones themed by [_Controls] elsewhere. Chosen as
+  /// media_kit's adaptive ones choose.
+  Widget _vodControls(VideoState video) =>
+      switch (Theme.of(video.context).platform) {
+        TargetPlatform.android || TargetPlatform.iOS => VodPhoneControls(
+          playPause: const MaterialPlayOrPauseButton(iconSize: 48),
+          readout: _readout(fontSize: 14),
+          fullscreen: const MaterialFullscreenButton(),
+          bar: _seekBar(),
+          bufferings: () => widget.player.bufferings,
+          onSeekBy: (by) => unawaited(widget.player.seekBy(by)),
+        ),
+        _ => AdaptiveVideoControls(video),
+      };
 
   void _armSleep(int minutes) =>
       ArmSleepTimer(minutes: minutes).sendSignalToRust();
@@ -232,13 +266,15 @@ class _PlayerPageState extends State<PlayerPage> {
           child: _Controls(
             live: live,
             player: widget.player,
-            onGoTo: _goTo,
+            bar: _seekBar(),
+            readout: _readout(fontSize: 12),
             onToggleFullscreen: _toggleFullscreen,
             onExitFullscreen: () =>
                 unawaited(_videoKey.currentState?.exitFullscreen()),
             child: Video(
               key: _videoKey,
               controller: widget.player.controller,
+              controls: live ? AdaptiveVideoControls : _vodControls,
               // Leaving media_kit's fullscreen from theatre goes back to
               // theatre's screen, not out of fullscreen.
               onExitFullscreen: _theatre
@@ -289,11 +325,11 @@ class _QualityMenu extends StatelessWidget {
   }
 }
 
-/// media_kit's controls (play/pause, volume, fullscreen; on desktop space,
-/// `f` and the arrow keys, a VOD's as [vodKeys] has them; on a phone a
-/// VOD's double tap). A live stream has no seek bar and no position;
-/// a VOD has the page's [SeekBar], which Shift and Ctrl or a finger taken
-/// up from it slow, and its [PositionReadout], which goes to a typed time.
+/// media_kit's controls, themed (play/pause, volume, fullscreen; on desktop
+/// space, `f` and the arrow keys, a VOD's as [vodKeys] has them). A live
+/// stream has no seek bar and no position. A VOD on desktop has the page's
+/// [SeekBar] and [PositionReadout] among media_kit's buttons; on a phone
+/// it has the page's own controls instead ([VodPhoneControls]).
 /// On desktop media_kit's wheel and drag for the volume over the video are
 /// off: the page's own wheel sets the volume, through the sleep timer's
 /// fade, and the drag moves the zoomed picture. The wheel over the volume
@@ -302,7 +338,8 @@ class _Controls extends StatelessWidget {
   const new({
     required this.live,
     required this.player,
-    required this.onGoTo,
+    required this.bar,
+    required this.readout,
     required this.onToggleFullscreen,
     required this.onExitFullscreen,
     required this.child,
@@ -311,8 +348,9 @@ class _Controls extends StatelessWidget {
   final bool live;
   final MediaKitEngine player;
 
-  /// Sends a time typed into the VOD's [PositionReadout].
-  final ValueChanged<String> onGoTo;
+  /// A VOD's seek bar and readout, for desktop.
+  final Widget bar;
+  final Widget readout;
 
   /// For a VOD's keys, `f` and Escape: media_kit's own go through the
   /// controls, which a key map cannot reach.
@@ -323,49 +361,9 @@ class _Controls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!live) {
-      final bar = SeekBar(
-        positions: () => player.positions,
-        durations: () => player.durations,
-        buffers: () => player.buffers,
-        onSeek: (to) => unawaited(player.seek(to)),
-      );
-      PositionReadout readout({required double fontSize}) => PositionReadout(
-        positions: () => player.positions,
-        durations: () => player.durations,
-        answers: () =>
-            GoToTimeAnswer.rustSignalStream.map((pack) => pack.message),
-        onGoTo: onGoTo,
-        fontSize: fontSize,
-      );
-      // media_kit's own buttons, with the page's seek bar as part of the
-      // button bar, so a touch on it is not a touch on the video: under
-      // the buttons on a phone, as media_kit's own bar is.
-      // A double tap on either side goes back or on media_kit's 10 s, as
-      // the arrow keys ([vodSeekStep]).
-      final mobile = MaterialVideoControlsThemeData(
-        displaySeekBar: false,
-        seekOnDoubleTap: true,
-        buttonBarHeight: _buttonBarHeight + seekBarHeight,
-        bottomButtonBar: [
-          Expanded(
-            child: Column(
-              children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      readout(fontSize: 14),
-                      const Spacer(),
-                      const MaterialFullscreenButton(),
-                    ],
-                  ),
-                ),
-                bar,
-              ],
-            ),
-          ),
-        ],
-      );
-      // Over the buttons on desktop, the volume button keeping its wheel.
+      // media_kit's own buttons, with the page's seek bar over them as
+      // part of the button bar, so a click on it is not a click on the
+      // video; the volume button keeps its wheel.
       final desktop = MaterialDesktopVideoControlsThemeData(
         modifyVolumeOnScroll: false,
         displaySeekBar: false,
@@ -393,7 +391,7 @@ class _Controls extends StatelessWidget {
                       const MaterialDesktopPlayOrPauseButton(),
                       const MaterialDesktopSkipNextButton(),
                       const KeepsWheel(child: MaterialDesktopVolumeButton()),
-                      readout(fontSize: 12),
+                      readout,
                       const Spacer(),
                       const MaterialDesktopFullscreenButton(),
                     ],
@@ -404,14 +402,10 @@ class _Controls extends StatelessWidget {
           ),
         ],
       );
-      return MaterialVideoControlsTheme(
-        normal: mobile,
-        fullscreen: mobile,
-        child: MaterialDesktopVideoControlsTheme(
-          normal: desktop,
-          fullscreen: desktop,
-          child: child,
-        ),
+      return MaterialDesktopVideoControlsTheme(
+        normal: desktop,
+        fullscreen: desktop,
+        child: child,
       );
     }
     const mobile = MaterialVideoControlsThemeData(
