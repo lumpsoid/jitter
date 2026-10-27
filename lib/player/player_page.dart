@@ -6,6 +6,7 @@ import 'package:jitter/chat/chat_mode.dart';
 import 'package:jitter/chat/chat_panel.dart';
 import 'package:jitter/chat/chat_toggle.dart';
 import 'package:jitter/player/media_kit_engine.dart';
+import 'package:jitter/player/playback_failure.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/player/playback_title.dart';
 import 'package:jitter/src/bindings/bindings.dart';
@@ -60,9 +61,13 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   void initState() {
     super.initState();
-    Play(target: widget.target).sendSignalToRust();
+    _play();
     _reporter = Timer.periodic(_reportEvery, (_) => _reportPosition());
   }
+
+  /// Asks Rust to load [PlayerPage.target]: on open, and again on Retry;
+  /// Rust answers with `PlaybackUpdate`, loading first.
+  void _play() => Play(target: widget.target).sendSignalToRust();
 
   void _reportPosition() => PlayerPosition(
     target: widget.target,
@@ -158,15 +163,9 @@ class _PlayerPageState extends State<PlayerPage> {
       live: live,
       child: Video(controller: widget.player.controller),
     ),
-    PlaybackUpdateFailed(:final message) => Center(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Text(
-          message,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: Colors.white),
-        ),
-      ),
+    PlaybackUpdateFailed(:final message) => PlaybackFailure(
+      message: message,
+      onRetry: _play,
     ),
     _ => const Center(child: CircularProgressIndicator()),
   };
