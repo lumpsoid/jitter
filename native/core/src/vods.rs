@@ -4,6 +4,9 @@
 use crate::models::{ChannelLogin, ListState, Page, PageRequest, Video, VideoKind};
 use crate::paged_list::PagedList;
 
+/// The kind a channel page lists when it opens: its past broadcasts.
+pub const FIRST_KIND: VideoKind = VideoKind::Archive;
+
 #[derive(Debug)]
 pub struct VodsController {
     channel: ChannelLogin,
@@ -43,6 +46,14 @@ impl VodsController {
 
     /// Switches to another kind and starts over from its first page.
     pub fn show_kind(&mut self, kind: VideoKind) -> PageRequest {
+        self.kind = kind;
+        self.list.begin_refresh()
+    }
+
+    /// Switches to another channel and kind at once, as opening a channel
+    /// page does, and starts over from the first page.
+    pub fn show(&mut self, channel: ChannelLogin, kind: VideoKind) -> PageRequest {
+        self.channel = channel;
         self.kind = kind;
         self.list.begin_refresh()
     }

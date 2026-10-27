@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/app.dart';
 import 'package:jitter/boot/boot_holder.dart';
+import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
@@ -11,6 +12,7 @@ JitterApp _app(BootHolder boot) => JitterApp(
   boot: boot,
   browse: BrowseHolder(),
   favorites: FavoritesHolder(),
+  channel: ChannelHolder(),
   playback: PlaybackHolder(),
   player: MediaKitEngine(),
 );

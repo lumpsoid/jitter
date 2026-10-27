@@ -2,7 +2,7 @@ use jitter_core::models::{
     Channel, ChannelId, ChannelLogin, Cursor, FirstPage, ListState, Page, Seconds, Timestamp,
     Video, VideoId, VideoKind,
 };
-use jitter_core::vods::VodsController;
+use jitter_core::vods::{FIRST_KIND, VodsController};
 
 fn login(value: &str) -> ChannelLogin {
     let Ok(login) = ChannelLogin::parse(value) else {
@@ -89,6 +89,19 @@ fn switching_channel_starts_a_new_list() {
     let fresh = c.show_channel(login("shroud"));
     assert_eq!(c.channel(), &login("shroud"));
     c.apply_page(old, Ok(page(&["1"], VideoKind::Archive, None)));
+    assert_eq!(c.state(), &ListState::FirstPage(FirstPage::Loading));
+    c.apply_page(fresh, Ok(page(&["9"], VideoKind::Archive, None)));
+    assert_eq!(ids(&c), ["9"]);
+}
+
+#[test]
+fn showing_a_channel_and_kind_starts_one_new_list() {
+    let mut c = VodsController::new(login("xqc"), VideoKind::Upload);
+    let old = c.begin_refresh();
+    let fresh = c.show(login("shroud"), FIRST_KIND);
+    assert_eq!(c.channel(), &login("shroud"));
+    assert_eq!(c.kind(), VideoKind::Archive);
+    c.apply_page(old, Ok(page(&["1"], VideoKind::Upload, None)));
     assert_eq!(c.state(), &ListState::FirstPage(FirstPage::Loading));
     c.apply_page(fresh, Ok(page(&["9"], VideoKind::Archive, None)));
     assert_eq!(ids(&c), ["9"]);

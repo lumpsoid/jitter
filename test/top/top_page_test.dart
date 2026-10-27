@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:jitter/top/top_page.dart';
@@ -10,6 +11,7 @@ Future<void> pumpPage(
   WidgetTester tester,
   BrowseHolder browse, {
   ValueChanged<String>? onOpenStream,
+  FavoritesHolder? favorites,
 }) async {
   tester.view.physicalSize = const Size(400, 2000);
   tester.view.devicePixelRatio = 1;
@@ -17,7 +19,11 @@ Future<void> pumpPage(
   await tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
-        body: TopPage(browse: browse, onOpenStream: onOpenStream),
+        body: TopPage(
+          browse: browse,
+          favorites: favorites ?? FavoritesHolder(),
+          onOpenStream: onOpenStream,
+        ),
       ),
     ),
   );
@@ -79,5 +85,28 @@ void main() {
     await tester.tap(find.text('Title a'));
 
     expect(opened, ['login_a']);
+  });
+
+  testWidgets("a card's star is filled while its channel is a favorite", (
+    tester,
+  ) async {
+    final favorites = FavoritesHolder()
+      ..apply(
+        const FavoritesUpdateSnapshot(
+          favorites: [
+            FavoriteRow(
+              channelId: 'channel_a',
+              login: 'login_a',
+              displayName: 'Name a',
+              status: FavoriteStatusOffline(),
+            ),
+          ],
+        ),
+      );
+    final browse = BrowseHolder()..apply(loaded(['a', 'b']));
+    await pumpPage(tester, browse, favorites: favorites);
+
+    expect(find.byIcon(Icons.star), findsOneWidget);
+    expect(find.byIcon(Icons.star_outline), findsOneWidget);
   });
 }

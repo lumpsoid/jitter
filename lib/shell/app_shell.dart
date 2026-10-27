@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:jitter/channel/channel_holder.dart';
+import 'package:jitter/channel/channel_page.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/favorites/favorites_page.dart';
 import 'package:jitter/player/media_kit_engine.dart';
@@ -32,6 +36,8 @@ class AppShell extends StatefulWidget {
     // Playback
     required this.playback,
     required this.player,
+    // Channel
+    required this.channel,
     super.key,
   });
 
@@ -42,6 +48,8 @@ class AppShell extends StatefulWidget {
   // Playback: what a page needs to push a `PlayerPage`.
   final PlaybackHolder playback;
   final MediaKitEngine player;
+  // Channel
+  final ChannelHolder channel;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -57,8 +65,8 @@ class _AppShellState extends State<AppShell> {
       selectedIcon: Icons.trending_up,
       page: TopPage(
         browse: widget.browse,
-        onOpenStream: (login) =>
-            _openPlayer(PlaybackTargetLive(login: login), login),
+        favorites: widget.favorites,
+        onOpenStream: _openLive,
       ),
     ),
     (
@@ -67,11 +75,25 @@ class _AppShellState extends State<AppShell> {
       selectedIcon: Icons.favorite,
       page: FavoritesPage(
         favorites: widget.favorites,
-        // Opening a channel lands with the channel page (G5).
-        onOpenChannel: (_) {},
+        onOpenChannel: _openChannel,
       ),
     ),
   ];
+
+  // Channel
+  void _openChannel(String login) => unawaited(
+    ChannelPage.push(
+      context,
+      login: login,
+      channel: widget.channel,
+      favorites: widget.favorites,
+      onOpenVod: (id) => _openPlayer(PlaybackTargetVod(id: id), id),
+      onOpenLive: _openLive,
+    ),
+  );
+
+  void _openLive(String login) =>
+      _openPlayer(PlaybackTargetLive(login: login), login);
 
   void _select(int index) => setState(() => _selected = index);
 

@@ -60,10 +60,12 @@ pub enum BrowseMore {
 
 /// One live stream's card. Every value is ready to show: `thumbnail_url`
 /// is sized for a card, `viewers_label` is formatted (`12.3K viewers`).
-/// Tapping it hands `login` on.
+/// Tapping it hands `login` on; its `FavoriteStar` reads `channel_id` and
+/// `login`.
 #[derive(Serialize, SignalPiece)]
 pub struct StreamCard {
     pub id: String,
+    pub channel_id: String,
     pub login: String,
     pub display_name: String,
     pub title: String,

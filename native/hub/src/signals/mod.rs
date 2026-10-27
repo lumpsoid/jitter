@@ -11,6 +11,8 @@ mod browse;
 mod favorites;
 // Playback
 mod playback;
+// Channel
+mod channel;
 
 pub use boot::{Boot, BootFailed, Booted};
 // Browse
@@ -26,4 +28,9 @@ pub use favorites::{
 pub use playback::{
     LeavePlayer, Play, PlaybackTarget, PlaybackUpdate, PlayerCommand, PlayerPosition,
     QualityOption, SelectQuality,
+};
+// Channel
+pub use channel::{
+    ChannelLive, ChannelUpdate, OpenChannel, RefreshChannel, SelectVodKind, VodKind, VodTile,
+    VodsMore, VodsNextPage, VodsState, VodsUpdate,
 };

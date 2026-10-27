@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:jitter/top/stream_card_tile.dart';
@@ -17,9 +18,17 @@ const double _nextPageExtent = 800;
 /// The most-watched live channels: a grid of stream cards, refreshed by
 /// pulling down and paged by scrolling.
 class TopPage extends StatelessWidget {
-  const new({required this.browse, this.onOpenStream, super.key});
+  const new({
+    required this.browse,
+    required this.favorites,
+    this.onOpenStream,
+    super.key,
+  });
 
   final BrowseHolder browse;
+
+  /// Read by each card's favorite star.
+  final FavoritesHolder favorites;
 
   /// Opens the tapped stream's channel by login. Cards are not tappable
   /// without it.
@@ -36,6 +45,7 @@ class TopPage extends StatelessWidget {
         ),
         BrowseStateLoaded(:final streams, :final more) => _Grid(
           browse: browse,
+          favorites: favorites,
           streams: streams,
           more: more,
           onOpenStream: onOpenStream,
@@ -49,12 +59,14 @@ class TopPage extends StatelessWidget {
 class _Grid extends StatelessWidget {
   const new({
     required this.browse,
+    required this.favorites,
     required this.streams,
     required this.more,
     required this.onOpenStream,
   });
 
   final BrowseHolder browse;
+  final FavoritesHolder favorites;
   final List<StreamCard> streams;
   final BrowseMore more;
   final ValueChanged<String>? onOpenStream;
@@ -93,6 +105,7 @@ class _Grid extends StatelessWidget {
                       final open = onOpenStream;
                       return StreamCardTile(
                         card: card,
+                        favorites: favorites,
                         onTap: open == null ? null : () => open(card.login),
                       );
                     },

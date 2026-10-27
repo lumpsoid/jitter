@@ -31,6 +31,18 @@ impl ResumeController {
         }))
     }
 
+    /// How far into `id` playback would resume, as a fraction of the
+    /// duration stored with its point, for a progress bar: `None` when it
+    /// would start from the beginning. Reads the store; changes nothing.
+    pub fn progress(&self, id: &VideoId) -> Result<Option<f64>, StoreError> {
+        Ok(self.store.get(id)?.and_then(|p| {
+            let start = ResumePolicy::start_position(p.position, p.duration);
+            // A point that resumes is short of its end, so its duration is
+            // not 0 here.
+            (start > Seconds::ZERO).then(|| f64::from(start.get()) / f64::from(p.duration.get()))
+        }))
+    }
+
     /// Reports the playback position. Heads may call this on every player
     /// tick; the policy throttles. A failed write leaves the controller's
     /// view of the store unchanged and returns `Err`.

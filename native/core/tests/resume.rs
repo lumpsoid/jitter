@@ -166,9 +166,28 @@ fn a_failed_save_returns_err_and_the_next_record_tries_again() {
 }
 
 #[test]
+fn progress_is_where_playback_would_resume() {
+    let half = FakeResumeStore::with_points(vec![point(1800, 3600)]);
+    assert_eq!(controller(&half).progress(&vod()), Ok(Some(0.5)));
+}
+
+#[test]
+fn no_progress_when_playback_would_start_from_the_beginning() {
+    let empty = FakeResumeStore::default();
+    assert_eq!(controller(&empty).progress(&vod()), Ok(None));
+    let barely_started = FakeResumeStore::with_points(vec![point(10, 3600)]);
+    assert_eq!(controller(&barely_started).progress(&vod()), Ok(None));
+    let finished = FakeResumeStore::with_points(vec![point(3590, 3600)]);
+    assert_eq!(controller(&finished).progress(&vod()), Ok(None));
+    let empty_duration = FakeResumeStore::with_points(vec![point(100, 0)]);
+    assert_eq!(controller(&empty_duration).progress(&vod()), Ok(None));
+}
+
+#[test]
 fn a_failed_read_returns_err() {
     let store = FakeResumeStore::with_points(vec![point(1800, 3600)]).failing_loads();
     let mut resume = controller(&store);
     assert!(resume.start_position(&vod()).is_err());
+    assert!(resume.progress(&vod()).is_err());
     assert!(resume.record(vod(), s(1900), s(3600), now()).is_err());
 }
