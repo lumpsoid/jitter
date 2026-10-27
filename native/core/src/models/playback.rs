@@ -10,6 +10,11 @@ pub struct Playback {
 }
 
 impl Playback {
+    /// A name that means "the default selection". Real quality names are
+    /// Twitch's `STABLE-VARIANT-ID`s (`1080p60`, `audio_only`), so the user
+    /// needs a stable word for "the best one".
+    pub const DEFAULT_QUALITY: &str = "source";
+
     /// Orders variants: source first, then transcodes by resolution, frame
     /// rate and bandwidth (all descending), then audio only.
     pub fn from_variants(master_url: String, mut variants: Vec<Variant>) -> Self {
@@ -48,5 +53,17 @@ impl Playback {
             .iter()
             .find(|q| q.kind == QualityKind::Source)
             .or_else(|| self.qualities.first())
+    }
+
+    /// The quality called `name`, where [`Self::DEFAULT_QUALITY`] means the
+    /// default selection unless a real quality has that name.
+    pub fn quality(&self, name: &str) -> Option<&Quality> {
+        self.qualities
+            .iter()
+            .find(|q| q.name == name)
+            .or_else(|| match name {
+                Self::DEFAULT_QUALITY => self.default_quality(),
+                _ => None,
+            })
     }
 }

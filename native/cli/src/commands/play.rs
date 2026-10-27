@@ -1,11 +1,9 @@
 use clap::Args;
+use jitter_core::models::Playback;
 use jitter_core::playback::{PlaybackController, PlaybackState, PlaybackTarget};
 use jitter_core::resume::ResumeController;
 
 use super::{Result, ctx, login, open_store, twitch, video_id};
-
-/// The quality name that means "whatever core selects by default".
-const DEFAULT_QUALITY: &str = "source";
 
 #[derive(Args)]
 pub struct PlayArgs {
@@ -17,7 +15,7 @@ pub struct PlayArgs {
     vod: Option<String>,
     /// Print only one URL: the named quality (for example `720p60`), or the
     /// default (`source`) when the name is omitted or is `source`.
-    #[arg(long, value_name = "QUALITY", num_args = 0..=1, default_missing_value = DEFAULT_QUALITY, conflicts_with = "start")]
+    #[arg(long, value_name = "QUALITY", num_args = 0..=1, default_missing_value = Playback::DEFAULT_QUALITY, conflicts_with = "start")]
     url: Option<String>,
     /// Print the resume offset of the VOD in seconds; no network.
     #[arg(long)]
@@ -51,40 +49,42 @@ pub async fn run(args: PlayArgs) -> Result<()> {
     };
     playback.apply(target, resolved.map_err(|e| e.to_string()));
 
-    if let Some(name) = &args.url {
-        playback.select(name);
-    }
+    let not_ready = || "playback did not resolve".to_owned();
     match playback.state() {
-        PlaybackState::Ready {
-            playback: resolved,
-            selected,
-            ..
-        } => match &args.url {
-            Some(name) => {
-                let quality = playback
-                    .selected_quality()
-                    .filter(|q| name == DEFAULT_QUALITY || q.name == *name)
-                    .ok_or_else(|| format!("no quality named {name:?}"))?;
-                println!("{}", quality.url);
-            }
-            None => {
-                for q in &resolved.qualities {
-                    let marker = if q.name == *selected { '*' } else { ' ' };
-                    let size = q
-                        .resolution
-                        .map_or_else(String::new, |r| format!("{}x{}", r.width, r.height));
-                    let rate = q.frame_rate.map_or_else(String::new, |f| format!("{f}fps"));
-                    println!(
-                        "{marker} {:<12} {:<10} {:<6} {:?}",
-                        q.name, size, rate, q.kind
-                    );
-                }
-            }
-        },
+        PlaybackState::Ready { .. } => {}
         PlaybackState::Failed { message } => return Err(message.clone()),
-        PlaybackState::Idle | PlaybackState::Resolving { .. } => {
-            return Err("playback did not resolve".to_owned());
+        PlaybackState::Idle | PlaybackState::Resolving { .. } => return Err(not_ready()),
+    }
+    if let Some(name) = &args.url {
+        if !playback.select(name) {
+            return Err(format!("no quality named {name:?}"));
         }
+        let resume = ResumeController::new(Box::new(open_store()?));
+        let open = playback
+            .open(&resume)
+            .map_err(ctx("reading the resume point"))?
+            .ok_or_else(not_ready)?;
+        println!("{}", open.url);
+        return Ok(());
+    }
+    let PlaybackState::Ready {
+        playback: resolved,
+        selected,
+        ..
+    } = playback.state()
+    else {
+        return Err(not_ready());
+    };
+    for q in &resolved.qualities {
+        let marker = if q.name == *selected { '*' } else { ' ' };
+        let size = q
+            .resolution
+            .map_or_else(String::new, |r| format!("{}x{}", r.width, r.height));
+        let rate = q.frame_rate.map_or_else(String::new, |f| format!("{f}fps"));
+        println!(
+            "{marker} {:<12} {:<10} {:<6} {:?}",
+            q.name, size, rate, q.kind
+        );
     }
     Ok(())
 }

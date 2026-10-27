@@ -1,7 +1,10 @@
 //! Resolving a live channel or a VOD into a playable stream and choosing a
-//! quality. Pure state; heads resolve through twitch and hand the result in.
+//! quality, then deciding what the player opens. Pure state; heads resolve
+//! through twitch and hand the result in.
 
-use crate::models::{ChannelLogin, Playback, Quality, VideoId};
+use crate::models::{ChannelLogin, Open, Playback, Quality, Seconds, VideoId};
+use crate::ports::StoreError;
+use crate::resume::ResumeController;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlaybackTarget {
@@ -78,15 +81,60 @@ impl PlaybackController {
         };
     }
 
-    /// Selects a quality by name; an unknown name changes nothing.
-    pub fn select(&mut self, name: &str) {
-        if let PlaybackState::Ready {
+    /// Selects a quality by name or by [`Playback::DEFAULT_QUALITY`].
+    /// Returns whether `name` is known; an unknown name changes nothing.
+    pub fn select(&mut self, name: &str) -> bool {
+        let PlaybackState::Ready {
             playback, selected, ..
         } = &mut self.state
-            && playback.qualities.iter().any(|q| q.name == name)
-        {
-            *selected = name.to_owned();
+        else {
+            return false;
+        };
+        match playback.quality(name) {
+            Some(q) => {
+                *selected = q.name.clone();
+                true
+            }
+            None => false,
         }
+    }
+
+    /// What to open to start playing the selected quality: a VOD at its
+    /// resume position, a live stream at the live edge. `None` until ready.
+    pub fn open(&self, resume: &ResumeController) -> Result<Option<Open>, StoreError> {
+        let start = match &self.state {
+            PlaybackState::Ready {
+                target: PlaybackTarget::Vod(id),
+                ..
+            } => resume.start_position(id)?,
+            _ => Seconds::ZERO,
+        };
+        Ok(self.open_at(start))
+    }
+
+    /// Switches to quality `name` mid-play: what to open to carry on from
+    /// `position`. `None`, changing nothing, when not ready or `name` is
+    /// unknown.
+    pub fn switch_quality(&mut self, name: &str, position: Seconds) -> Option<Open> {
+        if self.select(name) {
+            self.open_at(position)
+        } else {
+            None
+        }
+    }
+
+    /// The selected quality opened at `vod_start`; live always opens at the
+    /// live edge.
+    fn open_at(&self, vod_start: Seconds) -> Option<Open> {
+        let PlaybackState::Ready { target, .. } = &self.state else {
+            return None;
+        };
+        let live = matches!(target, PlaybackTarget::Live(_));
+        Some(Open {
+            url: self.selected_quality()?.url.clone(),
+            start: if live { Seconds::ZERO } else { vod_start },
+            live,
+        })
     }
 
     pub fn selected_quality(&self) -> Option<&Quality> {
