@@ -12,6 +12,7 @@ import 'package:jitter/player/playback_loading.dart';
 import 'package:jitter/player/playback_title.dart';
 import 'package:jitter/player/player_layout.dart';
 import 'package:jitter/player/player_shortcuts.dart';
+import 'package:jitter/player/seek_bar.dart';
 import 'package:jitter/player/sleep_stopped.dart';
 import 'package:jitter/player/sleep_timer_button.dart';
 import 'package:jitter/player/theatre.dart';
@@ -28,6 +29,9 @@ const _reportEvery = Duration(seconds: 1);
 /// How far one wheel notch over the video moves the volume (of 0–100), as
 /// media_kit's volume button does.
 const double _wheelVolumeStep = 5;
+
+/// media_kit's desktop button bar height, its default.
+const double _buttonBarHeight = 56;
 
 /// Plays [target]: sends `Play` when it opens and `LeavePlayer` when it
 /// closes; Rust opens and stops the player. Push it with `Navigator.push`.
@@ -216,6 +220,7 @@ class _PlayerPageState extends State<PlayerPage> {
               unawaited(widget.player.nudgeVolume(notches * _wheelVolumeStep)),
           child: _Controls(
             live: live,
+            player: widget.player,
             child: Video(
               key: _videoKey,
               controller: widget.player.controller,
@@ -270,31 +275,55 @@ class _QualityMenu extends StatelessWidget {
 }
 
 /// media_kit's controls (play/pause, volume, fullscreen; on desktop space,
-/// `f` and the arrow keys). A live stream has no seek bar and no position.
+/// `f` and the arrow keys). A live stream has no seek bar and no position;
+/// a VOD on desktop has the page's [SeekBar], which Shift and Ctrl slow.
 /// On desktop media_kit's wheel and drag for the volume over the video are
 /// off: the page's own wheel sets the volume, through the sleep timer's
 /// fade, and the drag moves the zoomed picture. The wheel over the volume
 /// button is the button's alone.
 class _Controls extends StatelessWidget {
-  const new({required this.live, required this.child});
+  const new({required this.live, required this.player, required this.child});
 
   final bool live;
+  final MediaKitEngine player;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
     if (!live) {
-      // media_kit's own bar, the volume button keeping its wheel.
-      const desktop = MaterialDesktopVideoControlsThemeData(
+      // media_kit's own buttons, the volume button keeping its wheel, under
+      // the page's seek bar: the bar is part of the button bar, so a click
+      // on it is not a click on the video.
+      final desktop = MaterialDesktopVideoControlsThemeData(
         modifyVolumeOnScroll: false,
+        displaySeekBar: false,
+        buttonBarHeight: _buttonBarHeight + seekBarHeight,
         bottomButtonBar: [
-          MaterialDesktopSkipPreviousButton(),
-          MaterialDesktopPlayOrPauseButton(),
-          MaterialDesktopSkipNextButton(),
-          KeepsWheel(child: MaterialDesktopVolumeButton()),
-          MaterialDesktopPositionIndicator(),
-          Spacer(),
-          MaterialDesktopFullscreenButton(),
+          Expanded(
+            child: Column(
+              children: [
+                SeekBar(
+                  positions: () => player.positions,
+                  durations: () => player.durations,
+                  buffers: () => player.buffers,
+                  onSeek: (to) => unawaited(player.seek(to)),
+                ),
+                const Expanded(
+                  child: Row(
+                    children: [
+                      MaterialDesktopSkipPreviousButton(),
+                      MaterialDesktopPlayOrPauseButton(),
+                      MaterialDesktopSkipNextButton(),
+                      KeepsWheel(child: MaterialDesktopVolumeButton()),
+                      MaterialDesktopPositionIndicator(),
+                      Spacer(),
+                      MaterialDesktopFullscreenButton(),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       );
       return MaterialDesktopVideoControlsTheme(

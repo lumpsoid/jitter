@@ -49,6 +49,26 @@ class MediaKitEngine implements PlayerEngine {
     yield* _player.stream.playing;
   }
 
+  Future<void> seek(Duration to) => _player.seek(to);
+
+  /// Where it plays now, then each change.
+  Stream<Duration> get positions async* {
+    yield _player.state.position;
+    yield* _player.stream.position;
+  }
+
+  /// How long the media is now, then each change.
+  Stream<Duration> get durations async* {
+    yield _player.state.duration;
+    yield* _player.stream.duration;
+  }
+
+  /// How far it has buffered now, then each change.
+  Stream<Duration> get buffers async* {
+    yield _player.state.buffer;
+    yield* _player.stream.buffer;
+  }
+
   /// Mutes, or unmutes back to the volume it was muted at; mid-fade, under
   /// the fade.
   Future<void> toggleMute() =>
