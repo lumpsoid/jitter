@@ -3,6 +3,9 @@
 
 // Browse
 mod browse;
+// Categories
+mod categories;
+mod category;
 // Channel
 mod channel;
 // Chat

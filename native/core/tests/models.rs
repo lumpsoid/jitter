@@ -1,6 +1,7 @@
 use jitter_core::models::{
-    Channel, ChannelId, ChannelIdError, ChannelLogin, ChannelLoginError, Playback, QualityKind,
-    Resolution, Seconds, Stream, Variant, VideoId, VideoIdError,
+    Category, CategoryId, CategoryIdError, Channel, ChannelId, ChannelIdError, ChannelLogin,
+    ChannelLoginError, Playback, QualityKind, Resolution, Seconds, Stream, Variant, VideoId,
+    VideoIdError,
 };
 
 fn login(s: &str) -> ChannelLogin {
@@ -132,7 +133,7 @@ fn stream_thumbnail_fills_template() {
             avatar_url: String::new(),
         },
         title: "t".into(),
-        game_name: None,
+        game: None,
         viewers: 1,
         started_at: None,
         thumbnail_url: "https://t/live-{width}x{height}.jpg".into(),
@@ -151,10 +152,58 @@ fn stream_thumbnail_without_template_is_unchanged() {
             avatar_url: String::new(),
         },
         title: "t".into(),
-        game_name: None,
+        game: None,
         viewers: 1,
         started_at: None,
         thumbnail_url: "https://t/live-440x248.jpg".into(),
     };
     assert_eq!(stream.thumbnail(320, 180), "https://t/live-440x248.jpg");
+}
+
+#[test]
+fn category_ids_reject_non_numeric_and_empty() {
+    assert_eq!(
+        CategoryId::parse("33214").map(|id| id.to_string()),
+        Ok("33214".to_owned())
+    );
+    assert_eq!(
+        CategoryId::parse("elden-ring"),
+        Err(CategoryIdError::NotNumeric)
+    );
+    assert_eq!(CategoryId::parse(""), Err(CategoryIdError::Empty));
+}
+
+fn category(box_art_url: &str) -> Category {
+    Category {
+        id: CategoryId::parse("21779").unwrap_or_else(|e| unreachable!("{e:?}")),
+        name: "League of Legends".into(),
+        box_art_url: box_art_url.into(),
+        viewers: 1,
+    }
+}
+
+#[test]
+fn box_art_fills_template() {
+    let c = category("https://b/21779-{width}x{height}.jpg");
+    assert_eq!(c.box_art(285, 380), "https://b/21779-285x380.jpg");
+}
+
+#[test]
+fn box_art_swaps_a_fixed_size() {
+    let c = category("https://static-cdn.jtvnw.net/ttv-boxart/21779-40x56.jpg");
+    assert_eq!(
+        c.box_art(285, 380),
+        "https://static-cdn.jtvnw.net/ttv-boxart/21779-285x380.jpg"
+    );
+}
+
+#[test]
+fn box_art_without_a_size_is_unchanged() {
+    let c = category("https://static-cdn.jtvnw.net/ttv-boxart/21779_IGDB.jpg");
+    assert_eq!(
+        c.box_art(285, 380),
+        "https://static-cdn.jtvnw.net/ttv-boxart/21779_IGDB.jpg"
+    );
+    let c = category("https://b/elden-ring.jpg");
+    assert_eq!(c.box_art(285, 380), "https://b/elden-ring.jpg");
 }

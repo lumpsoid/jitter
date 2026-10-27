@@ -40,7 +40,7 @@ fn stream(channel: Channel, viewers: u32) -> Stream {
         id: format!("s{}", channel.id),
         channel,
         title: String::new(),
-        game_name: None,
+        game: None,
         viewers,
         started_at: None,
         thumbnail_url: String::new(),

@@ -4,15 +4,22 @@
 //! marked as such: the `failed integrity check` and generic error bodies,
 //! and the browse edges with a null broadcaster and a null game.
 
-use jitter_core::models::{ChannelId, ChannelLogin, Cursor, Seconds, Timestamp, VideoKind};
+use jitter_core::models::{
+    CategoryId, ChannelId, ChannelLogin, Cursor, Seconds, Timestamp, VideoKind,
+};
 use jitter_twitch::TwitchError;
 use jitter_twitch::client::{CLIENT_ID, headers};
 use jitter_twitch::gql::users_stream::{LIVE_STATUS_BATCH, batch_variables};
 use jitter_twitch::gql::{
-    browse_popular, channel_by_login, channel_videos, decode, persisted_body, users_stream,
+    browse_directories, browse_popular, channel_by_login, channel_videos, decode, game_streams,
+    persisted_body, query_body, users_stream,
 };
 
 const BROWSE: &[u8] = include_bytes!("fixtures/gql_browse_popular.json");
+// Hand-written after the `BrowsePage_AllDirectories` response shape and the
+// raw `GameStreams` document: not recorded.
+const DIRECTORIES: &[u8] = include_bytes!("fixtures/gql_browse_directories.json");
+const GAME_STREAMS: &[u8] = include_bytes!("fixtures/gql_game_streams.json");
 const VIDEOS: &[u8] = include_bytes!("fixtures/gql_channel_videos.json");
 const USERS_STREAM: &[u8] = include_bytes!("fixtures/gql_users_stream.json");
 const CHANNEL: &[u8] = include_bytes!("fixtures/gql_channel_by_login.json");
@@ -156,7 +163,9 @@ fn browse_maps_streams_without_start_time() {
     assert_eq!(first.id, "318143733475");
     assert_eq!(first.channel.login.as_str(), "caedrel");
     assert_eq!(first.channel.display_name, "Caedrel");
-    assert_eq!(first.game_name.as_deref(), Some("League of Legends"));
+    let game = ok(first.game.as_ref().ok_or("no game"));
+    assert_eq!(game.id.as_str(), "21779");
+    assert_eq!(game.name, "League of Legends");
     assert_eq!(first.viewers, 248965);
     assert_eq!(first.started_at, None);
     // A fixed-size URL: no template to fill.
@@ -185,7 +194,7 @@ fn browse_drops_null_broadcaster_and_keeps_null_game() {
     let page = ok(browse_popular::parse(body));
     assert_eq!(page.items.len(), 1);
     assert_eq!(page.items[0].id, "2");
-    assert_eq!(page.items[0].game_name, None);
+    assert_eq!(page.items[0].game, None);
     assert_eq!(page.next, None);
 }
 
@@ -223,7 +232,9 @@ fn users_stream_yields_only_the_live_id() {
     assert_eq!(live.channel.id.as_str(), "71092938");
     assert_eq!(live.viewers, 22239);
     assert_eq!(live.started_at, Some(Timestamp::from_unix(1793048367)));
-    assert_eq!(live.game_name.as_deref(), Some("Grand Theft Auto V"));
+    let game = ok(live.game.as_ref().ok_or("no game"));
+    assert_eq!(game.id.as_str(), "32982");
+    assert_eq!(game.name, "Grand Theft Auto V");
     assert_eq!(
         live.thumbnail(320, 180),
         "https://static-cdn.jtvnw.net/previews-ttv/live_user_xqc-320x180.jpg"
@@ -244,6 +255,106 @@ fn channel_lookup_maps_the_user() {
 fn channel_lookup_of_unknown_login_is_not_found() {
     assert_eq!(
         channel_by_login::parse(CHANNEL_UNKNOWN),
+        Err(TwitchError::NotFound)
+    );
+}
+
+// --- BrowsePage_AllDirectories (top categories) -----------------------------
+
+#[test]
+fn directories_body_has_the_persisted_shape() {
+    let body = persisted_body(
+        &browse_directories::QUERY,
+        browse_directories::variables(Some(&Cursor::new("MQ=="))),
+    );
+    assert_eq!(body["operationName"], "BrowsePage_AllDirectories");
+    assert_eq!(
+        body["extensions"]["persistedQuery"]["sha256Hash"],
+        "2f67f71ba89f3c0ed26a141ec00da1defecb2303595f5cda4298169549783d9e"
+    );
+    assert_eq!(body["variables"]["cursor"], "MQ==");
+    assert_eq!(body["variables"]["options"]["sort"], "VIEWER_COUNT");
+}
+
+#[test]
+fn directories_map_categories_and_drop_ones_without_box_art() {
+    let page = ok(browse_directories::parse(DIRECTORIES));
+    let names: Vec<&str> = page.items.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["Just Chatting", "League of Legends", "Grand Theft Auto V"]
+    );
+    let first = &page.items[0];
+    assert_eq!(first.id.as_str(), "509658");
+    assert_eq!(first.viewers, 412345);
+    assert_eq!(
+        first.box_art(285, 380),
+        "https://static-cdn.jtvnw.net/ttv-boxart/509658-285x380.jpg"
+    );
+    // The dropped Elden Ring edge is not the last, so the cursor is NA==.
+    assert_eq!(page.next.as_ref().map(Cursor::as_str), Some("NA=="));
+}
+
+#[test]
+fn directories_end_when_twitch_says_so() {
+    let body = br#"{"data":{"directoriesWithTags":{"edges":[
+        {"cursor":"a","node":{"id":"1","displayName":"A","avatarURL":"https://b/1-1x1.jpg","viewersCount":1}}
+      ],"pageInfo":{"hasNextPage":false}}}}"#;
+    let page = ok(browse_directories::parse(body));
+    assert_eq!(page.items.len(), 1);
+    assert_eq!(page.next, None);
+}
+
+#[test]
+fn a_retired_directories_hash_names_its_operation() {
+    assert_eq!(
+        browse_directories::parse(BOGUS_HASH),
+        Err(TwitchError::QueryRetired {
+            operation: "BrowsePage_AllDirectories"
+        })
+    );
+}
+
+// --- GameStreams (a category's streams) -------------------------------------
+
+#[test]
+fn game_streams_body_asks_by_id_and_viewer_count() {
+    let id = ok(CategoryId::parse("512953"));
+    let body = query_body(&game_streams::QUERY, game_streams::variables(&id, None));
+    assert_eq!(body["variables"]["id"], "512953");
+    assert_eq!(body["variables"]["sort"], "VIEWER_COUNT");
+    assert_eq!(body["variables"]["after"], serde_json::Value::Null);
+}
+
+#[test]
+fn game_streams_place_each_stream_in_the_game() {
+    let page = ok(game_streams::parse(GAME_STREAMS));
+    let logins: Vec<&str> = page
+        .items
+        .iter()
+        .map(|s| s.channel.login.as_str())
+        .collect();
+    assert_eq!(logins, ["vinesauce", "lirik"]);
+    let first = &page.items[0];
+    let game = ok(first.game.as_ref().ok_or("no game"));
+    assert_eq!(game.id.as_str(), "512953");
+    assert_eq!(game.name, "Elden Ring");
+    assert_eq!(first.viewers, 9000);
+    assert_eq!(first.started_at, Some(Timestamp::from_unix(1793037600)));
+    assert_eq!(
+        first.thumbnail(440, 248),
+        "https://static-cdn.jtvnw.net/previews-ttv/live_user_vinesauce-440x248.jpg"
+    );
+    assert_eq!(
+        page.next.as_ref().map(Cursor::as_str),
+        Some("eyJzIjozMDAwfQ==")
+    );
+}
+
+#[test]
+fn game_streams_of_an_unknown_id_are_not_found() {
+    assert_eq!(
+        game_streams::parse(br#"{"data":{"game":null}}"#),
         Err(TwitchError::NotFound)
     );
 }

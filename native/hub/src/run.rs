@@ -9,8 +9,9 @@
 //! late result harmless.
 
 use jitter_core::browse::BrowseController;
+use jitter_core::categories::TopCategoriesController;
 use jitter_core::favorites::FavoritesController;
-use jitter_core::models::{Page, PageRequest, Playback, Stream};
+use jitter_core::models::{Category, Page, PageRequest, Playback, Stream};
 use jitter_core::playback::{PlaybackController, PlaybackTarget};
 use jitter_core::ports::StoreError;
 use jitter_core::resume::ResumeController;
@@ -23,6 +24,13 @@ use crate::signals::{Boot, Booted};
 // Browse
 use crate::browse;
 use crate::signals::{BrowseReady, NextBrowsePage, RefreshBrowse};
+// Categories
+use crate::categories;
+use crate::category::{self, CategoryPage};
+use crate::signals::{
+    CategoriesReady, NextCategoriesPage, NextCategoryPage, OpenCategory, RefreshCategories,
+    RefreshCategory,
+};
 // Chat
 use crate::chat::{self, ChatFetched, ChatPanel};
 use crate::signals::{ChatReady, SetTheme};
@@ -41,6 +49,9 @@ pub struct Controllers {
     favorites: FavoritesController,
     // Browse
     browse: BrowseController,
+    // Categories
+    top_categories: TopCategoriesController,
+    category: CategoryPage,
     // Playback
     resume: ResumeController,
     playback: PlaybackController,
@@ -61,6 +72,9 @@ impl Controllers {
             resume: ResumeController::new(Box::new(store.clone())),
             // Browse
             browse: BrowseController::new(),
+            // Categories
+            top_categories: TopCategoriesController::new(),
+            category: None,
             // Playback
             playback: PlaybackController::new(),
             // Channel
@@ -93,6 +107,15 @@ pub enum Fetched {
         request: PageRequest,
         result: Result<Page<Stream>, String>,
     },
+    // Categories
+    TopCategories {
+        request: PageRequest,
+        result: Result<Page<Category>, String>,
+    },
+    CategoryStreams {
+        request: PageRequest,
+        result: Result<Page<Stream>, String>,
+    },
     // Favorites
     Favorites(FavoritesFetched),
     // Playback
@@ -119,6 +142,15 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
     let refresh_browse = RefreshBrowse::get_dart_signal_receiver();
     let next_browse_page = NextBrowsePage::get_dart_signal_receiver();
     browse::refresh(&mut c.browse, &twitch, &fetch);
+
+    // Categories: like Top, the first page loads at start.
+    let categories_ready = CategoriesReady::get_dart_signal_receiver();
+    let refresh_categories = RefreshCategories::get_dart_signal_receiver();
+    let next_categories_page = NextCategoriesPage::get_dart_signal_receiver();
+    let open_category = OpenCategory::get_dart_signal_receiver();
+    let refresh_category = RefreshCategory::get_dart_signal_receiver();
+    let next_category_page = NextCategoryPage::get_dart_signal_receiver();
+    categories::refresh(&mut c.top_categories, &twitch, &fetch);
 
     // Favorites
     let favorites_ready = FavoritesReady::get_dart_signal_receiver();
@@ -153,14 +185,35 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
             Some(_) = refresh_browse.recv() => browse::refresh(&mut c.browse, &twitch, &fetch),
             Some(_) = next_browse_page.recv() => browse::next(&mut c.browse, &twitch, &fetch),
 
-            // Favorites
+            // Categories
+            Some(_) = categories_ready.recv() => categories::ready(&c.top_categories, &c.favorites),
+            Some(_) = refresh_categories.recv() => {
+                categories::refresh(&mut c.top_categories, &twitch, &fetch);
+            }
+            Some(_) = next_categories_page.recv() => {
+                categories::next(&mut c.top_categories, &twitch, &fetch);
+            }
+            Some(pack) = open_category.recv() => {
+                let id = &pack.message.id;
+                category::open(&mut c.category, &c.favorites, id, &twitch, &fetch);
+            }
+            Some(_) = refresh_category.recv() => {
+                category::refresh(&mut c.category, &c.favorites, &twitch, &fetch);
+            }
+            Some(_) = next_category_page.recv() => {
+                category::next(&mut c.category, &c.favorites, &twitch, &fetch);
+            }
+
+            // Favorites: each change also reaches the categories that show them.
             Some(_) = favorites_ready.recv() => favorites::on_ready(&c.favorites, &twitch, &fetch),
             Some(pack) = add_favorite.recv() => favorites::add(&pack.message.login, &twitch, &fetch),
             Some(pack) = remove_favorite.recv() => {
                 favorites::remove(&mut c.favorites, &pack.message.channel_id);
+                favorites_changed(&c);
             }
             Some(_) = refresh_favorites.recv() => {
                 favorites::refresh(&mut c.favorites, &twitch, &fetch);
+                favorites_changed(&c);
             }
 
             // Playback
@@ -222,8 +275,18 @@ fn on_fetched(
     match result {
         // Browse
         Fetched::TopStreams { request, result } => browse::on_page(&mut c.browse, request, result),
+        // Categories
+        Fetched::TopCategories { request, result } => {
+            categories::on_page(&mut c.top_categories, request, result);
+        }
+        Fetched::CategoryStreams { request, result } => {
+            category::on_page(&mut c.category, &c.favorites, request, result);
+        }
         // Favorites
-        Fetched::Favorites(fetched) => favorites::on_fetched(&mut c.favorites, fetched),
+        Fetched::Favorites(fetched) => {
+            favorites::on_fetched(&mut c.favorites, fetched);
+            favorites_changed(c);
+        }
         // Playback
         Fetched::Playback { target, result } => {
             playback::resolved(&mut c.playback, &c.resume, target, result);
@@ -235,4 +298,11 @@ fn on_fetched(
         // Chat
         Fetched::Chat(fetched) => chat::on_fetched(&mut c.chat, fetched),
     }
+}
+
+/// The favorites list may have changed: the categories strip and the open
+/// category's pinned streams are drawn from it, so they go out again.
+fn favorites_changed(c: &Controllers) {
+    categories::send_from_your_channels(&c.favorites);
+    category::favorites_changed(&c.category, &c.favorites);
 }

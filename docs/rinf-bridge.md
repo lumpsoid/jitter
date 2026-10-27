@@ -217,10 +217,11 @@ This also covers Flutter hot restart, where Dart state resets but Rust keeps
 running.
 
 **jitter: only features that hold state before any page asks have one.**
-`BrowseReady`, `FavoritesReady` and `ChatReady` exist: the top streams load
-at start, the favorites at boot, and a chat session runs while the player
-does. Playback and the channel page have none: they show nothing until a
-page opens, and that page's own intent (`Play`, `OpenChannel`) is answered
+`BrowseReady`, `CategoriesReady`, `FavoritesReady` and `ChatReady` exist:
+the top streams and top categories load at start, the favorites at boot,
+and a chat session runs while the player does. Playback, the channel page
+and the category page have none: they show nothing until a page opens, and
+that page's own intent (`Play`, `OpenChannel`, `OpenCategory`) is answered
 with the whole state, so it is the ready signal.
 
 ### Startup
@@ -257,6 +258,8 @@ state the action left (`Loading`, `Resolving`), and returns. The result comes ba
 // native/hub/src/run.rs
 pub enum Fetched {
     TopStreams { request: PageRequest, result: Result<Page<Stream>, String> },
+    TopCategories { request: PageRequest, result: Result<Page<Category>, String> },
+    CategoryStreams { request: PageRequest, result: Result<Page<Stream>, String> },
     Favorites(FavoritesFetched),
     Playback { target: PlaybackTarget, result: Result<Playback, TwitchError> },
     Channel(ChannelFetched),
@@ -276,9 +279,9 @@ The loop stays free while a call is in flight, so the user may move on
 before it returns. Every result carries what it was for, and only the
 current one applies:
 
-- Paged lists (top streams, VODs): core's `PageRequest` carries a
-  generation; a refresh or another VOD kind bumps it, and `apply_page`
-  ignores an older one.
+- Paged lists (top streams, top categories, a category's streams, VODs):
+  core's `PageRequest` carries a generation; a refresh, another category
+  or another VOD kind bumps it, and `apply_page` ignores an older one.
 - Playback: `apply` ignores a result for any target but the one resolving.
   Dart tags `PlayerPosition` and `LeavePlayer` with its page's target, so a
   closing page cannot stop the player a newer page took over.
@@ -331,6 +334,14 @@ with the CLI, so a favorite added there shows up in the GUI after a
 restart or a refresh; there is no file watch or polling. `FavoritesReady`
 sends the list in memory. Live status is checked on `FavoritesReady` and
 on refresh, never on a timer.
+
+Two other views are drawn from the favorites: the Categories page's "From
+your channels" strip (`categories::favorites_by_category`) and the open
+category's pinned favorites (`category::pin_favorites`). After every
+favorites change `run.rs`'s `favorites_changed` sends both again: the strip
+as `CategoriesUpdate::FromYourChannels`, the category as a whole
+`Snapshot`. Between two snapshots the category's unpinned streams only
+grow, so its next pages still go out as `Appended`.
 
 ### Error messages
 

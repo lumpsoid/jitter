@@ -130,7 +130,7 @@ impl From<&Stream> for StreamCard {
             login: stream.channel.login.as_str().to_owned(),
             display_name: stream.channel.display_name.clone(),
             title: stream.title.clone(),
-            game_name: stream.game_name.clone(),
+            game_name: stream.game.as_ref().map(|g| g.name.clone()),
             viewers_label: viewers_label(stream.viewers),
             thumbnail_url: stream.thumbnail(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT),
         }
@@ -139,7 +139,7 @@ impl From<&Stream> for StreamCard {
 
 #[cfg(test)]
 mod tests {
-    use jitter_core::models::{Channel, ChannelId, ChannelLogin, Cursor};
+    use jitter_core::models::{CategoryId, Channel, ChannelId, ChannelLogin, Cursor, GameRef};
 
     use super::*;
 
@@ -155,7 +155,10 @@ mod tests {
                 avatar_url: String::new(),
             },
             title: "Speedruns".to_owned(),
-            game_name: Some("Celeste".to_owned()),
+            game: Some(GameRef {
+                id: CategoryId::parse("33214").map_err(|e| format!("{e:?}"))?,
+                name: "Celeste".to_owned(),
+            }),
             viewers: 12_345,
             started_at: None,
             thumbnail_url: "https://cdn/{width}x{height}.jpg".to_owned(),
@@ -189,6 +192,7 @@ mod tests {
         assert_eq!(card.display_name, "Streamer_1");
         assert_eq!(card.viewers_label, "12.3K viewers");
         assert_eq!(card.thumbnail_url, "https://cdn/440x248.jpg");
+        assert_eq!(card.game_name.as_deref(), Some("Celeste"));
         Ok(())
     }
 

@@ -22,7 +22,7 @@ pub async fn run(pages: u32) -> Result<()> {
                     "{:>8}  {:<20} {:<24} {}",
                     stream.viewers,
                     stream.channel.login,
-                    stream.game_name.as_deref().unwrap_or("-"),
+                    stream.game.as_ref().map_or("-", |g| g.name.as_str()),
                     stream.title
                 );
             }

@@ -7,6 +7,8 @@
 mod boot;
 // Browse
 mod browse;
+// Categories
+mod categories;
 // Chat
 mod chat;
 // Favorites
@@ -20,6 +22,12 @@ pub use boot::{Boot, BootFailed, Booted};
 // Browse
 pub use browse::{
     BrowseMore, BrowseReady, BrowseState, BrowseUpdate, NextBrowsePage, RefreshBrowse, StreamCard,
+};
+// Categories
+pub use categories::{
+    CategoriesMore, CategoriesReady, CategoriesState, CategoriesUpdate, CategoryMore,
+    CategoryState, CategoryTile, CategoryUpdate, FavoritesCategoryRow, NextCategoriesPage,
+    NextCategoryPage, OpenCategory, RefreshCategories, RefreshCategory,
 };
 // Chat
 pub use chat::{ChatFragment, ChatLine, ChatReady, ChatStatus, ChatUpdate, EmoteImage, SetTheme};

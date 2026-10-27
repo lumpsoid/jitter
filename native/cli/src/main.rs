@@ -27,6 +27,21 @@ enum Command {
         #[arg(long, default_value_t = 1)]
         pages: u32,
     },
+    /// List the categories your live favorites are streaming, then the
+    /// most-watched categories.
+    Categories {
+        /// How many pages to load.
+        #[arg(long, default_value_t = 1)]
+        pages: u32,
+    },
+    /// List a category's live streams by id (see `categories`), your
+    /// favorites first.
+    Category {
+        id: String,
+        /// How many pages to load.
+        #[arg(long, default_value_t = 1)]
+        pages: u32,
+    },
     /// Manage favorite channels; without a subcommand, list them with live status.
     Fav {
         #[command(subcommand)]
@@ -71,6 +86,8 @@ async fn main() -> ExitCode {
 async fn run(command: Command) -> commands::Result<()> {
     match command {
         Command::Top { pages } => commands::top::run(pages).await,
+        Command::Categories { pages } => commands::categories::run(pages).await,
+        Command::Category { id, pages } => commands::category::run(&id, pages).await,
         Command::Fav { command } => commands::fav::run(command).await,
         Command::Vods { login, pages } => commands::vods::run(&login, pages).await,
         Command::Play(args) => commands::play::run(args).await,

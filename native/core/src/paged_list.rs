@@ -5,7 +5,10 @@
 use std::collections::HashSet;
 use std::hash::Hash;
 
-use crate::models::{FirstPage, ListState, MorePages, Page, PageRequest, Stream, Video, VideoId};
+use crate::models::{
+    Category, CategoryId, FirstPage, ListState, MorePages, Page, PageRequest, Stream, Video,
+    VideoId,
+};
 
 /// An item with an id that stays the same across pages.
 pub trait Keyed {
@@ -16,6 +19,13 @@ pub trait Keyed {
 impl Keyed for Stream {
     type Key = String;
     fn key(&self) -> &String {
+        &self.id
+    }
+}
+
+impl Keyed for Category {
+    type Key = CategoryId;
+    fn key(&self) -> &CategoryId {
         &self.id
     }
 }

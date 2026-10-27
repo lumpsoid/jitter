@@ -4,6 +4,8 @@
 //! the heads hand them in. Heads pass the clock.
 
 pub mod browse;
+pub mod categories;
+pub mod category;
 pub mod channel;
 pub mod chat;
 #[cfg(any(test, feature = "test-fakes"))]

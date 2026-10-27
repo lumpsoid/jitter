@@ -1,11 +1,12 @@
-use super::{Channel, Timestamp};
+use super::{Channel, GameRef, Timestamp};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Stream {
     pub id: String,
     pub channel: Channel,
     pub title: String,
-    pub game_name: Option<String>,
+    /// The category it is in; `None` when the streamer set none.
+    pub game: Option<GameRef>,
     pub viewers: u32,
     /// When the stream went live. `None` when the source omits it (top
     /// streams carry no start time).

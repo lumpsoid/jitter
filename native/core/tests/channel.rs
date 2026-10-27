@@ -29,7 +29,7 @@ fn stream(channel_id: &str, name: &str) -> Stream {
         id: format!("s{channel_id}"),
         channel: channel(channel_id, name),
         title: "Live".to_owned(),
-        game_name: None,
+        game: None,
         viewers: 10,
         started_at: None,
         thumbnail_url: String::new(),

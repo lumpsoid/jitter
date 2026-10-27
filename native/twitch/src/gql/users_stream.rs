@@ -5,7 +5,7 @@ use jitter_core::models::{ChannelId, Stream};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{RawQuery, UserNode, parse_timestamp};
+use super::{GameNode, RawQuery, UserNode, parse_timestamp};
 use crate::client::Twitch;
 use crate::error::TwitchError;
 
@@ -16,7 +16,7 @@ pub const QUERY: RawQuery = RawQuery {
     operation: "UsersStream",
     document: "query($ids: [ID!]) { users(ids: $ids) { id login displayName \
                profileImageURL(width: 50) stream { id title viewersCount createdAt \
-               previewImageURL game { displayName } } } }",
+               previewImageURL game { id displayName } } } }",
 };
 
 /// The variables of each request needed for `ids`, at most
@@ -79,13 +79,7 @@ struct StreamNode {
     created_at: Option<String>,
     #[serde(rename = "previewImageURL")]
     preview_image_url: Option<String>,
-    game: Option<Game>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Game {
-    display_name: Option<String>,
+    game: Option<GameNode>,
 }
 
 impl User {
@@ -95,7 +89,7 @@ impl User {
             id: stream.id?,
             channel: self.channel.into_channel()?,
             title: stream.title?,
-            game_name: stream.game.and_then(|g| g.display_name),
+            game: stream.game.and_then(GameNode::into_game_ref),
             viewers: stream.viewers_count?,
             started_at: stream.created_at.as_deref().and_then(parse_timestamp),
             thumbnail_url: stream.preview_image_url?,

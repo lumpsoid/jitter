@@ -1,6 +1,8 @@
 //! Value objects and data models, one file each.
 
 mod badge;
+mod category;
+mod category_id;
 mod channel;
 mod channel_id;
 mod channel_login;
@@ -12,11 +14,14 @@ mod emote;
 mod emote_set;
 mod emote_span;
 mod favorite;
+mod favorites_category;
 mod fragment;
+mod game_ref;
 mod list_state;
 mod open;
 mod page;
 mod page_request;
+mod pinned_streams;
 mod playback;
 mod quality;
 mod resume_point;
@@ -31,6 +36,8 @@ mod video;
 mod video_id;
 
 pub use badge::Badge;
+pub use category::Category;
+pub use category_id::{CategoryId, CategoryIdError};
 pub use channel::Channel;
 pub use channel_id::{ChannelId, ChannelIdError};
 pub use channel_login::{ChannelLogin, ChannelLoginError};
@@ -42,11 +49,14 @@ pub use emote::{Emote, EmoteProvider};
 pub use emote_set::{EmoteScope, EmoteSet};
 pub use emote_span::EmoteSpan;
 pub use favorite::Favorite;
+pub use favorites_category::FavoritesCategory;
 pub use fragment::Fragment;
+pub use game_ref::GameRef;
 pub use list_state::{FirstPage, ListState, MorePages};
 pub use open::Open;
 pub use page::{Cursor, Page};
 pub use page_request::PageRequest;
+pub use pinned_streams::PinnedStreams;
 pub use playback::Playback;
 pub use quality::{Quality, QualityKind, Resolution};
 pub use resume_point::ResumePoint;

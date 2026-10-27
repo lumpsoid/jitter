@@ -4,7 +4,7 @@ use jitter_core::models::{Cursor, Page, Stream};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{PAGE_SIZE, PersistedQuery, UserNode};
+use super::{GameNode, PAGE_SIZE, PersistedQuery, UserNode};
 use crate::client::Twitch;
 use crate::error::TwitchError;
 
@@ -102,13 +102,7 @@ struct Node {
     #[serde(rename = "previewImageURL")]
     preview_image_url: Option<String>,
     broadcaster: Option<UserNode>,
-    game: Option<Game>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Game {
-    display_name: Option<String>,
+    game: Option<GameNode>,
 }
 
 impl Node {
@@ -117,7 +111,7 @@ impl Node {
             id: self.id?,
             channel: self.broadcaster?.into_channel()?,
             title: self.title?,
-            game_name: self.game.and_then(|g| g.display_name),
+            game: self.game.and_then(GameNode::into_game_ref),
             viewers: self.viewers_count?,
             started_at: None,
             thumbnail_url: self.preview_image_url?,

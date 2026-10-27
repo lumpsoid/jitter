@@ -16,7 +16,7 @@ fn stream(id: &str) -> Stream {
             avatar_url: String::new(),
         },
         title: String::new(),
-        game_name: None,
+        game: None,
         viewers: 1,
         started_at: None,
         thumbnail_url: String::new(),

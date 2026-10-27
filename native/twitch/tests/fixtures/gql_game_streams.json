@@ -1,0 +1,62 @@
+{
+  "data": {
+    "game": {
+      "id": "512953",
+      "displayName": "Elden Ring",
+      "streams": {
+        "edges": [
+          {
+            "cursor": "eyJzIjo5MDAwfQ==",
+            "node": {
+              "id": "320900000001",
+              "title": "Blind first playthrough",
+              "viewersCount": 9000,
+              "createdAt": "2026-10-26T18:00:00Z",
+              "previewImageURL": "https://static-cdn.jtvnw.net/previews-ttv/live_user_vinesauce-{width}x{height}.jpg",
+              "broadcaster": {
+                "id": "25725272",
+                "login": "vinesauce",
+                "displayName": "Vinesauce",
+                "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/vinesauce-profile_image-50x50.png"
+              }
+            }
+          },
+          {
+            "cursor": "eyJzIjo1MDB9",
+            "node": {
+              "id": "320900000002",
+              "title": "no broadcaster",
+              "viewersCount": 500,
+              "createdAt": "2026-10-26T19:00:00Z",
+              "previewImageURL": "https://static-cdn.jtvnw.net/previews-ttv/live_user_gone-{width}x{height}.jpg",
+              "broadcaster": null
+            }
+          },
+          {
+            "cursor": "eyJzIjozMDAwfQ==",
+            "node": {
+              "id": "320900000003",
+              "title": "Any% practice",
+              "viewersCount": 3000,
+              "createdAt": "2026-10-26T20:30:00Z",
+              "previewImageURL": "https://static-cdn.jtvnw.net/previews-ttv/live_user_lirik-{width}x{height}.jpg",
+              "broadcaster": {
+                "id": "23161357",
+                "login": "lirik",
+                "displayName": "LIRIK",
+                "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/lirik-profile_image-50x50.png"
+              }
+            }
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": true
+        }
+      }
+    }
+  },
+  "extensions": {
+    "durationMilliseconds": 74,
+    "requestID": "01HANDWRITTEN0000000000001"
+  }
+}

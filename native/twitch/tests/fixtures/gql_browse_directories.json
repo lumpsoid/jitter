@@ -1,0 +1,76 @@
+{
+  "data": {
+    "directoriesWithTags": {
+      "edges": [
+        {
+          "cursor": "MQ==",
+          "node": {
+            "id": "509658",
+            "slug": "just-chatting",
+            "displayName": "Just Chatting",
+            "avatarURL": "https://static-cdn.jtvnw.net/ttv-boxart/509658-144x192.jpg",
+            "viewersCount": 412345,
+            "tags": [
+              {
+                "id": "c2542d6d-cd10-4532-919b-3d19f30a768b",
+                "localizedName": "IRL",
+                "__typename": "Tag"
+              }
+            ],
+            "__typename": "Game"
+          },
+          "__typename": "GameEdge"
+        },
+        {
+          "cursor": "Mg==",
+          "node": {
+            "id": "21779",
+            "slug": "league-of-legends",
+            "displayName": "League of Legends",
+            "avatarURL": "https://static-cdn.jtvnw.net/ttv-boxart/21779-144x192.jpg",
+            "viewersCount": 298765,
+            "tags": [],
+            "__typename": "Game"
+          },
+          "__typename": "GameEdge"
+        },
+        {
+          "cursor": "Mw==",
+          "node": {
+            "id": "512953",
+            "slug": "elden-ring",
+            "displayName": "Elden Ring",
+            "avatarURL": null,
+            "viewersCount": 45678,
+            "tags": [],
+            "__typename": "Game"
+          },
+          "__typename": "GameEdge"
+        },
+        {
+          "cursor": "NA==",
+          "node": {
+            "id": "32982",
+            "slug": "grand-theft-auto-v",
+            "displayName": "Grand Theft Auto V",
+            "avatarURL": "https://static-cdn.jtvnw.net/ttv-boxart/32982_IGDB-144x192.jpg",
+            "viewersCount": 123456,
+            "tags": [],
+            "__typename": "Game"
+          },
+          "__typename": "GameEdge"
+        }
+      ],
+      "pageInfo": {
+        "hasNextPage": true,
+        "__typename": "PageInfo"
+      },
+      "__typename": "GameConnection"
+    }
+  },
+  "extensions": {
+    "durationMilliseconds": 61,
+    "operationName": "BrowsePage_AllDirectories",
+    "requestID": "01HANDWRITTEN0000000000000"
+  }
+}

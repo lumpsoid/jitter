@@ -2,13 +2,15 @@
 //! operation. Every response is checked for `errors[]` before `data` is
 //! read, so an error body is never mistaken for an empty result.
 
+pub mod browse_directories;
 pub mod browse_popular;
 pub mod channel_by_login;
 pub mod channel_videos;
+pub mod game_streams;
 pub mod playback_access_token;
 pub mod users_stream;
 
-use jitter_core::models::{Channel, ChannelId, ChannelLogin, Timestamp};
+use jitter_core::models::{CategoryId, Channel, ChannelId, ChannelLogin, GameRef, Timestamp};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -122,6 +124,25 @@ impl UserNode {
             login: ChannelLogin::parse(&self.login?).ok()?,
             display_name: self.display_name?,
             avatar_url: self.profile_image_url?,
+        })
+    }
+}
+
+/// The category fields a stream links by (`game { id displayName }`). A
+/// game missing either, or with an id core rejects, maps to `None`: the
+/// stream is kept, in no category.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GameNode {
+    id: Option<String>,
+    display_name: Option<String>,
+}
+
+impl GameNode {
+    pub(crate) fn into_game_ref(self) -> Option<GameRef> {
+        Some(GameRef {
+            id: CategoryId::parse(&self.id?).ok()?,
+            name: self.display_name?,
         })
     }
 }

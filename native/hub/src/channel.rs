@@ -248,7 +248,7 @@ impl From<&LiveStatus> for ChannelLive {
             LiveStatus::Offline => Self::Offline,
             LiveStatus::Live(stream) => Self::Live {
                 title: stream.title.clone(),
-                game_name: stream.game_name.clone(),
+                game_name: stream.game.as_ref().map(|g| g.name.clone()),
                 viewers_label: viewers_label(stream.viewers),
             },
             LiveStatus::Failed { message } => Self::Failed {
