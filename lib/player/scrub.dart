@@ -1,13 +1,22 @@
 import 'package:flutter/foundation.dart';
 
-/// How fast a drag along the seek bar moves the position, by the keys held:
-/// across a long VOD each pixel of the bar is many seconds, so a precise
-/// spot needs a slower drag.
+/// How far from the bar each slower band starts, a finger's width apart.
+const double scrubBand = 50;
+
+/// How fast a drag along the seek bar moves the position, by the keys held
+/// or by how far from the bar the pointer has gone: across a long VOD each
+/// pixel of the bar is many seconds, so a precise spot needs a slower drag.
 enum ScrubSpeed {
   /// The position follows the pointer across the bar.
   normal(1, ''),
 
-  /// Shift: a tenth of the bar's pace.
+  /// A band away from the bar: half the bar's pace.
+  half(0.5, '×1/2'),
+
+  /// Two bands away: a quarter.
+  quarter(0.25, '×1/4'),
+
+  /// Shift, or three bands away: a tenth.
   fine(0.1, '×1/10'),
 
   /// Shift and Ctrl: a hundredth.
@@ -21,11 +30,24 @@ enum ScrubSpeed {
       ? finest
       : fine;
 
+  /// [distance] from the bar, up or down: a slower speed each
+  /// [scrubBand] further, down to a tenth: a finger's way to slow down.
+  factory away(double distance) => switch (distance.abs() ~/ scrubBand) {
+    0 => normal,
+    1 => half,
+    2 => quarter,
+    _ => fine,
+  };
+
   /// The share of the bar's pace a drag moves at.
   final double gain;
 
   /// Shown by the drag while it is slowed; empty at the normal speed.
   final String label;
+
+  /// The slower of this and [other]: keys held and the pointer's distance
+  /// each slow a drag, the slower winning.
+  ScrubSpeed slowest(ScrubSpeed other) => other.gain < gain ? other : this;
 }
 
 /// A drag along a seek bar over a VOD: the

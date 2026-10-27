@@ -26,6 +26,21 @@ void main() {
     expect(ScrubSpeed.held(shift: true, control: true), ScrubSpeed.finest);
   });
 
+  test('each band away from the bar slows to a half, a quarter, a tenth', () {
+    expect(ScrubSpeed.away(0), ScrubSpeed.normal);
+    expect(ScrubSpeed.away(scrubBand - 1), ScrubSpeed.normal);
+    expect(ScrubSpeed.away(-scrubBand), ScrubSpeed.half);
+    expect(ScrubSpeed.away(scrubBand * 2), ScrubSpeed.quarter);
+    expect(ScrubSpeed.away(-scrubBand * 3), ScrubSpeed.fine);
+    expect(ScrubSpeed.away(scrubBand * 20), ScrubSpeed.fine);
+  });
+
+  test('keys and distance together go at the slower', () {
+    expect(ScrubSpeed.fine.slowest(ScrubSpeed.half), ScrubSpeed.fine);
+    expect(ScrubSpeed.normal.slowest(ScrubSpeed.quarter), ScrubSpeed.quarter);
+    expect(ScrubSpeed.finest.slowest(ScrubSpeed.fine), ScrubSpeed.finest);
+  });
+
   test('a press at the normal speed jumps to the spot', () {
     final scrub = _start(250);
 

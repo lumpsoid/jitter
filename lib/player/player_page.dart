@@ -30,7 +30,7 @@ const _reportEvery = Duration(seconds: 1);
 /// media_kit's volume button does.
 const double _wheelVolumeStep = 5;
 
-/// media_kit's desktop button bar height, its default.
+/// media_kit's button bar height, its default on desktop and on phones.
 const double _buttonBarHeight = 56;
 
 /// Plays [target]: sends `Play` when it opens and `LeavePlayer` when it
@@ -276,7 +276,8 @@ class _QualityMenu extends StatelessWidget {
 
 /// media_kit's controls (play/pause, volume, fullscreen; on desktop space,
 /// `f` and the arrow keys). A live stream has no seek bar and no position;
-/// a VOD on desktop has the page's [SeekBar], which Shift and Ctrl slow.
+/// a VOD has the page's [SeekBar], which Shift and Ctrl or a finger taken
+/// up from it slow.
 /// On desktop media_kit's wheel and drag for the volume over the video are
 /// off: the page's own wheel sets the volume, through the sleep timer's
 /// fade, and the drag moves the zoomed picture. The wheel over the volume
@@ -291,9 +292,38 @@ class _Controls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!live) {
-      // media_kit's own buttons, the volume button keeping its wheel, under
-      // the page's seek bar: the bar is part of the button bar, so a click
-      // on it is not a click on the video.
+      final bar = SeekBar(
+        positions: () => player.positions,
+        durations: () => player.durations,
+        buffers: () => player.buffers,
+        onSeek: (to) => unawaited(player.seek(to)),
+      );
+      // media_kit's own buttons, with the page's seek bar as part of the
+      // button bar, so a touch on it is not a touch on the video: under
+      // the buttons on a phone, as media_kit's own bar is.
+      final mobile = MaterialVideoControlsThemeData(
+        displaySeekBar: false,
+        buttonBarHeight: _buttonBarHeight + seekBarHeight,
+        bottomButtonBar: [
+          Expanded(
+            child: Column(
+              children: [
+                const Expanded(
+                  child: Row(
+                    children: [
+                      MaterialPositionIndicator(),
+                      Spacer(),
+                      MaterialFullscreenButton(),
+                    ],
+                  ),
+                ),
+                bar,
+              ],
+            ),
+          ),
+        ],
+      );
+      // Over the buttons on desktop, the volume button keeping its wheel.
       final desktop = MaterialDesktopVideoControlsThemeData(
         modifyVolumeOnScroll: false,
         displaySeekBar: false,
@@ -302,12 +332,7 @@ class _Controls extends StatelessWidget {
           Expanded(
             child: Column(
               children: [
-                SeekBar(
-                  positions: () => player.positions,
-                  durations: () => player.durations,
-                  buffers: () => player.buffers,
-                  onSeek: (to) => unawaited(player.seek(to)),
-                ),
+                bar,
                 const Expanded(
                   child: Row(
                     children: [
@@ -326,10 +351,14 @@ class _Controls extends StatelessWidget {
           ),
         ],
       );
-      return MaterialDesktopVideoControlsTheme(
-        normal: desktop,
-        fullscreen: desktop,
-        child: child,
+      return MaterialVideoControlsTheme(
+        normal: mobile,
+        fullscreen: mobile,
+        child: MaterialDesktopVideoControlsTheme(
+          normal: desktop,
+          fullscreen: desktop,
+          child: child,
+        ),
       );
     }
     const mobile = MaterialVideoControlsThemeData(

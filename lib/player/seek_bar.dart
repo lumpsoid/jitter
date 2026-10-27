@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -21,12 +22,14 @@ const _playedColor = Color(0xFFFF0000);
 /// drag that keeps still this long shows its frame.
 const _rest = Duration(milliseconds: 150);
 
-/// A VOD's seek bar, in media_kit's desktop controls in place of their own
+/// A VOD's seek bar, in media_kit's controls in place of their own
 /// and drawn like it. A click seeks to the spot and a drag follows the
 /// pointer; held Shift slows the drag to a tenth and Shift and Ctrl to a
-/// hundredth ([ScrubSpeed]), for a precise spot in a long VOD. A slowed
-/// press does not jump: the drag starts from where it plays. Over the bar
-/// a bubble shows the time under the pointer, or the drag's and its speed.
+/// hundredth; taking the pointer or a finger away from the bar slows it to
+/// a half, a quarter and a tenth, a band further each ([ScrubSpeed]). The
+/// slower of the two wins. A slowed press does not jump: the drag starts
+/// from where it plays. Over the bar a bubble shows the time under the
+/// pointer, or the drag's and its speed.
 ///
 /// A drag seeks the player itself, where it rests and where it ends, so
 /// its frame shows. Twitch also publishes preview images along each VOD
@@ -70,6 +73,12 @@ class _SeekBarState extends State<SeekBar> {
   /// The drag under way, or null.
   Scrub? _scrub;
 
+  /// Whether the drag is a mouse's, whose moves keep the controls shown.
+  bool _mouse = false;
+
+  /// How slow the drag's distance from the bar makes it.
+  ScrubSpeed _away = ScrubSpeed.normal;
+
   /// Seeks to where the drag rests, until it moves on.
   Timer? _resting;
 
@@ -101,7 +110,7 @@ class _SeekBarState extends State<SeekBar> {
   ScrubSpeed get _speed => ScrubSpeed.held(
     shift: HardwareKeyboard.instance.isShiftPressed,
     control: HardwareKeyboard.instance.isControlPressed,
-  );
+  ).slowest(_away);
 
   /// Redraws a drag's speed as Shift or Ctrl goes down or up; the key
   /// goes on to whatever else handles it.
@@ -133,10 +142,13 @@ class _SeekBarState extends State<SeekBar> {
   }
 
   void _move(DragUpdateDetails details) {
+    if (_scrub == null) return;
+    if (_mouse) _hoverUnder(details.globalPosition);
+    final y = details.localPosition.dy;
+    final away = ScrubSpeed.away(y < 0 ? y : math.max(0, y - seekBarHeight));
+    if (away != _away) setState(() => _away = away);
     final scrub = _scrub?.moveTo(details.localPosition.dx, _speed);
-    if (scrub == null) return;
-    _hoverUnder(details.globalPosition);
-    if (scrub.target == _scrub?.target) return;
+    if (scrub == null || scrub.target == _scrub?.target) return;
     setState(() => _scrub = scrub);
     _resting?.cancel();
     _resting = Timer(_rest, () => _seek(scrub.target));
@@ -153,13 +165,15 @@ class _SeekBarState extends State<SeekBar> {
     setState(() {
       _position = scrub.target;
       _scrub = null;
+      _away = ScrubSpeed.normal;
     });
   }
 
-  /// media_kit's controls hide a while after the pointer last hovered over
-  /// them, and a pressed pointer does not hover: a long, slow drag would
-  /// hide them, this bar with them. Each move of the drag is passed to
-  /// what is under the pointer as a hover too, which keeps them shown.
+  /// media_kit's desktop controls hide a while after the mouse last hovered
+  /// over them, and a pressed mouse does not hover: a long, slow drag would
+  /// hide them, this bar with them. Each move of a mouse's drag is passed
+  /// to what is under it as a hover too, which keeps them shown. A phone's
+  /// controls hide a while after the tap that showed them, drag or not.
   void _hoverUnder(Offset global) {
     final view = View.of(context).viewId;
     final result = HitTestResult();
@@ -196,6 +210,8 @@ class _SeekBarState extends State<SeekBar> {
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onPanDown: (details) => _start(details.localPosition.dx, width),
+            onPanStart: (details) =>
+                _mouse = details.kind == PointerDeviceKind.mouse,
             onPanUpdate: _move,
             onPanEnd: (_) => _end(),
             onPanCancel: _end,

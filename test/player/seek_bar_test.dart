@@ -110,6 +110,30 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
   });
 
+  testWidgets('a finger taken up from the bar slows the drag by bands', (
+    tester,
+  ) async {
+    final seeks = await pumpBar(tester);
+
+    final drag = await tester.startGesture(_at(250));
+    // Two bands up, straight: the position stays where the press put it.
+    await drag.moveTo(_at(250) - const Offset(0, 120));
+    await tester.pump(_rest);
+    expect(find.text('1:30:00  ×1/4'), findsOneWidget);
+
+    // 100 pixels of 21.6 s, at a quarter.
+    await drag.moveTo(_at(350) - const Offset(0, 120));
+    await tester.pump(_rest);
+    expect(seeks.last, const Duration(hours: 1, minutes: 39));
+    expect(find.text('1:39:00  ×1/4'), findsOneWidget);
+
+    // Back down on the bar, at its own pace again.
+    await drag.moveTo(_at(450));
+    await tester.pump(_rest);
+    expect(seeks.last, const Duration(hours: 2, minutes: 15));
+    await drag.up();
+  });
+
   testWidgets('a sweep seeks only where it rests and where it ends', (
     tester,
   ) async {
