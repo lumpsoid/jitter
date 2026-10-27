@@ -100,6 +100,7 @@ class _AppShellState extends State<AppShell> {
       page: FavoritesPage(
         favorites: widget.favorites,
         onOpenChannel: _openChannel,
+        onOpenLive: _openLive,
       ),
     ),
   ];

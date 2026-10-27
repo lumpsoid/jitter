@@ -33,7 +33,7 @@ pub use categories::{
 pub use chat::{ChatFragment, ChatLine, ChatReady, ChatStatus, ChatUpdate, EmoteImage, SetTheme};
 // Favorites
 pub use favorites::{
-    AddFavorite, FavoriteRow, FavoriteStatus, FavoritesReady, FavoritesUpdate, RefreshFavorites,
+    AddFavorite, FavoriteChannel, FavoritesReady, FavoritesUpdate, LiveFavorite, RefreshFavorites,
     RemoveFavorite,
 };
 // Playback

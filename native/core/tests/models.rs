@@ -1,7 +1,7 @@
 use jitter_core::models::{
     Category, CategoryId, CategoryIdError, Channel, ChannelId, ChannelIdError, ChannelLogin,
-    ChannelLoginError, Playback, QualityKind, Resolution, Seconds, Stream, Variant, VideoId,
-    VideoIdError,
+    ChannelLoginError, Playback, QualityKind, Resolution, Seconds, Stream, Timestamp, Variant,
+    VideoId, VideoIdError,
 };
 
 fn login(s: &str) -> ChannelLogin {
@@ -158,6 +158,52 @@ fn stream_thumbnail_without_template_is_unchanged() {
         thumbnail_url: "https://t/live-440x248.jpg".into(),
     };
     assert_eq!(stream.thumbnail(320, 180), "https://t/live-440x248.jpg");
+}
+
+fn started(at: Option<i64>) -> Stream {
+    Stream {
+        id: "1".into(),
+        channel: Channel {
+            id: ChannelId::parse("7").unwrap_or_else(|e| unreachable!("{e:?}")),
+            login: login("xqc"),
+            display_name: "xQc".into(),
+            avatar_url: String::new(),
+        },
+        title: "t".into(),
+        game: None,
+        viewers: 1,
+        started_at: at.map(Timestamp::from_unix),
+        thumbnail_url: String::new(),
+    }
+}
+
+#[test]
+fn uptime_is_the_time_since_the_start() {
+    let now = Timestamp::from_unix(1_000_000);
+    let stream = started(Some(1_000_000 - 11_520));
+    assert_eq!(stream.uptime(now), Some(Seconds::new(11_520)));
+    assert_eq!(started(Some(1_000_000)).uptime(now), Some(Seconds::ZERO));
+}
+
+#[test]
+fn uptime_is_unknown_without_a_start() {
+    assert_eq!(started(None).uptime(Timestamp::from_unix(100)), None);
+}
+
+#[test]
+fn a_start_after_now_reads_as_just_started() {
+    assert_eq!(
+        started(Some(200)).uptime(Timestamp::from_unix(100)),
+        Some(Seconds::ZERO)
+    );
+}
+
+#[test]
+fn an_uptime_beyond_u32_saturates() {
+    assert_eq!(
+        started(Some(i64::MIN)).uptime(Timestamp::from_unix(i64::MAX)),
+        Some(Seconds::new(u32::MAX))
+    );
 }
 
 #[test]

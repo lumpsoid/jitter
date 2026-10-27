@@ -3,19 +3,28 @@ import 'package:jitter/favorites/favorite_star.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 
-/// One live stream: its thumbnail with the viewer count over it, then the
-/// title, the channel and the game, with the channel's favorite star.
+/// One live stream: its thumbnail with the viewer count (and the uptime,
+/// when given) over it, then the title, the channel and the game, with the
+/// channel's favorite star. Given an [avatarUrl], the channel's avatar
+/// leads the text; given [onOpenChannel], tapping the avatar or the
+/// channel name opens the channel instead of [onTap].
 class StreamCardTile extends StatelessWidget {
   const new({
     required this.card,
     required this.favorites,
     this.onTap,
+    this.uptimeLabel,
+    this.avatarUrl,
+    this.onOpenChannel,
     super.key,
   });
 
   final StreamCard card;
   final FavoritesHolder favorites;
   final VoidCallback? onTap;
+  final String? uptimeLabel;
+  final String? avatarUrl;
+  final VoidCallback? onOpenChannel;
 
   @override
   Widget build(BuildContext context) {
@@ -45,8 +54,14 @@ class StreamCardTile extends StatelessWidget {
                   Positioned(
                     left: 6,
                     bottom: 6,
-                    child: _ViewersBadge(label: card.viewersLabel),
+                    child: _ThumbnailBadge(label: card.viewersLabel),
                   ),
+                  if (uptimeLabel case final uptime?)
+                    Positioned(
+                      right: 6,
+                      bottom: 6,
+                      child: _ThumbnailBadge(label: uptime),
+                    ),
                 ],
               ),
             ),
@@ -56,6 +71,21 @@ class StreamCardTile extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (avatarUrl case final avatar?)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8, top: 2),
+                        child: InkWell(
+                          onTap: onOpenChannel,
+                          customBorder: const CircleBorder(),
+                          child: CircleAvatar(
+                            radius: 16,
+                            foregroundImage: NetworkImage(avatar),
+                            // A failed avatar falls back to the icon.
+                            onForegroundImageError: (_, _) {},
+                            child: const Icon(Icons.person, size: 18),
+                          ),
+                        ),
+                      ),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -66,11 +96,14 @@ class StreamCardTile extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.titleSmall,
                           ),
-                          Text(
-                            card.displayName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: muted,
+                          InkWell(
+                            onTap: onOpenChannel,
+                            child: Text(
+                              card.displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: muted,
+                            ),
                           ),
                           if (card.gameName case final game?)
                             Text(
@@ -98,7 +131,7 @@ class StreamCardTile extends StatelessWidget {
   }
 }
 
-class _ViewersBadge extends StatelessWidget {
+class _ThumbnailBadge extends StatelessWidget {
   const new({required this.label});
 
   final String label;

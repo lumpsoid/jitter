@@ -60,6 +60,16 @@ pub fn duration_label(duration: Seconds) -> String {
     }
 }
 
+/// How long a stream has been live, to the minute: `3h 12m`, or `12m`
+/// under an hour (`0m` in its first minute). Hours do not roll into days.
+pub fn uptime_label(uptime: Seconds) -> String {
+    let minutes = uptime.get() / 60;
+    match minutes / 60 {
+        0 => format!("{minutes}m"),
+        hours => format!("{hours}h {}m", minutes % 60),
+    }
+}
+
 /// `123` tenths with suffix `K` is `12.3K`; a whole number drops the `.0`.
 fn tenths(tenths: u32, suffix: &str) -> String {
     match tenths % 10 {
@@ -73,7 +83,7 @@ mod tests {
     use jitter_core::models::Seconds;
     use jitter_twitch::TwitchError;
 
-    use super::{duration_label, twitch_error, viewers_label};
+    use super::{duration_label, twitch_error, uptime_label, viewers_label};
 
     fn reads(error: TwitchError, message: &str) {
         assert_eq!(twitch_error(&error), message, "{error:?}");
@@ -151,6 +161,17 @@ mod tests {
         assert_eq!(duration_label(Seconds::new(3599)), "59:59");
         assert_eq!(duration_label(Seconds::new(3723)), "1:02:03");
         assert_eq!(duration_label(Seconds::new(36_000)), "10:00:00");
+    }
+
+    #[test]
+    fn uptimes_read_in_hours_and_minutes() {
+        assert_eq!(uptime_label(Seconds::new(0)), "0m");
+        assert_eq!(uptime_label(Seconds::new(59)), "0m");
+        assert_eq!(uptime_label(Seconds::new(60)), "1m");
+        assert_eq!(uptime_label(Seconds::new(3599)), "59m");
+        assert_eq!(uptime_label(Seconds::new(3600)), "1h 0m");
+        assert_eq!(uptime_label(Seconds::new(11_520)), "3h 12m");
+        assert_eq!(uptime_label(Seconds::new(100_000)), "27h 46m");
     }
 
     #[test]

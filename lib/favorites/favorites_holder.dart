@@ -16,14 +16,18 @@ class FavoritesHolder extends ChangeNotifier {
   /// sent.
   Stream<String> get failures => _failures.stream;
 
-  /// Null until the first snapshot arrives. In list order: live by
-  /// viewers, then the rest by name.
-  List<FavoriteRow>? get favorites => _favorites;
-  List<FavoriteRow>? _favorites;
+  /// Null until the first snapshot arrives. Live by viewers, then offline
+  /// and not-yet-checked favorites, each by name; a favorite is in exactly
+  /// one of the three.
+  FavoritesUpdateSnapshot? get favorites => _favorites;
+  FavoritesUpdateSnapshot? _favorites;
+  Set<String> _ids = const {};
+
+  /// Whether the snapshot lists no favorite at all.
+  bool get isEmpty => _ids.isEmpty;
 
   /// Whether the channel [channelId] is in the list.
-  bool isFavorite(String channelId) =>
-      _favorites?.any((f) => f.channelId == channelId) ?? false;
+  bool isFavorite(String channelId) => _ids.contains(channelId);
 
   /// Subscribes to Rust's updates, then asks for the current snapshot.
   void connect() {
@@ -52,7 +56,12 @@ class FavoritesHolder extends ChangeNotifier {
       return;
     }
     if (update is FavoritesUpdateSnapshot) {
-      _favorites = List.of(update.favorites);
+      _favorites = update;
+      _ids = {
+        for (final f in update.live) f.stream.channelId,
+        for (final f in update.offline) f.channelId,
+        for (final f in update.unchecked) f.channelId,
+      };
       notifyListeners();
       for (final done in _refreshes) {
         done.complete();

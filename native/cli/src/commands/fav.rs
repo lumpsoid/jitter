@@ -1,5 +1,6 @@
 use clap::Subcommand;
-use jitter_core::favorites::{FavoritesController, Liveness};
+use jitter_core::favorites::FavoritesController;
+use jitter_core::models::Favorite;
 
 use super::{Result, ctx, login, now, open_store, twitch};
 
@@ -51,15 +52,25 @@ async fn list(favorites: &mut FavoritesController) -> Result<()> {
     favorites
         .apply_live(streams)
         .map_err(ctx("updating favorites"))?;
-    for entry in favorites.entries() {
-        let name = &entry.favorite.login;
-        match &entry.liveness {
-            Liveness::Live(stream) => println!(
-                "live     {:>8}  {:<20} {}",
-                stream.viewers, name, stream.title
-            ),
-            Liveness::Offline | Liveness::Unknown => println!("offline  {:>8}  {name}", ""),
-        }
+    let now = now()?;
+    let split = favorites.split();
+    for stream in &split.live {
+        let uptime = stream.uptime(now).map_or_else(
+            || "?".to_owned(),
+            |up| format!("{}h{:02}m", up.get() / 3600, up.get() / 60 % 60),
+        );
+        println!(
+            "live     {:>8}  {uptime:>7}  {:<20} {}",
+            stream.viewers, stream.channel.login, stream.title
+        );
     }
+    print_idle("offline", &split.offline);
+    print_idle("unknown", &split.unchecked);
     Ok(())
+}
+
+fn print_idle(status: &str, favorites: &[&Favorite]) {
+    for favorite in favorites {
+        println!("{status:<8} {:>8}  {:>7}  {}", "", "", favorite.login);
+    }
 }

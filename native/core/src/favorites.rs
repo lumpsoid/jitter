@@ -32,6 +32,19 @@ impl FavoriteEntry {
     }
 }
 
+/// The favorites split by what the last live check found, each part in
+/// list order. A favorite is in exactly one part.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct FavoritesSplit<'a> {
+    /// Live, by viewers descending.
+    pub live: Vec<&'a Stream>,
+    /// Checked and offline, by name.
+    pub offline: Vec<&'a Favorite>,
+    /// Not checked since it was loaded or added, by name: neither live nor
+    /// known to be offline.
+    pub unchecked: Vec<&'a Favorite>,
+}
+
 /// Owner of the favorites list. The list is ordered: live channels by
 /// viewers descending, then the others by name.
 pub struct FavoritesController {
@@ -73,6 +86,19 @@ impl FavoritesController {
 
     pub fn entries(&self) -> &[FavoriteEntry] {
         &self.entries
+    }
+
+    /// The list split into live, offline and not yet checked.
+    pub fn split(&self) -> FavoritesSplit<'_> {
+        let mut split = FavoritesSplit::default();
+        for entry in &self.entries {
+            match &entry.liveness {
+                Liveness::Live(stream) => split.live.push(stream),
+                Liveness::Offline => split.offline.push(&entry.favorite),
+                Liveness::Unknown => split.unchecked.push(&entry.favorite),
+            }
+        }
+        split
     }
 
     /// Adds `channel`. Idempotent on its id: a channel already listed keeps

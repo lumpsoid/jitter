@@ -1,6 +1,8 @@
 use rinf::{DartSignal, RustSignal, SignalPiece};
 use serde::{Deserialize, Serialize};
 
+use super::StreamCard;
+
 /// The favorites holder is subscribed: answer with a `Snapshot`, then check
 /// which favorites are live.
 #[derive(Deserialize, DartSignal)]
@@ -28,34 +30,35 @@ pub struct RefreshFavorites;
 /// snapshot and the failures around it arrive in order.
 #[derive(Serialize, RustSignal)]
 pub enum FavoritesUpdate {
-    /// Every favorite, in list order (live by viewers, then the rest by
-    /// name). Replaces the list.
-    Snapshot { favorites: Vec<FavoriteRow> },
+    /// Every favorite, split by the last live check; each favorite is in
+    /// exactly one list. Replaces the list.
+    Snapshot {
+        /// Live, by viewers descending.
+        live: Vec<LiveFavorite>,
+        /// Checked and offline, by name.
+        offline: Vec<FavoriteChannel>,
+        /// Not checked since loaded or added, by name: neither live nor
+        /// known to be offline.
+        unchecked: Vec<FavoriteChannel>,
+    },
     /// An add, remove, reload or live check failed; the list is as last
     /// sent. A one-shot notice for a snackbar, not list state.
     Failed { message: String },
 }
 
-/// One favorite channel as the list shows it.
+/// A live favorite as its card shows it.
 #[derive(Serialize, SignalPiece)]
-pub struct FavoriteRow {
+pub struct LiveFavorite {
+    pub stream: StreamCard,
+    pub avatar_url: String,
+    /// `3h 12m`, as of the snapshot; `None` when Twitch sent no start time.
+    pub uptime_label: Option<String>,
+}
+
+/// A favorite that is not live: what the store keeps, with no avatar.
+#[derive(Serialize, SignalPiece)]
+pub struct FavoriteChannel {
     pub channel_id: String,
     pub login: String,
     pub display_name: String,
-    /// Known only while the channel is live: the store keeps no avatar.
-    pub avatar_url: Option<String>,
-    pub status: FavoriteStatus,
-}
-
-/// Whether a favorite is live, as of the last live check.
-#[derive(Serialize, SignalPiece)]
-pub enum FavoriteStatus {
-    /// Not checked since it was loaded or added.
-    Unknown,
-    Offline,
-    Live {
-        /// `1234 viewers`.
-        viewers_label: String,
-        title: String,
-    },
 }

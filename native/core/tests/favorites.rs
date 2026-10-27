@@ -239,3 +239,76 @@ fn load_again_keeps_live_status_of_channels_still_stored() {
         Liveness::Live(_)
     ));
 }
+
+fn split_names(controller: &FavoritesController) -> [Vec<String>; 3] {
+    let split = controller.split();
+    [
+        split
+            .live
+            .iter()
+            .map(|s| s.channel.display_name.clone())
+            .collect(),
+        split
+            .offline
+            .iter()
+            .map(|f| f.display_name.clone())
+            .collect(),
+        split
+            .unchecked
+            .iter()
+            .map(|f| f.display_name.clone())
+            .collect(),
+    ]
+}
+
+#[test]
+fn before_any_live_check_every_favorite_is_unchecked_not_offline() {
+    let store =
+        FakeFavoritesStore::with_favorites(vec![favorite("1", "Bravo"), favorite("2", "alpha")]);
+    let controller = loaded(&store);
+    assert_eq!(
+        split_names(&controller),
+        [vec![], vec![], vec!["alpha".to_owned(), "Bravo".to_owned()]]
+    );
+}
+
+#[test]
+fn split_puts_live_by_viewers_then_offline_by_name() {
+    let store = FakeFavoritesStore::with_favorites(vec![
+        favorite("1", "delta"),
+        favorite("2", "Bravo"),
+        favorite("3", "charlie"),
+        favorite("4", "alpha"),
+    ]);
+    let mut controller = loaded(&store);
+    assert_eq!(
+        controller.apply_live(vec![
+            stream(channel("3", "charlie"), 10),
+            stream(channel("1", "delta"), 500),
+        ]),
+        Ok(())
+    );
+    assert_eq!(
+        split_names(&controller),
+        [
+            vec!["delta".to_owned(), "charlie".to_owned()],
+            vec!["alpha".to_owned(), "Bravo".to_owned()],
+            vec![],
+        ]
+    );
+}
+
+#[test]
+fn a_favorite_added_after_the_check_is_unchecked_until_the_next_one() {
+    let store = FakeFavoritesStore::with_favorites(vec![favorite("1", "alpha")]);
+    let mut controller = loaded(&store);
+    assert_eq!(controller.apply_live(vec![]), Ok(()));
+    assert_eq!(
+        controller.add(channel("2", "beta"), Timestamp::from_unix(5)),
+        Ok(())
+    );
+    assert_eq!(
+        split_names(&controller),
+        [vec![], vec!["alpha".to_owned()], vec!["beta".to_owned()]]
+    );
+}

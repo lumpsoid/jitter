@@ -7,15 +7,15 @@
 use std::fmt::Display;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use jitter_core::favorites::{FavoriteEntry, FavoritesController, Liveness};
-use jitter_core::models::{Channel, ChannelId, ChannelLogin, Stream, Timestamp};
+use jitter_core::favorites::{FavoritesController, FavoritesSplit};
+use jitter_core::models::{Channel, ChannelId, ChannelLogin, Favorite, Stream, Timestamp};
 use jitter_twitch::{Twitch, TwitchError};
 use rinf::RustSignal;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::format::{twitch_error, viewers_label};
+use crate::format::{twitch_error, uptime_label};
 use crate::run::Fetched;
-use crate::signals::{FavoriteRow, FavoriteStatus, FavoritesUpdate};
+use crate::signals::{FavoriteChannel, FavoritesUpdate, LiveFavorite, StreamCard};
 
 /// A favorites call's result, back in the loop as [`Fetched::Favorites`].
 pub enum FavoritesFetched {
@@ -136,33 +136,117 @@ fn send_failed(message: String) {
     FavoritesUpdate::Failed { message }.send_signal_to_dart();
 }
 
+/// Sends the list. Uptimes are as of now; a clock that cannot be read is
+/// reported, and the list goes out without them.
 fn send_snapshot(favorites: &FavoritesController) {
-    FavoritesUpdate::Snapshot {
-        favorites: favorites.entries().iter().map(FavoriteRow::from).collect(),
-    }
-    .send_signal_to_dart();
+    let now = now()
+        .inspect_err(|e| send_failed(format!("Couldn't show how long streams are live: {e}")))
+        .ok();
+    snapshot(&favorites.split(), now).send_signal_to_dart();
 }
 
-impl From<&FavoriteEntry> for FavoriteRow {
-    fn from(entry: &FavoriteEntry) -> Self {
-        let favorite = &entry.favorite;
-        let (avatar_url, status) = match &entry.liveness {
-            Liveness::Unknown => (None, FavoriteStatus::Unknown),
-            Liveness::Offline => (None, FavoriteStatus::Offline),
-            Liveness::Live(stream) => (
-                Some(stream.channel.avatar_url.clone()),
-                FavoriteStatus::Live {
-                    viewers_label: viewers_label(stream.viewers),
-                    title: stream.title.clone(),
-                },
-            ),
+fn snapshot(split: &FavoritesSplit<'_>, now: Option<Timestamp>) -> FavoritesUpdate {
+    FavoritesUpdate::Snapshot {
+        live: split.live.iter().map(|s| live_favorite(s, now)).collect(),
+        offline: split.offline.iter().map(|f| channel(f)).collect(),
+        unchecked: split.unchecked.iter().map(|f| channel(f)).collect(),
+    }
+}
+
+fn live_favorite(stream: &Stream, now: Option<Timestamp>) -> LiveFavorite {
+    LiveFavorite {
+        stream: StreamCard::from(stream),
+        avatar_url: stream.channel.avatar_url.clone(),
+        uptime_label: now.and_then(|now| stream.uptime(now)).map(uptime_label),
+    }
+}
+
+fn channel(favorite: &Favorite) -> FavoriteChannel {
+    FavoriteChannel {
+        channel_id: favorite.channel_id.as_str().to_owned(),
+        login: favorite.login.as_str().to_owned(),
+        display_name: favorite.display_name.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use jitter_core::models::{Channel, ChannelId, ChannelLogin, Favorite, Stream, Timestamp};
+
+    use super::*;
+
+    type TestResult = Result<(), String>;
+
+    fn favorite(id: &str, name: &str) -> Result<Favorite, String> {
+        Ok(Favorite {
+            channel_id: ChannelId::parse(id).map_err(|e| format!("{e:?}"))?,
+            login: ChannelLogin::parse(name).map_err(|e| format!("{e:?}"))?,
+            display_name: name.to_owned(),
+            added_at: Timestamp::from_unix(0),
+        })
+    }
+
+    fn stream(started_at: Option<i64>) -> Result<Stream, String> {
+        Ok(Stream {
+            id: "s1".to_owned(),
+            channel: Channel {
+                id: ChannelId::parse("1").map_err(|e| format!("{e:?}"))?,
+                login: ChannelLogin::parse("alpha").map_err(|e| format!("{e:?}"))?,
+                display_name: "Alpha".to_owned(),
+                avatar_url: "https://a/alpha.png".to_owned(),
+            },
+            title: "speedrun".to_owned(),
+            game: None,
+            viewers: 1_234,
+            started_at: started_at.map(Timestamp::from_unix),
+            thumbnail_url: String::new(),
+        })
+    }
+
+    #[test]
+    fn a_live_favorite_carries_its_card_avatar_and_uptime() -> TestResult {
+        let live = live_favorite(&stream(Some(1_000))?, Some(Timestamp::from_unix(12_520)));
+        assert_eq!(live.stream.login, "alpha");
+        assert_eq!(live.stream.viewers_label, "1.2K viewers");
+        assert_eq!(live.avatar_url, "https://a/alpha.png");
+        assert_eq!(live.uptime_label.as_deref(), Some("3h 12m"));
+        Ok(())
+    }
+
+    #[test]
+    fn no_start_time_or_no_clock_means_no_uptime() -> TestResult {
+        let now = Some(Timestamp::from_unix(100));
+        assert_eq!(live_favorite(&stream(None)?, now).uptime_label, None);
+        assert_eq!(live_favorite(&stream(Some(0))?, None).uptime_label, None);
+        Ok(())
+    }
+
+    #[test]
+    fn a_snapshot_keeps_offline_and_unchecked_apart() -> TestResult {
+        let (live, beta, gamma) = (
+            stream(Some(0))?,
+            favorite("2", "beta")?,
+            favorite("3", "gamma")?,
+        );
+        let split = FavoritesSplit {
+            live: vec![&live],
+            offline: vec![&beta],
+            unchecked: vec![&gamma],
         };
-        Self {
-            channel_id: favorite.channel_id.as_str().to_owned(),
-            login: favorite.login.as_str().to_owned(),
-            display_name: favorite.display_name.clone(),
-            avatar_url,
-            status,
-        }
+        let FavoritesUpdate::Snapshot {
+            live,
+            offline,
+            unchecked,
+        } = snapshot(&split, None)
+        else {
+            return Err("expected a snapshot".to_owned());
+        };
+        let logins = |list: &[FavoriteChannel]| -> Vec<String> {
+            list.iter().map(|f| f.login.clone()).collect()
+        };
+        assert_eq!(live.len(), 1);
+        assert_eq!(logins(&offline), ["beta"]);
+        assert_eq!(logins(&unchecked), ["gamma"]);
+        Ok(())
     }
 }

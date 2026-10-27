@@ -93,14 +93,15 @@ void main() {
     final favorites = FavoritesHolder()
       ..apply(
         const FavoritesUpdateSnapshot(
-          favorites: [
-            FavoriteRow(
+          live: [],
+          offline: [
+            FavoriteChannel(
               channelId: 'channel_a',
               login: 'login_a',
               displayName: 'Name a',
-              status: FavoriteStatusOffline(),
             ),
           ],
+          unchecked: [],
         ),
       );
     final browse = BrowseHolder()..apply(loaded(['a', 'b']));
