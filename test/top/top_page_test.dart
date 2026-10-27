@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
@@ -109,5 +110,41 @@ void main() {
 
     expect(find.byIcon(Icons.star), findsOneWidget);
     expect(find.byIcon(Icons.star_outline), findsOneWidget);
+  });
+
+  testWidgets('a long press offers to copy the title, channel and game', (
+    tester,
+  ) async {
+    String? copied;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String;
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    await pumpPage(tester, BrowseHolder()..apply(loaded(['a'])));
+
+    await tester.longPress(find.text('Title a'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Copy stream title'), findsOneWidget);
+    expect(find.text('Copy channel name'), findsOneWidget);
+    expect(find.text('Copy game name'), findsOneWidget);
+
+    await tester.tap(find.text('Copy channel name'));
+    await tester.pumpAndSettle();
+
+    expect(copied, 'Name a');
+    expect(find.text('Copy stream title'), findsNothing);
+    expect(find.text('Copied "Name a"'), findsOneWidget);
   });
 }

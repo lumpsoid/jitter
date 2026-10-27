@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:jitter/favorites/favorite_star.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
@@ -7,7 +10,8 @@ import 'package:jitter/src/bindings/bindings.dart';
 /// when given) over it, then the title, the channel and the game, with the
 /// channel's favorite star. Given an [avatarUrl], the channel's avatar
 /// leads the text; given [onOpenChannel], tapping the avatar or the
-/// channel name opens the channel instead of [onTap].
+/// channel name opens the channel instead of [onTap]. A long press offers
+/// to copy the title, the channel name or the game.
 class StreamCardTile extends StatelessWidget {
   const new({
     required this.card,
@@ -36,6 +40,7 @@ class StreamCardTile extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
+        onLongPress: () => _showCopyMenu(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -127,6 +132,46 @@ class StreamCardTile extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  void _showCopyMenu(BuildContext context) => unawaited(
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _CopyTile(label: 'Copy stream title', text: card.title),
+            _CopyTile(label: 'Copy channel name', text: card.displayName),
+            if (card.gameName case final game?)
+              _CopyTile(label: 'Copy game name', text: game),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// A sheet row that puts [text] on the clipboard and closes the sheet.
+class _CopyTile extends StatelessWidget {
+  const new({required this.label, required this.text});
+
+  final String label;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: const Icon(Icons.copy),
+      title: Text(label),
+      subtitle: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
+      onTap: () async {
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        Navigator.pop(context);
+        await Clipboard.setData(ClipboardData(text: text));
+        messenger?.showSnackBar(SnackBar(content: Text('Copied "$text"')));
+      },
     );
   }
 }
