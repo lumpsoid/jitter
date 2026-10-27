@@ -1,17 +1,11 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:jitter/favorites/favorite_star.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/stream_card_tile.dart';
-
-/// Live cards are at most this wide; the grid adds columns as it widens.
-const double _maxCardWidth = 360;
-
-/// Height of a live card's text below its 16:9 thumbnail.
-const double _cardTextHeight = 72;
+import 'package:jitter/top/stream_grid.dart';
 
 /// Size of one channel in the offline and not-checked grids.
 const double _channelTileWidth = 104;
@@ -106,15 +100,10 @@ class _FavoritesPageState extends State<FavoritesPage> {
   }
 
   Widget _liveGrid(List<LiveFavorite> live, double width) {
-    final columns = math.max(1, ((width - 16) / _maxCardWidth).ceil());
-    final cardWidth = (width - 16) / columns;
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       sliver: SliverGrid.builder(
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: columns,
-          mainAxisExtent: cardWidth * 9 / 16 + _cardTextHeight,
-        ),
+        gridDelegate: streamGridDelegate(width - 16),
         itemCount: live.length,
         itemBuilder: (context, index) {
           final favorite = live[index];

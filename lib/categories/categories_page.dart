@@ -4,15 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:jitter/categories/categories_holder.dart';
 import 'package:jitter/categories/category_tile_view.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:jitter/widgets/next_page_footer.dart';
+import 'package:jitter/widgets/paged_scroll_view.dart';
+import 'package:jitter/widgets/retry_failure.dart';
 
 /// Tiles are at most this wide; the grid adds columns as it widens.
 const double _maxTileWidth = 180;
 
 /// Height of the "From your channels" strip.
 const double _stripHeight = 72;
-
-/// Scrolled this close to the end, the grid asks for the next page.
-const double _nextPageExtent = 800;
 
 /// Opens a category by id; its name titles the page until Rust answers.
 typedef CategoryOpener = void Function(String id, String name);
@@ -33,7 +33,7 @@ class CategoriesPage extends StatelessWidget {
     return ListenableBuilder(
       listenable: categories,
       builder: (context, _) => switch (categories.state) {
-        CategoriesStateFailed(:final message) => _Failure(
+        CategoriesStateFailed(:final message) => RetryFailure(
           message: message,
           onRetry: categories.refresh,
         ),
@@ -62,11 +62,6 @@ class _Grid extends StatelessWidget {
   final CategoriesMore more;
   final CategoryOpener? onOpenCategory;
 
-  bool _onScroll(ScrollNotification notification) {
-    if (notification.metrics.extentAfter < _nextPageExtent) categories.next();
-    return false;
-  }
-
   @override
   Widget build(BuildContext context) {
     final strip = categories.fromYourChannels;
@@ -78,47 +73,46 @@ class _Grid extends StatelessWidget {
           (constraints.maxWidth / _maxTileWidth).ceil(),
         );
         final tileWidth = constraints.maxWidth / columns;
-        return RefreshIndicator(
+        return PagedScrollView(
           onRefresh: () async => categories.refresh(),
-          child: NotificationListener<ScrollNotification>(
-            onNotification: _onScroll,
-            child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                if (strip.isNotEmpty) ...[
-                  const _Heading('From your channels'),
-                  SliverToBoxAdapter(
-                    child: _Strip(rows: strip, onOpenCategory: open),
-                  ),
-                  const _Heading('Top categories'),
-                ],
-                SliverPadding(
-                  padding: const EdgeInsets.all(8),
-                  sliver: SliverGrid.builder(
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: columns,
-                      mainAxisExtent:
-                          tileWidth / boxArtAspectRatio +
-                          categoryTileTextHeight,
-                    ),
-                    itemCount: tiles.length,
-                    itemBuilder: (context, index) {
-                      final tile = tiles[index];
-                      return CategoryTileView(
-                        tile: tile,
-                        onTap: open == null
-                            ? null
-                            : () => open(tile.id, tile.name),
-                      );
-                    },
-                  ),
+          onNextPage: categories.next,
+          slivers: [
+            if (strip.isNotEmpty) ...[
+              const _Heading('From your channels'),
+              SliverToBoxAdapter(
+                child: _Strip(rows: strip, onOpenCategory: open),
+              ),
+              const _Heading('Top categories'),
+            ],
+            SliverPadding(
+              padding: const EdgeInsets.all(8),
+              sliver: SliverGrid.builder(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: columns,
+                  mainAxisExtent:
+                      tileWidth / boxArtAspectRatio + categoryTileTextHeight,
                 ),
-                SliverToBoxAdapter(
-                  child: _Footer(more: more, onRetry: categories.next),
-                ),
-              ],
+                itemCount: tiles.length,
+                itemBuilder: (context, index) {
+                  final tile = tiles[index];
+                  return CategoryTileView(
+                    tile: tile,
+                    onTap: open == null ? null : () => open(tile.id, tile.name),
+                  );
+                },
+              ),
             ),
-          ),
+            SliverToBoxAdapter(
+              child: switch (more) {
+                CategoriesMoreLoading() => const NextPageFooter.loading(),
+                CategoriesMoreFailed(:final message) => NextPageFooter.failed(
+                  message: message,
+                  onRetry: categories.next,
+                ),
+                _ => const NextPageFooter.idle(),
+              },
+            ),
+          ],
         );
       },
     );
@@ -197,56 +191,6 @@ class _Strip extends StatelessWidget {
             ),
           );
         },
-      ),
-    );
-  }
-}
-
-/// Under the grid: a spinner while the next page loads, its failure with a
-/// Retry, otherwise nothing.
-class _Footer extends StatelessWidget {
-  const new({required this.more, required this.onRetry});
-
-  final CategoriesMore more;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: switch (more) {
-        CategoriesMoreLoading() => const Center(
-          child: CircularProgressIndicator(),
-        ),
-        CategoriesMoreFailed(:final message) => _Failure(
-          message: message,
-          onRetry: onRetry,
-        ),
-        _ => const SizedBox.shrink(),
-      },
-    );
-  }
-}
-
-class _Failure extends StatelessWidget {
-  const new({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(message, textAlign: TextAlign.center),
-            const SizedBox(height: 8),
-            FilledButton.tonal(onPressed: onRetry, child: const Text('Retry')),
-          ],
-        ),
       ),
     );
   }
