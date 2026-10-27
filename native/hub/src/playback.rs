@@ -2,7 +2,7 @@
 //! controllers, and the player commands they lead to.
 
 use std::fmt::Display;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use jitter_core::models::{
     self, Channel, ChannelLogin, Open, Playback, Quality, QualityKind, Seconds, Timestamp, VideoId,
@@ -21,9 +21,10 @@ use crate::signals::{
 };
 
 /// `Play`: starts resolving `target` through twitch, and loading what it
-/// plays beside it; both come back together as [`Fetched::Playback`]. A
-/// target core rejects fails at once. Returns the target now playing,
-/// `None` when it was rejected.
+/// plays beside it; both come back together as [`Fetched::Playback`], or
+/// as [`Fetched::PlaybackTimedOut`] when they take longer than core's
+/// `RESOLVE_TIMEOUT`. A target core rejects fails at once. Returns the
+/// target now playing, `None` when it was rejected.
 pub fn play(
     playback: &mut PlaybackController,
     twitch: &Twitch,
@@ -37,7 +38,7 @@ pub fn play(
             return None;
         }
     };
-    playback.begin(target.clone());
+    let attempt = playback.begin(target.clone());
     send_state(playback);
     let (twitch, fetch, playing) = (twitch.clone(), fetch.clone(), target.clone());
     tokio::spawn(async move {
@@ -47,14 +48,25 @@ pub fn play(
                 playback::PlaybackTarget::Vod(id) => twitch.vod(id).await,
             }
         };
-        let (result, details) = tokio::join!(resolve, twitch.playback_details(&target));
-        let _ = fetch.send(Fetched::Playback {
-            target,
-            result,
-            details,
+        let both = async { tokio::join!(resolve, twitch.playback_details(&target)) };
+        let limit = Duration::from_secs(u64::from(playback::RESOLVE_TIMEOUT.get()));
+        let _ = fetch.send(match tokio::time::timeout(limit, both).await {
+            Ok((result, details)) => Fetched::Playback {
+                target,
+                result,
+                details,
+            },
+            Err(_) => Fetched::PlaybackTimedOut(attempt),
         });
     });
     Some(playing)
+}
+
+/// A resolve ran out of time: core decides whether the page fails.
+pub fn timed_out(playback: &mut PlaybackController, attempt: playback::Attempt) {
+    if playback.time_out(attempt) {
+        send_state(playback);
+    }
 }
 
 /// A resolve finished: shows the result and, if it is the one being

@@ -9,6 +9,18 @@ use crate::ports::StoreError;
 use crate::resume::ResumeController;
 use crate::resume_policy::ResumeDecision;
 
+/// A resolve still unanswered after this long has failed: heads stop
+/// waiting and call [`PlaybackController::time_out`], so the page can retry.
+pub const RESOLVE_TIMEOUT: Seconds = Seconds::new(20);
+
+/// What a resolve that ran out of [`RESOLVE_TIMEOUT`] fails with.
+pub const TIMED_OUT: &str = "Twitch took too long to answer";
+
+/// One [`PlaybackController::begin`]: tells it from a later begin of the
+/// same target, so an old attempt's timeout cannot fail a fresh one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Attempt(u64);
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlaybackTarget {
     Live(ChannelLogin),
@@ -38,6 +50,8 @@ pub enum PlaybackState {
 #[derive(Debug)]
 pub struct PlaybackController {
     state: PlaybackState,
+    /// The latest [`Attempt`] begun.
+    attempt: Attempt,
 }
 
 impl Default for PlaybackController {
@@ -50,6 +64,7 @@ impl PlaybackController {
     pub fn new() -> Self {
         Self {
             state: PlaybackState::Idle,
+            attempt: Attempt(0),
         }
     }
 
@@ -57,9 +72,27 @@ impl PlaybackController {
         &self.state
     }
 
-    /// Starts resolving `target`, replacing whatever was there.
-    pub fn begin(&mut self, target: PlaybackTarget) {
+    /// Starts resolving `target`, replacing whatever was there. Returns the
+    /// attempt, to hand to [`Self::time_out`] if it runs out of time.
+    pub fn begin(&mut self, target: PlaybackTarget) -> Attempt {
         self.state = PlaybackState::Resolving { target };
+        self.attempt = Attempt(self.attempt.0.wrapping_add(1));
+        self.attempt
+    }
+
+    /// `attempt` ran out of [`RESOLVE_TIMEOUT`]: fails with [`TIMED_OUT`],
+    /// unless it was answered, left, or replaced by a later [`Self::begin`]
+    /// since; a result arriving after this is then ignored by
+    /// [`Self::apply`]. Returns whether it failed, i.e. whether the page
+    /// changed.
+    pub fn time_out(&mut self, attempt: Attempt) -> bool {
+        if attempt != self.attempt || !matches!(self.state, PlaybackState::Resolving { .. }) {
+            return false;
+        }
+        self.state = PlaybackState::Failed {
+            message: TIMED_OUT.to_owned(),
+        };
+        true
     }
 
     /// Applies a resolve result and the details fetched beside it. Ignored

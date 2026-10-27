@@ -1,7 +1,9 @@
+use std::time::Duration;
+
 use chrono::{DateTime, Local, TimeZone};
 use clap::Args;
 use jitter_core::models::{Playback, Timestamp};
-use jitter_core::playback::{PlaybackController, PlaybackState, PlaybackTarget};
+use jitter_core::playback::{PlaybackController, PlaybackState, PlaybackTarget, RESOLVE_TIMEOUT};
 use jitter_core::resume::ResumeController;
 
 use super::{Result, ctx, login, now, open_store, twitch, video_id};
@@ -43,22 +45,30 @@ pub async fn run(args: PlayArgs) -> Result<()> {
 
     let twitch = twitch()?;
     let mut playback = PlaybackController::new();
-    playback.begin(target.clone());
+    let attempt = playback.begin(target.clone());
     let resolve = async {
         match &target {
             PlaybackTarget::Live(login) => twitch.live(login).await,
             PlaybackTarget::Vod(id) => twitch.vod(id).await,
         }
     };
-    let (resolved, details) = tokio::join!(resolve, twitch.playback_details(&target));
-    if let Err(e) = &details {
-        eprintln!("-- playback details unavailable: {e}");
+    let both = async { tokio::join!(resolve, twitch.playback_details(&target)) };
+    let limit = Duration::from_secs(u64::from(RESOLVE_TIMEOUT.get()));
+    match tokio::time::timeout(limit, both).await {
+        Ok((resolved, details)) => {
+            if let Err(e) = &details {
+                eprintln!("-- playback details unavailable: {e}");
+            }
+            playback.apply(
+                target,
+                resolved.map_err(|e| e.to_string()),
+                details.map_err(|e| e.to_string()),
+            );
+        }
+        Err(_) => {
+            playback.time_out(attempt);
+        }
     }
-    playback.apply(
-        target,
-        resolved.map_err(|e| e.to_string()),
-        details.map_err(|e| e.to_string()),
-    );
 
     let not_ready = || "playback did not resolve".to_owned();
     match playback.state() {

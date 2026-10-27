@@ -3,7 +3,7 @@ use jitter_core::models::{
     CategoryId, ChannelLogin, GameRef, Open, Playback, PlaybackDetails, QualityKind, Resolution,
     ResumePoint, Seconds, Timestamp, Variant, VideoId,
 };
-use jitter_core::playback::{PlaybackController, PlaybackState, PlaybackTarget};
+use jitter_core::playback::{PlaybackController, PlaybackState, PlaybackTarget, TIMED_OUT};
 use jitter_core::resume::ResumeController;
 use jitter_core::resume_policy::ResumeDecision;
 
@@ -59,6 +59,47 @@ fn result_for_another_target_is_ignored() {
 fn result_while_idle_is_ignored() {
     let mut c = PlaybackController::new();
     c.apply(live("a"), Err("x".to_owned()), no_details());
+    assert_eq!(c.state(), &PlaybackState::Idle);
+}
+
+fn timed_out() -> PlaybackState {
+    PlaybackState::Failed {
+        message: TIMED_OUT.to_owned(),
+    }
+}
+
+#[test]
+fn a_resolve_that_times_out_fails_and_its_late_result_is_ignored() {
+    let mut c = PlaybackController::new();
+    let attempt = c.begin(live("a"));
+    assert!(c.time_out(attempt));
+    assert_eq!(c.state(), &timed_out());
+    assert!(!c.apply(live("a"), one_quality(), no_details()));
+    assert_eq!(c.state(), &timed_out());
+}
+
+#[test]
+fn a_retry_gets_a_fresh_attempt_the_old_timeout_cannot_fail() {
+    let mut c = PlaybackController::new();
+    let first = c.begin(live("a"));
+    let retry = c.begin(live("a"));
+    assert!(!c.time_out(first));
+    assert_eq!(c.state(), &PlaybackState::Resolving { target: live("a") });
+    assert!(c.time_out(retry));
+    assert_eq!(c.state(), &timed_out());
+}
+
+#[test]
+fn a_timeout_after_the_answer_or_leaving_changes_nothing() {
+    let mut c = PlaybackController::new();
+    let attempt = c.begin(live("a"));
+    assert!(c.apply(live("a"), one_quality(), no_details()));
+    assert!(!c.time_out(attempt));
+    assert!(matches!(c.state(), PlaybackState::Ready { .. }));
+
+    let attempt = c.begin(live("b"));
+    assert!(c.leave(&live("b")));
+    assert!(!c.time_out(attempt));
     assert_eq!(c.state(), &PlaybackState::Idle);
 }
 

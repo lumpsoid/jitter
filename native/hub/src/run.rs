@@ -12,7 +12,7 @@ use jitter_core::browse::BrowseController;
 use jitter_core::categories::TopCategoriesController;
 use jitter_core::favorites::FavoritesController;
 use jitter_core::models::{Category, Page, PageRequest, Playback, PlaybackDetails, Stream};
-use jitter_core::playback::{PlaybackController, PlaybackTarget};
+use jitter_core::playback::{Attempt, PlaybackController, PlaybackTarget};
 use jitter_core::ports::StoreError;
 use jitter_core::resume::ResumeController;
 use jitter_store::SqliteStore;
@@ -132,6 +132,7 @@ pub enum Fetched {
         result: Result<Playback, TwitchError>,
         details: Result<PlaybackDetails, TwitchError>,
     },
+    PlaybackTimedOut(Attempt),
     // Channel
     Channel(ChannelFetched),
     // Chat
@@ -334,6 +335,7 @@ fn on_fetched(
         } => {
             playback::resolved(&mut c.playback, &c.resume, target, result, details);
         }
+        Fetched::PlaybackTimedOut(attempt) => playback::timed_out(&mut c.playback, attempt),
         // Channel
         Fetched::Channel(fetched) => {
             channel::on_fetched(&mut c.channel, &c.resume, fetched, twitch, fetch);
