@@ -1,20 +1,20 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:jitter/app.dart';
+import 'package:jitter/boot/boot_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:rinf/rinf.dart';
 
+/// Starts Rust, subscribes every holder (each then sends its ready signal,
+/// which Rust queues until it has booted), then boots Rust. The GUI shows
+/// a spinner until Rust answers [Booted].
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   await initializeRust(assignRustSignal);
-  runApp(const JitterApp());
-}
 
-class JitterApp extends StatelessWidget {
-  const new({super.key});
+  final boot = BootHolder();
+  unawaited(boot.connect());
 
-  @override
-  Widget build(BuildContext context) {
-    return const MaterialApp(
-      title: 'Jitter',
-      home: Scaffold(body: Center(child: Text('Jitter'))),
-    );
-  }
+  runApp(JitterApp(boot: boot));
 }

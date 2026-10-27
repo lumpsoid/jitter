@@ -487,6 +487,7 @@ name = "hub"
 version = "0.1.0"
 dependencies = [
  "jitter_core",
+ "jitter_store",
  "jitter_twitch",
  "rinf",
  "serde",
