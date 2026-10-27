@@ -16,6 +16,8 @@ import 'package:jitter/player/sleep_stopped.dart';
 import 'package:jitter/player/sleep_timer_button.dart';
 import 'package:jitter/player/theatre.dart';
 import 'package:jitter/player/video_frame.dart';
+import 'package:jitter/player/video_zoom.dart';
+import 'package:jitter/player/zoom_gestures.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
@@ -66,9 +68,14 @@ class _PlayerPageState extends State<PlayerPage> {
   /// The page's own layout, not Rust's: it is gone when the page closes.
   bool _theatre = false;
 
+  /// The zoom into the picture; the page's own, like theatre. Each change
+  /// goes to the player, and the page leaves it unzoomed.
+  final ValueNotifier<VideoZoom> _zoom = ValueNotifier(VideoZoom.none);
+
   @override
   void initState() {
     super.initState();
+    _zoom.addListener(_showZoom);
     _play();
     _reporter = Timer.periodic(_reportEvery, (_) => _reportPosition());
   }
@@ -98,9 +105,15 @@ class _PlayerPageState extends State<PlayerPage> {
 
   void _exitTheatre() => setState(() => _theatre = false);
 
+  void _showZoom() => unawaited(widget.player.setZoom(_zoom.value));
+
+  void _zoomBy(double factor) => _zoom.value = _zoom.value.zoomBy(factor);
+
   @override
   void dispose() {
     _reporter.cancel();
+    _zoom.dispose();
+    unawaited(widget.player.setZoom(VideoZoom.none));
     LeavePlayer(
       target: widget.target,
       positionS: widget.player.position.inSeconds,
@@ -118,6 +131,9 @@ class _PlayerPageState extends State<PlayerPage> {
           unawaited(_videoKey.currentState?.toggleFullscreen()),
       onTogglePlay: () => unawaited(widget.player.togglePlaying()),
       onToggleTheatre: _toggleTheatre,
+      onZoomIn: () => _zoomBy(zoomStep),
+      onZoomOut: () => _zoomBy(1 / zoomStep),
+      onResetZoom: () => _zoom.value = VideoZoom.none,
       child: ListenableBuilder(
         listenable: Listenable.merge([widget.playback, widget.chat]),
         builder: (context, _) {
@@ -186,16 +202,19 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Widget _video(PlaybackUpdate state) => switch (state) {
-    PlaybackUpdateReady(:final live) => _Controls(
-      live: live,
-      child: Video(
-        key: _videoKey,
-        controller: widget.player.controller,
-        // Leaving media_kit's fullscreen from theatre goes back to theatre's
-        // screen, not out of fullscreen.
-        onExitFullscreen: _theatre
-            ? returnToTheatreScreen
-            : defaultExitNativeFullscreen,
+    PlaybackUpdateReady(:final live) => ZoomGestures(
+      zoom: _zoom,
+      child: _Controls(
+        live: live,
+        child: Video(
+          key: _videoKey,
+          controller: widget.player.controller,
+          // Leaving media_kit's fullscreen from theatre goes back to
+          // theatre's screen, not out of fullscreen.
+          onExitFullscreen: _theatre
+              ? returnToTheatreScreen
+              : defaultExitNativeFullscreen,
+        ),
       ),
     ),
     PlaybackUpdateFailed(:final message) => PlaybackFailure(
@@ -239,6 +258,8 @@ class _QualityMenu extends StatelessWidget {
 
 /// media_kit's controls (play/pause, volume, fullscreen; on desktop space,
 /// `f` and the arrow keys). A live stream has no seek bar and no position.
+/// On desktop the wheel and a drag over the video are the zoom's, not the
+/// volume's; the wheel over the volume button sets the volume only.
 class _Controls extends StatelessWidget {
   const new({required this.live, required this.child});
 
@@ -247,16 +268,36 @@ class _Controls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!live) return child;
+    if (!live) {
+      // media_kit's own bar, the volume button keeping its wheel.
+      const desktop = MaterialDesktopVideoControlsThemeData(
+        modifyVolumeOnScroll: false,
+        bottomButtonBar: [
+          MaterialDesktopSkipPreviousButton(),
+          MaterialDesktopPlayOrPauseButton(),
+          MaterialDesktopSkipNextButton(),
+          KeepsWheel(child: MaterialDesktopVolumeButton()),
+          MaterialDesktopPositionIndicator(),
+          Spacer(),
+          MaterialDesktopFullscreenButton(),
+        ],
+      );
+      return MaterialDesktopVideoControlsTheme(
+        normal: desktop,
+        fullscreen: desktop,
+        child: child,
+      );
+    }
     const mobile = MaterialVideoControlsThemeData(
       displaySeekBar: false,
       bottomButtonBar: [Spacer(), MaterialFullscreenButton()],
     );
     const desktop = MaterialDesktopVideoControlsThemeData(
       displaySeekBar: false,
+      modifyVolumeOnScroll: false,
       bottomButtonBar: [
         MaterialDesktopPlayOrPauseButton(),
-        MaterialDesktopVolumeButton(),
+        KeepsWheel(child: MaterialDesktopVolumeButton()),
         Spacer(),
         MaterialDesktopFullscreenButton(),
       ],
