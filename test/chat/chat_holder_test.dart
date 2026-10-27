@@ -147,4 +147,19 @@ void main() {
     expect(holder.messages, isEmpty);
     expect(holder.status.modes, isEmpty);
   });
+
+  test('toggle hides a shown chat, shows a hidden one, and is quiet off', () {
+    final sent = <String>[];
+    ChatHolder(
+        sendHide: () => sent.add('hide'),
+        sendShow: () => sent.add('show'),
+      )
+      ..toggle()
+      ..apply(const ChatUpdateSnapshot(messages: [], status: connected))
+      ..toggle()
+      ..apply(const ChatUpdateHidden())
+      ..toggle();
+
+    expect(sent, ['hide', 'show']);
+  });
 }

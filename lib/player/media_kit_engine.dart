@@ -18,6 +18,18 @@ class MediaKitEngine implements PlayerEngine {
   @override
   Future<void> stop() => _player.stop();
 
+  Future<void> togglePlaying() => _player.playOrPause();
+
+  /// Mutes, or unmutes back to the volume it was muted at.
+  Future<void> toggleMute() {
+    final volume = _player.state.volume;
+    if (volume == 0) return _player.setVolume(_unmutedVolume);
+    _unmutedVolume = volume;
+    return _player.setVolume(0);
+  }
+
+  double _unmutedVolume = 100;
+
   @override
   Duration get position => _player.state.position;
 

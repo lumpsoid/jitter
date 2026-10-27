@@ -12,10 +12,14 @@ const _noStatus = ChatStatus(modes: []);
 /// snapshot folded with the diffs after it, in order. Rust bounds the list
 /// (it sends `Evicted`). Lives for the app's lifetime.
 class ChatHolder extends ChangeNotifier {
-  new({this.sendTheme = _send});
+  new({this.sendTheme = _send, this.sendHide = _hide, this.sendShow = _show});
 
   /// Sends `SetTheme`; tests that render the panel without Rust replace it.
   final void Function(SetTheme) sendTheme;
+
+  /// Send `HideChat` / `ShowChat`; tests without Rust replace them.
+  final VoidCallback sendHide;
+  final VoidCallback sendShow;
 
   StreamSubscription<RustSignalPack<ChatUpdate>>? _subscription;
   bool? _dark;
@@ -46,6 +50,15 @@ class ChatHolder extends ChangeNotifier {
     _dark = dark;
     sendTheme(SetTheme(dark: dark));
   }
+
+  /// Asks Rust to hide a shown chat or show a hidden one; nothing while
+  /// there is no chat. Rust leaves or rejoins it and answers with the new
+  /// mode.
+  void toggle() => switch (_mode) {
+    ChatMode.off => null,
+    ChatMode.shown => sendHide(),
+    ChatMode.hidden => sendShow(),
+  };
 
   /// Folds one update in.
   void apply(ChatUpdate update) {
@@ -87,3 +100,5 @@ class ChatHolder extends ChangeNotifier {
 }
 
 void _send(SetTheme signal) => signal.sendSignalToRust();
+void _hide() => const HideChat().sendSignalToRust();
+void _show() => const ShowChat().sendSignalToRust();

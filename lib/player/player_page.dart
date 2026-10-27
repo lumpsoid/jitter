@@ -9,6 +9,7 @@ import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_failure.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/player/playback_title.dart';
+import 'package:jitter/player/player_shortcuts.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
@@ -58,6 +59,9 @@ class PlayerPage extends StatefulWidget {
 class _PlayerPageState extends State<PlayerPage> {
   late final Timer _reporter;
 
+  /// The video, for the fullscreen key; unattached until playback is ready.
+  final _videoKey = GlobalKey<VideoState>();
+
   @override
   void initState() {
     super.initState();
@@ -93,41 +97,48 @@ class _PlayerPageState extends State<PlayerPage> {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: Listenable.merge([widget.playback, widget.chat]),
-      builder: (context, _) {
-        final state = widget.playback.state;
-        return Scaffold(
-          appBar: AppBar(
-            title: PlaybackTitle(
-              title: widget.title,
-              onOpenChannel: widget.onOpenChannel,
-              details: switch (state) {
-                PlaybackUpdateReady(:final details) => details,
-                _ => null,
-              },
+    return PlayerShortcuts(
+      onToggleChat: widget.chat.toggle,
+      onToggleMute: () => unawaited(widget.player.toggleMute()),
+      onToggleFullscreen: () =>
+          unawaited(_videoKey.currentState?.toggleFullscreen()),
+      onTogglePlay: () => unawaited(widget.player.togglePlaying()),
+      child: ListenableBuilder(
+        listenable: Listenable.merge([widget.playback, widget.chat]),
+        builder: (context, _) {
+          final state = widget.playback.state;
+          return Scaffold(
+            appBar: AppBar(
+              title: PlaybackTitle(
+                title: widget.title,
+                onOpenChannel: widget.onOpenChannel,
+                details: switch (state) {
+                  PlaybackUpdateReady(:final details) => details,
+                  _ => null,
+                },
+              ),
+              actions: [
+                if (state case PlaybackUpdateReady(
+                  :final qualities,
+                  :final selected,
+                ))
+                  _QualityMenu(
+                    qualities: qualities,
+                    selected: selected,
+                    onSelected: _selectQuality,
+                  ),
+                ChatToggle(chat: widget.chat),
+              ],
             ),
-            actions: [
-              if (state case PlaybackUpdateReady(
-                :final qualities,
-                :final selected,
-              ))
-                _QualityMenu(
-                  qualities: qualities,
-                  selected: selected,
-                  onSelected: _selectQuality,
-                ),
-              ChatToggle(chat: widget.chat),
-            ],
-          ),
-          body: _layout(
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: ColoredBox(color: Colors.black, child: _video(state)),
+            body: _layout(
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: ColoredBox(color: Colors.black, child: _video(state)),
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -161,7 +172,7 @@ class _PlayerPageState extends State<PlayerPage> {
   Widget _video(PlaybackUpdate state) => switch (state) {
     PlaybackUpdateReady(:final live) => _Controls(
       live: live,
-      child: Video(controller: widget.player.controller),
+      child: Video(key: _videoKey, controller: widget.player.controller),
     ),
     PlaybackUpdateFailed(:final message) => PlaybackFailure(
       message: message,

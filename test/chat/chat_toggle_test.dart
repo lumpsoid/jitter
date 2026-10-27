@@ -10,29 +10,26 @@ void main() {
   Future<void> pump(WidgetTester tester, ChatHolder chat) => tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
-        appBar: AppBar(
-          actions: [
-            ChatToggle(
-              chat: chat,
-              onHide: () => sent.add('hide'),
-              onShow: () => sent.add('show'),
-            ),
-          ],
-        ),
+        appBar: AppBar(actions: [ChatToggle(chat: chat)]),
       ),
     ),
+  );
+
+  ChatHolder holder() => ChatHolder(
+    sendHide: () => sent.add('hide'),
+    sendShow: () => sent.add('show'),
   );
 
   setUp(() => sent = []);
 
   testWidgets('is absent while there is no chat', (tester) async {
-    await pump(tester, ChatHolder()..apply(const ChatUpdateOff()));
+    await pump(tester, holder()..apply(const ChatUpdateOff()));
 
     expect(find.byType(IconButton), findsNothing);
   });
 
   testWidgets('hides a shown chat', (tester) async {
-    final chat = ChatHolder()
+    final chat = holder()
       ..apply(
         const ChatUpdateSnapshot(
           messages: [],
@@ -47,7 +44,7 @@ void main() {
   });
 
   testWidgets('shows a hidden chat', (tester) async {
-    await pump(tester, ChatHolder()..apply(const ChatUpdateHidden()));
+    await pump(tester, holder()..apply(const ChatUpdateHidden()));
 
     await tester.tap(find.byTooltip('Show chat'));
 
