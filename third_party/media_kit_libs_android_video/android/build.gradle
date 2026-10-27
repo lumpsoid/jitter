@@ -1,0 +1,74 @@
+import java.nio.file.Files
+import java.security.MessageDigest
+
+group 'com.alexmercerind.media_kit_libs_android_video'
+version '1.0'
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.0'
+    }
+}
+
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+apply plugin: 'com.android.library'
+
+android {
+    // Conditional for compatibility with AGP <4.2.
+    if (project.android.hasProperty("namespace")) {
+        namespace 'com.alexmercerind.media_kit_libs_android_video'
+    }
+
+    compileSdkVersion 36
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    defaultConfig {
+        minSdkVersion 16
+    }
+
+    dependencies {
+        implementation fileTree(dir: "libs", include: "*.jar")
+    }
+}
+
+// Jitter: upstream downloads media-kit's libmpv-android-video-build v1.1.7
+// jars here. These are that release rebuilt with one FFmpeg backport (see
+// ../libmpv/README.md), committed under libs/ and pinned by MD5 like
+// upstream's.
+task verifyLibmpvJars {
+    def jars = [
+        "default-arm64-v8a.jar"  : "cd8076eb7e0d928459bbcc4b9353c84e",
+        "default-armeabi-v7a.jar": "702296997e691828f83c951d196179e6",
+        "default-x86_64.jar"     : "177143dd0ae2717fcf52f336e65fa9c5",
+        "default-x86.jar"        : "41f5fd96c3d81d80789801f3bb7de178",
+    ]
+    doLast {
+        jars.each { name, md5 ->
+            def jar = file("libs/$name")
+            if (!jar.exists()) {
+                throw new GradleException("Missing ${jar}")
+            }
+            def actual = MessageDigest.getInstance("MD5").digest(Files.readAllBytes(jar.toPath())).encodeHex().toString()
+            if (actual != md5) {
+                throw new GradleException("MD5 mismatch for ${jar}: ${actual}, expected ${md5}")
+            }
+        }
+    }
+}
+
+preBuild.dependsOn(verifyLibmpvJars)
