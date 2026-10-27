@@ -51,11 +51,8 @@ fn absolute(url: &str) -> String {
 impl Twitch {
     /// The global emote lists of all three providers, fetched concurrently.
     pub async fn global_emotes(&self) -> [ProviderEmotes; 3] {
-        let (seventv, bttv, ffz) = tokio::join!(
-            seventv::global(self),
-            bttv::global(self),
-            ffz::global(self)
-        );
+        let (seventv, bttv, ffz) =
+            tokio::join!(seventv::global(self), bttv::global(self), ffz::global(self));
         [
             (EmoteProvider::SevenTv, seventv),
             (EmoteProvider::Bttv, bttv),

@@ -176,7 +176,10 @@ fn a_malformed_body_is_a_decode_error() {
         bttv::parse_channel(b"\"text\""),
         Err(TwitchError::Decode(_))
     ));
-    assert!(matches!(ffz::parse_room(b"{}"), Err(TwitchError::Decode(_))));
+    assert!(matches!(
+        ffz::parse_room(b"{}"),
+        Err(TwitchError::Decode(_))
+    ));
 }
 
 #[test]

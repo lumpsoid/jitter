@@ -16,7 +16,14 @@ const IMAGE_FILE: &str = "2x.webp";
 
 /// Names BTTV draws over the previous emote.
 const ZERO_WIDTH: [&str; 8] = [
-    "IceCold", "SoSnowy", "SantaHat", "TopHat", "CandyCane", "ReinDeer", "cvHazmat", "cvMask",
+    "IceCold",
+    "SoSnowy",
+    "SantaHat",
+    "TopHat",
+    "CandyCane",
+    "ReinDeer",
+    "cvHazmat",
+    "cvMask",
 ];
 
 pub fn channel_url(channel: &ChannelId) -> String {
@@ -63,12 +70,10 @@ pub fn parse_global(body: &[u8]) -> Result<Vec<Emote>, TwitchError> {
 pub fn parse_channel(body: &[u8]) -> Result<Vec<Emote>, TwitchError> {
     let channel: Channel =
         serde_json::from_slice(body).map_err(|e| TwitchError::Decode(format!("BTTV: {e}")))?;
-    Ok(map(
-        channel
-            .channel_emotes
-            .into_iter()
-            .chain(channel.shared_emotes),
-    ))
+    Ok(map(channel
+        .channel_emotes
+        .into_iter()
+        .chain(channel.shared_emotes)))
 }
 
 /// Entries missing an id or code are dropped.
