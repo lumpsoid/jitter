@@ -1,5 +1,6 @@
+use chrono::{DateTime, Local, TimeZone};
 use clap::Args;
-use jitter_core::models::Playback;
+use jitter_core::models::{Playback, Timestamp};
 use jitter_core::playback::{PlaybackController, PlaybackState, PlaybackTarget};
 use jitter_core::resume::ResumeController;
 
@@ -89,6 +90,9 @@ pub async fn run(args: PlayArgs) -> Result<()> {
     if let Some(game) = &details.game {
         println!("Game: {}", game.name);
     }
+    if let Some(streamed) = details.streamed_at.and_then(local_time) {
+        println!("Streamed: {}", streamed.format("%Y-%m-%d %H:%M %:z"));
+    }
     for q in &resolved.qualities {
         let marker = if q.name == *selected { '*' } else { ' ' };
         let size = q
@@ -101,4 +105,9 @@ pub async fn run(args: PlayArgs) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// `at` in the machine's time zone; `None` outside chrono's range.
+fn local_time(at: Timestamp) -> Option<DateTime<Local>> {
+    Local.timestamp_opt(at.unix(), 0).single()
 }

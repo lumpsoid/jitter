@@ -65,6 +65,9 @@ pub enum PlaybackUpdate {
 pub struct PlaybackDetails {
     /// The game or category's name; `None` when there is none to show.
     pub game: Option<String>,
+    /// The day a VOD was streamed, ready to show (`Oct 24`); `None` for a
+    /// live stream or when it is not known.
+    pub streamed: Option<String>,
 }
 
 /// One entry of the quality menu: `name` goes back in [`SelectQuality`],

@@ -13,7 +13,7 @@ use jitter_twitch::{Twitch, TwitchError};
 use rinf::{RustSignal, debug_print};
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::format::twitch_error;
+use crate::format::{streamed_label, twitch_error};
 use crate::run::Fetched;
 use crate::signals::{
     LeavePlayer, PlaybackDetails, PlaybackTarget, PlaybackUpdate, PlayerCommand, PlayerPosition,
@@ -220,6 +220,7 @@ impl From<&models::PlaybackDetails> for PlaybackDetails {
     fn from(details: &models::PlaybackDetails) -> Self {
         Self {
             game: details.game.as_ref().map(|game| game.name.clone()),
+            streamed: details.streamed_at.and_then(streamed_label),
         }
     }
 }
@@ -243,5 +244,39 @@ impl From<Open> for PlayerCommand {
             url: open.url,
             start_s: open.start.get(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use jitter_core::models::{CategoryId, GameRef};
+
+    use super::*;
+
+    #[test]
+    fn details_send_the_game_name_and_the_streamed_day() -> Result<(), String> {
+        let id = CategoryId::parse("509658").map_err(|e| format!("{e:?}"))?;
+        let at = Timestamp::from_unix(1_792_875_000);
+        let details = PlaybackDetails::from(&models::PlaybackDetails {
+            game: Some(GameRef {
+                id,
+                name: "Just Chatting".to_owned(),
+            }),
+            streamed_at: Some(at),
+        });
+        assert_eq!(details.game.as_deref(), Some("Just Chatting"));
+        assert_eq!(details.streamed, streamed_label(at));
+        assert!(details.streamed.is_some());
+        Ok(())
+    }
+
+    #[test]
+    fn details_without_a_date_send_none() {
+        let details = PlaybackDetails::from(&models::PlaybackDetails {
+            game: None,
+            streamed_at: None,
+        });
+        assert_eq!(details.game, None);
+        assert_eq!(details.streamed, None);
     }
 }

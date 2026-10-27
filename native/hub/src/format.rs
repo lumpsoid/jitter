@@ -1,7 +1,8 @@
 //! Labels and error messages the GUI shows as sent, formatted once here so
 //! every page that shows the same value shows it the same way.
 
-use jitter_core::models::Seconds;
+use chrono::{Datelike, Local, NaiveDate, TimeZone};
+use jitter_core::models::{Seconds, Timestamp};
 use jitter_twitch::TwitchError;
 
 /// What the user reads when a Twitch call failed: one sentence per
@@ -85,6 +86,25 @@ pub fn uptime_label(uptime: Seconds) -> String {
     }
 }
 
+/// The day a VOD was streamed, in the viewer's time zone: `Oct 24`, with
+/// the year when it is not this one: `Dec 31, 2025`. `None` outside the
+/// dates chrono can hold.
+pub fn streamed_label(at: Timestamp) -> Option<String> {
+    let local = Local.timestamp_opt(at.unix(), 0).single()?;
+    Some(date_label(local.date_naive(), Local::now().year()))
+}
+
+/// [`streamed_label`] once the day is known: `Oct 24` in `this_year`,
+/// `Dec 31, 2025` otherwise.
+fn date_label(date: NaiveDate, this_year: i32) -> String {
+    let pattern = if date.year() == this_year {
+        "%b %-d"
+    } else {
+        "%b %-d, %Y"
+    };
+    date.format(pattern).to_string()
+}
+
 /// `123` tenths with suffix `K` is `12.3K`; a whole number drops the `.0`.
 fn tenths(tenths: u32, suffix: &str) -> String {
     match tenths % 10 {
@@ -95,10 +115,13 @@ fn tenths(tenths: u32, suffix: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use chrono::NaiveDate;
     use jitter_core::models::Seconds;
     use jitter_twitch::TwitchError;
 
-    use super::{duration_label, followers_label, twitch_error, uptime_label, viewers_label};
+    use super::{
+        date_label, duration_label, followers_label, twitch_error, uptime_label, viewers_label,
+    };
 
     fn reads(error: TwitchError, message: &str) {
         assert_eq!(twitch_error(&error), message, "{error:?}");
@@ -187,6 +210,25 @@ mod tests {
         assert_eq!(uptime_label(Seconds::new(3600)), "1h 0m");
         assert_eq!(uptime_label(Seconds::new(11_520)), "3h 12m");
         assert_eq!(uptime_label(Seconds::new(100_000)), "27h 46m");
+    }
+
+    fn day(year: i32, month: u32, day: u32) -> NaiveDate {
+        let Some(date) = NaiveDate::from_ymd_opt(year, month, day) else {
+            unreachable!("valid date");
+        };
+        date
+    }
+
+    #[test]
+    fn dates_this_year_drop_the_year() {
+        assert_eq!(date_label(day(2026, 10, 24), 2026), "Oct 24");
+        assert_eq!(date_label(day(2026, 1, 5), 2026), "Jan 5");
+    }
+
+    #[test]
+    fn dates_of_other_years_show_it() {
+        assert_eq!(date_label(day(2025, 12, 31), 2026), "Dec 31, 2025");
+        assert_eq!(date_label(day(2027, 3, 1), 2026), "Mar 1, 2027");
     }
 
     #[test]

@@ -19,3 +19,4 @@ clap = { version = "4.6.7", features = ["derive"] }
 tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros"] }
 log = "0.4.34"
 futures-util = { version = "0.3.34", default-features = false, features = ["std"] }
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }

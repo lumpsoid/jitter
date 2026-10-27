@@ -34,7 +34,8 @@ const CHANNEL: &[u8] = include_bytes!("fixtures/gql_channel_by_login.json");
 const CHANNEL_UNKNOWN: &[u8] = include_bytes!("fixtures/gql_channel_by_login_unknown.json");
 // Hand-written after the raw `PlaybackDetails*` documents' live answers
 // (checked with `jitter play` on 2026-10-27; VOD 2909822254 is in Just
-// Chatting), with `users_stream`'s recorded game: not recorded.
+// Chatting and was streamed 2026-10-24 20:50 UTC, seconds not shown), with
+// `users_stream`'s recorded game: not recorded.
 const DETAILS_LIVE: &[u8] = include_bytes!("fixtures/gql_playback_details_live.json");
 const DETAILS_VOD: &[u8] = include_bytes!("fixtures/gql_playback_details_vod.json");
 const BOGUS_HASH: &[u8] = include_bytes!("fixtures/gql_persisted_bogus_hash.json");
@@ -282,6 +283,31 @@ fn vod_details_carry_the_video_game() {
     let game = ok(details.game.ok_or("no game"));
     assert_eq!(game.id.as_str(), "509658");
     assert_eq!(game.name, "Just Chatting");
+}
+
+#[test]
+fn vod_details_carry_when_it_was_streamed() {
+    let details = ok(playback_details::parse_vod(DETAILS_VOD));
+    // 2026-10-24T20:50:00Z
+    assert_eq!(
+        details.streamed_at,
+        Some(Timestamp::from_unix(1_792_875_000))
+    );
+}
+
+#[test]
+fn live_details_and_undated_vods_have_no_streamed_date() {
+    assert_eq!(
+        ok(playback_details::parse_live(DETAILS_LIVE)).streamed_at,
+        None
+    );
+    let undated = br#"{"data":{"video":{"game":null}}}"#;
+    assert_eq!(ok(playback_details::parse_vod(undated)).streamed_at, None);
+    let unreadable = br#"{"data":{"video":{"createdAt":"yesterday","game":null}}}"#;
+    assert_eq!(
+        ok(playback_details::parse_vod(unreadable)).streamed_at,
+        None
+    );
 }
 
 #[test]

@@ -138,6 +138,7 @@ fn gta() -> PlaybackDetails {
             id,
             name: "Grand Theft Auto V".to_owned(),
         }),
+        streamed_at: None,
     }
 }
 
@@ -203,6 +204,22 @@ fn vod() -> VideoId {
         unreachable!("valid id");
     };
     id
+}
+
+#[test]
+fn a_vod_carries_when_it_was_streamed() {
+    let streamed = PlaybackDetails {
+        game: None,
+        streamed_at: Some(Timestamp::from_unix(1_792_875_046)),
+    };
+    let mut c = PlaybackController::new();
+    c.begin(PlaybackTarget::Vod(vod()));
+    assert!(c.apply(
+        PlaybackTarget::Vod(vod()),
+        one_quality(),
+        Ok(streamed.clone())
+    ));
+    assert_eq!(details(&c), Some(&streamed));
 }
 
 fn ready(target: PlaybackTarget) -> PlaybackController {

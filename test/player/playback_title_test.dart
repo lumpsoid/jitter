@@ -22,7 +22,26 @@ void main() {
     expect(find.text('Grand Theft Auto V'), findsOneWidget);
   });
 
-  testWidgets('shows the title alone without a game', (tester) async {
+  testWidgets("shows a VOD's game and streamed day under the title", (
+    tester,
+  ) async {
+    await pumpTitle(
+      tester,
+      const PlaybackDetails(game: 'Just Chatting', streamed: 'Oct 24'),
+    );
+
+    expect(find.text('xQc'), findsOneWidget);
+    expect(find.text('Just Chatting · Oct 24'), findsOneWidget);
+  });
+
+  testWidgets('shows the streamed day alone without a game', (tester) async {
+    await pumpTitle(tester, const PlaybackDetails(streamed: 'Dec 31, 2025'));
+
+    expect(find.text('xQc'), findsOneWidget);
+    expect(find.text('Dec 31, 2025'), findsOneWidget);
+  });
+
+  testWidgets('shows the title alone without details to show', (tester) async {
     await pumpTitle(tester, const PlaybackDetails());
 
     expect(find.text('xQc'), findsOneWidget);

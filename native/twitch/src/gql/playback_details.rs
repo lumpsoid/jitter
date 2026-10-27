@@ -1,12 +1,14 @@
 //! What is playing, beside how to play it: raw documents written by us, one for
-//! a live channel and one for a VOD.
+//! a live channel and one for a VOD. A VOD's streamed date is its `createdAt`;
+//! `publishedAt` is when it was made public, which for an upload can be long
+//! after.
 
 use jitter_core::models::{ChannelLogin, PlaybackDetails, VideoId};
 use jitter_core::playback::PlaybackTarget;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{GameNode, RawQuery};
+use super::{GameNode, RawQuery, parse_timestamp};
 use crate::client::Twitch;
 use crate::error::TwitchError;
 
@@ -18,7 +20,7 @@ pub const LIVE_QUERY: RawQuery = RawQuery {
 
 pub const VOD_QUERY: RawQuery = RawQuery {
     operation: "PlaybackDetailsVod",
-    document: "query($id: ID!) { video(id: $id) { game { id displayName } } }",
+    document: "query($id: ID!) { video(id: $id) { createdAt game { id displayName } } }",
 };
 
 pub fn live_variables(login: &ChannelLogin) -> Value {
@@ -35,30 +37,34 @@ pub fn parse_live(body: &[u8]) -> Result<PlaybackDetails, TwitchError> {
     map_live(super::decode(body, LIVE_QUERY.operation)?)
 }
 
-/// Decodes a VOD response. An unknown VOD (`"video": null`) is `NotFound`.
+/// Decodes a VOD response. An unknown VOD (`"video": null`) is `NotFound`;
+/// a missing or unreadable `createdAt` leaves the date unknown.
 pub fn parse_vod(body: &[u8]) -> Result<PlaybackDetails, TwitchError> {
     map_vod(super::decode(body, VOD_QUERY.operation)?)
 }
 
 fn map_live(data: LiveData) -> Result<PlaybackDetails, TwitchError> {
     let user = data.user.ok_or(TwitchError::NotFound)?;
-    Ok(details(user.stream.and_then(|s| s.game)))
+    Ok(PlaybackDetails {
+        game: user
+            .stream
+            .and_then(|s| s.game)
+            .and_then(GameNode::into_game_ref),
+        streamed_at: None,
+    })
 }
 
 fn map_vod(data: VodData) -> Result<PlaybackDetails, TwitchError> {
     let video = data.video.ok_or(TwitchError::NotFound)?;
-    Ok(details(video.game))
-}
-
-fn details(game: Option<GameNode>) -> PlaybackDetails {
-    PlaybackDetails {
-        game: game.and_then(GameNode::into_game_ref),
-    }
+    Ok(PlaybackDetails {
+        game: video.game.and_then(GameNode::into_game_ref),
+        streamed_at: video.created_at.as_deref().and_then(parse_timestamp),
+    })
 }
 
 impl Twitch {
     /// What `target` is playing: the game a live stream is in now, or the
-    /// one a VOD was recorded in.
+    /// one a VOD was recorded in and when it was streamed.
     pub async fn playback_details(
         &self,
         target: &PlaybackTarget,
@@ -93,6 +99,8 @@ struct VodData {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Video {
+    created_at: Option<String>,
     game: Option<GameNode>,
 }
