@@ -3,16 +3,25 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/player/playback_title.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 
-Future<void> pumpTitle(WidgetTester tester, PlaybackDetails? details) =>
-    tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          appBar: AppBar(
-            title: PlaybackTitle(title: 'xQc', details: details),
-          ),
+Future<void> pumpTitle(
+  WidgetTester tester,
+  PlaybackDetails? details, {
+  ValueChanged<String>? onOpenChannel,
+}) => tester.pumpWidget(
+  MaterialApp(
+    home: Scaffold(
+      appBar: AppBar(
+        title: PlaybackTitle(
+          title: 'xQc',
+          details: details,
+          onOpenChannel: onOpenChannel ?? (_) {},
         ),
       ),
-    );
+    ),
+  ),
+);
+
+const _owner = PlaybackChannel(login: 'xqc', displayName: 'xQc_Owner');
 
 void main() {
   testWidgets('shows the game under the title', (tester) async {
@@ -53,5 +62,48 @@ void main() {
 
     expect(find.text('xQc'), findsOneWidget);
     expect(find.byType(Column), findsNothing);
+  });
+
+  testWidgets(
+    "shows the channel's name with its avatar in place of the title",
+    (tester) async {
+      await pumpTitle(
+        tester,
+        const PlaybackDetails(
+          channel: _owner,
+          game: 'Just Chatting',
+          streamed: 'Oct 24',
+        ),
+      );
+
+      expect(find.text('xQc_Owner'), findsOneWidget);
+      expect(find.text('xQc'), findsNothing);
+      expect(find.text('Just Chatting · Oct 24'), findsOneWidget);
+      expect(find.byType(CircleAvatar), findsOneWidget);
+    },
+  );
+
+  testWidgets('tapping the channel opens it by login', (tester) async {
+    final opened = <String>[];
+    await pumpTitle(
+      tester,
+      const PlaybackDetails(channel: _owner),
+      onOpenChannel: opened.add,
+    );
+
+    await tester.tap(find.text('xQc_Owner'));
+    expect(opened, ['xqc']);
+
+    await tester.tap(find.byType(CircleAvatar));
+    expect(opened, ['xqc', 'xqc']);
+  });
+
+  testWidgets('the title is not tappable before the channel is known', (
+    tester,
+  ) async {
+    await pumpTitle(tester, const PlaybackDetails(game: 'Just Chatting'));
+
+    expect(find.byType(InkWell), findsNothing);
+    expect(find.byType(CircleAvatar), findsNothing);
   });
 }

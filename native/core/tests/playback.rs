@@ -134,6 +134,7 @@ fn gta() -> PlaybackDetails {
         unreachable!("valid id");
     };
     PlaybackDetails {
+        channel: None,
         game: Some(GameRef {
             id,
             name: "Grand Theft Auto V".to_owned(),
@@ -144,7 +145,7 @@ fn gta() -> PlaybackDetails {
 
 fn details(c: &PlaybackController) -> Option<&PlaybackDetails> {
     match c.state() {
-        PlaybackState::Ready { details, .. } => Some(details),
+        PlaybackState::Ready { details, .. } => Some(&**details),
         _ => None,
     }
 }
@@ -209,6 +210,7 @@ fn vod() -> VideoId {
 #[test]
 fn a_vod_carries_when_it_was_streamed() {
     let streamed = PlaybackDetails {
+        channel: None,
         game: None,
         streamed_at: Some(Timestamp::from_unix(1_792_875_046)),
     };

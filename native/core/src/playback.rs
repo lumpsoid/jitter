@@ -26,8 +26,9 @@ pub enum PlaybackState {
         playback: Playback,
         /// Name of the selected quality; always one of `playback.qualities`.
         selected: String,
-        /// What is playing, for the page to show.
-        details: PlaybackDetails,
+        /// What is playing, for the page to show (boxed: it outweighs the
+        /// other states).
+        details: Box<PlaybackDetails>,
     },
     Failed {
         message: String,
@@ -89,7 +90,7 @@ impl PlaybackController {
                     target,
                     selected: q.name.clone(),
                     playback,
-                    details: details.unwrap_or_default(),
+                    details: Box::new(details.unwrap_or_default()),
                 },
             },
         };

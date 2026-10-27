@@ -150,16 +150,22 @@ class _AppShellState extends State<AppShell> {
 
   void _select(int index) => setState(() => _selected = index);
 
-  /// Pushes the player for `target`; leaving the page stops it.
+  /// Pushes the player for `target`; leaving the page stops it. Opening the
+  /// channel from it leaves it first, so player pages never stack (they
+  /// share one player and one playback state).
   void _openPlayer(PlaybackTarget target, String title) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => PlayerPage(
+        builder: (playerContext) => PlayerPage(
           target: target,
           title: title,
           playback: widget.playback,
           player: widget.player,
           chat: widget.chat,
+          onOpenChannel: (login) {
+            Navigator.of(playerContext).pop();
+            _openChannel(login);
+          },
         ),
       ),
     );

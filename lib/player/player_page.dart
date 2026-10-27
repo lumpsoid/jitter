@@ -27,6 +27,7 @@ class PlayerPage extends StatefulWidget {
     required this.playback,
     required this.player,
     required this.chat,
+    required this.onOpenChannel,
     super.key,
   });
 
@@ -41,6 +42,10 @@ class PlayerPage extends StatefulWidget {
 
   /// The live chat, shown while Rust has one open.
   final ChatHolder chat;
+
+  /// Opens the channel being watched (a VOD's owner) by login, from the
+  /// app bar title.
+  final ValueChanged<String> onOpenChannel;
 
   @override
   State<PlayerPage> createState() => _PlayerPageState();
@@ -88,6 +93,7 @@ class _PlayerPageState extends State<PlayerPage> {
           appBar: AppBar(
             title: PlaybackTitle(
               title: widget.title,
+              onOpenChannel: widget.onOpenChannel,
               details: switch (state) {
                 PlaybackUpdateReady(:final details) => details,
                 _ => null,

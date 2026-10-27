@@ -63,11 +63,24 @@ pub enum PlaybackUpdate {
 /// What is playing, shown on the player page beside the video.
 #[derive(Serialize, SignalPiece)]
 pub struct PlaybackDetails {
+    /// The channel being watched (a VOD's owner); `None` when it is not
+    /// known.
+    pub channel: Option<PlaybackChannel>,
     /// The game or category's name; `None` when there is none to show.
     pub game: Option<String>,
     /// The day a VOD was streamed, ready to show (`Oct 24`); `None` for a
     /// live stream or when it is not known.
     pub streamed: Option<String>,
+}
+
+/// The channel a player page shows. Tapping it opens the channel by
+/// `login`.
+#[derive(Serialize, SignalPiece)]
+pub struct PlaybackChannel {
+    pub login: String,
+    pub display_name: String,
+    /// `None`: no avatar known, show a placeholder.
+    pub avatar_url: Option<String>,
 }
 
 /// One entry of the quality menu: `name` goes back in [`SelectQuality`],

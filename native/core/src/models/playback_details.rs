@@ -1,9 +1,12 @@
-use super::{GameRef, Timestamp};
+use super::{Channel, GameRef, Timestamp};
 
 /// What is playing, beside how to play it: what the player page shows
 /// about the stream or VOD. Empty when Twitch could not tell.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PlaybackDetails {
+    /// The channel being watched: a live stream's broadcaster, a VOD's
+    /// owner. `None` when it is not known.
+    pub channel: Option<Channel>,
     /// The category being played: a live stream's current one, a VOD's
     /// recorded one. `None` when none is set or it is not known.
     pub game: Option<GameRef>,

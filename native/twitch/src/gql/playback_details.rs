@@ -1,26 +1,30 @@
 //! What is playing, beside how to play it: raw documents written by us, one for
 //! a live channel and one for a VOD. A VOD's streamed date is its `createdAt`;
 //! `publishedAt` is when it was made public, which for an upload can be long
-//! after.
+//! after. The channel is the live user itself, or the VOD's `owner`; one Twitch
+//! cannot fully describe (missing a field, or an id or login core rejects) is
+//! left unknown rather than failing the details.
 
 use jitter_core::models::{ChannelLogin, PlaybackDetails, VideoId};
 use jitter_core::playback::PlaybackTarget;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{GameNode, RawQuery, parse_timestamp};
+use super::{GameNode, RawQuery, UserNode, parse_timestamp};
 use crate::client::Twitch;
 use crate::error::TwitchError;
 
 pub const LIVE_QUERY: RawQuery = RawQuery {
     operation: "PlaybackDetailsLive",
     document: "query($login: String!) { user(login: $login) { \
+               id login displayName profileImageURL(width: 50) \
                stream { game { id displayName } } } }",
 };
 
 pub const VOD_QUERY: RawQuery = RawQuery {
     operation: "PlaybackDetailsVod",
-    document: "query($id: ID!) { video(id: $id) { createdAt game { id displayName } } }",
+    document: "query($id: ID!) { video(id: $id) { createdAt game { id displayName } \
+               owner { id login displayName profileImageURL(width: 50) } } }",
 };
 
 pub fn live_variables(login: &ChannelLogin) -> Value {
@@ -46,6 +50,7 @@ pub fn parse_vod(body: &[u8]) -> Result<PlaybackDetails, TwitchError> {
 fn map_live(data: LiveData) -> Result<PlaybackDetails, TwitchError> {
     let user = data.user.ok_or(TwitchError::NotFound)?;
     Ok(PlaybackDetails {
+        channel: user.node.into_channel(),
         game: user
             .stream
             .and_then(|s| s.game)
@@ -57,14 +62,16 @@ fn map_live(data: LiveData) -> Result<PlaybackDetails, TwitchError> {
 fn map_vod(data: VodData) -> Result<PlaybackDetails, TwitchError> {
     let video = data.video.ok_or(TwitchError::NotFound)?;
     Ok(PlaybackDetails {
+        channel: video.owner.and_then(UserNode::into_channel),
         game: video.game.and_then(GameNode::into_game_ref),
         streamed_at: video.created_at.as_deref().and_then(parse_timestamp),
     })
 }
 
 impl Twitch {
-    /// What `target` is playing: the game a live stream is in now, or the
-    /// one a VOD was recorded in and when it was streamed.
+    /// What `target` is playing: the channel, and the game a live stream
+    /// is in now, or the one a VOD was recorded in and when it was
+    /// streamed.
     pub async fn playback_details(
         &self,
         target: &PlaybackTarget,
@@ -85,6 +92,8 @@ struct LiveData {
 
 #[derive(Deserialize)]
 struct User {
+    #[serde(flatten)]
+    node: UserNode,
     stream: Option<Stream>,
 }
 
@@ -103,4 +112,5 @@ struct VodData {
 struct Video {
     created_at: Option<String>,
     game: Option<GameNode>,
+    owner: Option<UserNode>,
 }

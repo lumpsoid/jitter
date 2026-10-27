@@ -87,6 +87,13 @@ pub async fn run(args: PlayArgs) -> Result<()> {
     else {
         return Err(not_ready());
     };
+    if let Some(channel) = &details.channel {
+        println!(
+            "Channel: {} ({})",
+            channel.display_name,
+            channel.login.as_str()
+        );
+    }
     if let Some(game) = &details.game {
         println!("Game: {}", game.name);
     }

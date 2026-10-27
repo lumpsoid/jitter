@@ -34,8 +34,9 @@ const CHANNEL: &[u8] = include_bytes!("fixtures/gql_channel_by_login.json");
 const CHANNEL_UNKNOWN: &[u8] = include_bytes!("fixtures/gql_channel_by_login_unknown.json");
 // Hand-written after the raw `PlaybackDetails*` documents' live answers
 // (checked with `jitter play` on 2026-10-27; VOD 2909822254 is in Just
-// Chatting and was streamed 2026-10-24 20:50 UTC, seconds not shown), with
-// `users_stream`'s recorded game: not recorded.
+// Chatting and was streamed 2026-10-24 20:50 UTC, seconds not shown; its
+// owner is xQc), with `users_stream`'s recorded game and user: not
+// recorded.
 const DETAILS_LIVE: &[u8] = include_bytes!("fixtures/gql_playback_details_live.json");
 const DETAILS_VOD: &[u8] = include_bytes!("fixtures/gql_playback_details_vod.json");
 const BOGUS_HASH: &[u8] = include_bytes!("fixtures/gql_persisted_bogus_hash.json");
@@ -330,6 +331,31 @@ fn details_of_an_unknown_login_or_vod_are_not_found() {
         playback_details::parse_vod(unknown),
         Err(TwitchError::NotFound)
     ));
+}
+
+#[test]
+fn live_details_carry_the_channel_and_vod_details_its_owner() {
+    for details in [
+        ok(playback_details::parse_live(DETAILS_LIVE)),
+        ok(playback_details::parse_vod(DETAILS_VOD)),
+    ] {
+        let channel = ok(details.channel.ok_or("no channel"));
+        assert_eq!(channel.id.as_str(), "71092938");
+        assert_eq!(channel.login.as_str(), "xqc");
+        assert_eq!(channel.display_name, "xQc");
+        assert!(channel.avatar_url.ends_with("-50x50.jpeg"));
+    }
+}
+
+#[test]
+fn an_incomplete_or_missing_channel_is_unknown_not_an_error() {
+    let no_avatar = br#"{"data":{"user":{"id":"1","login":"a","displayName":"A","stream":null}}}"#;
+    assert_eq!(ok(playback_details::parse_live(no_avatar)).channel, None);
+    let bad_login = br#"{"data":{"video":{"game":null,"owner":{"id":"1","login":"no spaces",
+        "displayName":"A","profileImageURL":"x"}}}}"#;
+    assert_eq!(ok(playback_details::parse_vod(bad_login)).channel, None);
+    let no_owner = br#"{"data":{"video":{"game":null,"owner":null}}}"#;
+    assert_eq!(ok(playback_details::parse_vod(no_owner)).channel, None);
 }
 
 // --- channel lookup --------------------------------------------------------

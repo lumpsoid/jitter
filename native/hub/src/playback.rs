@@ -5,7 +5,7 @@ use std::fmt::Display;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use jitter_core::models::{
-    self, ChannelLogin, Open, Playback, Quality, QualityKind, Seconds, Timestamp, VideoId,
+    self, Channel, ChannelLogin, Open, Playback, Quality, QualityKind, Seconds, Timestamp, VideoId,
 };
 use jitter_core::playback::{self, PlaybackController, PlaybackState};
 use jitter_core::resume::ResumeController;
@@ -16,8 +16,8 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::format::{streamed_label, twitch_error};
 use crate::run::Fetched;
 use crate::signals::{
-    LeavePlayer, PlaybackDetails, PlaybackTarget, PlaybackUpdate, PlayerCommand, PlayerPosition,
-    QualityOption, SelectQuality,
+    LeavePlayer, PlaybackChannel, PlaybackDetails, PlaybackTarget, PlaybackUpdate, PlayerCommand,
+    PlayerPosition, QualityOption, SelectQuality,
 };
 
 /// `Play`: starts resolving `target` through twitch, and loading what it
@@ -207,7 +207,7 @@ impl From<&PlaybackState> for PlaybackUpdate {
                 qualities: playback.qualities.iter().map(QualityOption::from).collect(),
                 selected: selected.clone(),
                 live: matches!(target, playback::PlaybackTarget::Live(_)),
-                details: PlaybackDetails::from(details),
+                details: PlaybackDetails::from(details.as_ref()),
             },
             PlaybackState::Failed { message } => Self::Failed {
                 message: message.clone(),
@@ -219,8 +219,19 @@ impl From<&PlaybackState> for PlaybackUpdate {
 impl From<&models::PlaybackDetails> for PlaybackDetails {
     fn from(details: &models::PlaybackDetails) -> Self {
         Self {
+            channel: details.channel.as_ref().map(PlaybackChannel::from),
             game: details.game.as_ref().map(|game| game.name.clone()),
             streamed: details.streamed_at.and_then(streamed_label),
+        }
+    }
+}
+
+impl From<&Channel> for PlaybackChannel {
+    fn from(channel: &Channel) -> Self {
+        Self {
+            login: channel.login.as_str().to_owned(),
+            display_name: channel.display_name.clone(),
+            avatar_url: channel.avatar().map(str::to_owned),
         }
     }
 }
@@ -249,7 +260,7 @@ impl From<Open> for PlayerCommand {
 
 #[cfg(test)]
 mod tests {
-    use jitter_core::models::{CategoryId, GameRef};
+    use jitter_core::models::{CategoryId, ChannelId, GameRef};
 
     use super::*;
 
@@ -258,6 +269,7 @@ mod tests {
         let id = CategoryId::parse("509658").map_err(|e| format!("{e:?}"))?;
         let at = Timestamp::from_unix(1_792_875_000);
         let details = PlaybackDetails::from(&models::PlaybackDetails {
+            channel: None,
             game: Some(GameRef {
                 id,
                 name: "Just Chatting".to_owned(),
@@ -273,10 +285,38 @@ mod tests {
     #[test]
     fn details_without_a_date_send_none() {
         let details = PlaybackDetails::from(&models::PlaybackDetails {
+            channel: None,
             game: None,
             streamed_at: None,
         });
+        assert!(details.channel.is_none());
         assert_eq!(details.game, None);
         assert_eq!(details.streamed, None);
+    }
+
+    #[test]
+    fn details_send_the_channel_by_login_with_its_avatar() -> Result<(), String> {
+        let channel = |avatar_url: &str| -> Result<Channel, String> {
+            Ok(Channel {
+                id: ChannelId::parse("71092938").map_err(|e| format!("{e:?}"))?,
+                login: ChannelLogin::parse("xqc").map_err(|e| format!("{e:?}"))?,
+                display_name: "xQc".to_owned(),
+                avatar_url: avatar_url.to_owned(),
+            })
+        };
+        let details = PlaybackDetails::from(&models::PlaybackDetails {
+            channel: Some(channel("https://example.test/xqc.jpeg")?),
+            game: None,
+            streamed_at: None,
+        });
+        let sent = details.channel.ok_or("no channel")?;
+        assert_eq!(sent.login, "xqc");
+        assert_eq!(sent.display_name, "xQc");
+        assert_eq!(
+            sent.avatar_url.as_deref(),
+            Some("https://example.test/xqc.jpeg")
+        );
+        assert_eq!(PlaybackChannel::from(&channel("")?).avatar_url, None);
+        Ok(())
     }
 }
