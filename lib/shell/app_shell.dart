@@ -15,6 +15,8 @@ import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/player/player_page.dart';
 import 'package:jitter/search/search_holder.dart';
 import 'package:jitter/search/search_page.dart';
+import 'package:jitter/settings/settings_holder.dart';
+import 'package:jitter/settings/settings_page.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:jitter/top/top_page.dart';
@@ -52,6 +54,8 @@ class AppShell extends StatefulWidget {
     required this.chat,
     // Search
     required this.search,
+    // Settings
+    required this.settings,
     super.key,
   });
 
@@ -71,6 +75,8 @@ class AppShell extends StatefulWidget {
   final ChatHolder chat;
   // Search
   final SearchHolder search;
+  // Settings
+  final SettingsHolder settings;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -119,6 +125,12 @@ class _AppShellState extends State<AppShell> {
         onOpenChannel: _openChannel,
         onOpenCategory: _openCategory,
       ),
+    ),
+    (
+      label: 'Settings',
+      icon: Icons.settings_outlined,
+      selectedIcon: Icons.settings,
+      page: SettingsPage(settings: widget.settings),
     ),
   ];
 

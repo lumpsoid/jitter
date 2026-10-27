@@ -10,9 +10,11 @@ import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/search/search_holder.dart';
+import 'package:jitter/settings/settings_holder.dart';
+import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
 
-JitterApp _app(BootHolder boot) => JitterApp(
+JitterApp _app(BootHolder boot, {SettingsHolder? settings}) => JitterApp(
   boot: boot,
   browse: BrowseHolder(),
   categories: CategoriesHolder(),
@@ -23,6 +25,16 @@ JitterApp _app(BootHolder boot) => JitterApp(
   player: MediaKitEngine(),
   chat: ChatHolder(),
   search: SearchHolder(),
+  settings: settings ?? SettingsHolder(),
+);
+
+SettingsUpdateSnapshot _settings(AppTheme theme) => SettingsUpdateSnapshot(
+  theme: theme,
+  animatedEmotes: true,
+  autoLoadChat: true,
+  startQuality: StartQuality.source,
+  startQualities: const [],
+  thirdPartyEmotes: true,
 );
 
 void main() {
@@ -54,6 +66,24 @@ void main() {
     expect(find.text('Categories'), findsOneWidget);
     expect(find.text('Favorites'), findsOneWidget);
     expect(find.text('Search'), findsOneWidget);
+    expect(find.text('Settings'), findsOneWidget);
+  });
+
+  testWidgets('follows the system theme until Rust says otherwise', (
+    tester,
+  ) async {
+    final settings = SettingsHolder();
+    await tester.pumpWidget(_app(BootHolder(), settings: settings));
+
+    ThemeMode mode() =>
+        tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode!;
+    expect(mode(), ThemeMode.system);
+    settings.apply(_settings(AppTheme.dark));
+    await tester.pump();
+    expect(mode(), ThemeMode.dark);
+    settings.apply(_settings(AppTheme.light));
+    await tester.pump();
+    expect(mode(), ThemeMode.light);
   });
 
   testWidgets('wide shell has a side rail', (tester) async {

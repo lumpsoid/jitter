@@ -11,6 +11,7 @@ import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/search/search_holder.dart';
+import 'package:jitter/settings/settings_holder.dart';
 import 'package:jitter/shell/app_shell.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:rinf/rinf.dart';
@@ -37,6 +38,8 @@ class JitterApp extends StatefulWidget {
     required this.chat,
     // Search
     required this.search,
+    // Settings
+    required this.settings,
     super.key,
   });
 
@@ -57,6 +60,8 @@ class JitterApp extends StatefulWidget {
   final ChatHolder chat;
   // Search
   final SearchHolder search;
+  // Settings: the theme here, the rest on the settings page.
+  final SettingsHolder settings;
 
   @override
   State<JitterApp> createState() => _JitterAppState();
@@ -85,14 +90,19 @@ class _JitterAppState extends State<JitterApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Jitter',
-      theme: ThemeData(colorSchemeSeed: Colors.deepPurple),
-      darkTheme: ThemeData(
-        colorSchemeSeed: Colors.deepPurple,
-        brightness: Brightness.dark,
+    return ListenableBuilder(
+      listenable: widget.settings,
+      builder: (context, home) => MaterialApp(
+        title: 'Jitter',
+        theme: ThemeData(colorSchemeSeed: Colors.deepPurple),
+        darkTheme: ThemeData(
+          colorSchemeSeed: Colors.deepPurple,
+          brightness: Brightness.dark,
+        ),
+        themeMode: widget.settings.themeMode,
+        home: home,
       ),
-      home: ListenableBuilder(
+      child: ListenableBuilder(
         listenable: widget.boot,
         builder: (context, _) => switch (widget.boot.status) {
           BootPending() => const Scaffold(
@@ -119,6 +129,8 @@ class _JitterAppState extends State<JitterApp> {
             chat: widget.chat,
             // Search
             search: widget.search,
+            // Settings
+            settings: widget.settings,
           ),
         },
       ),
