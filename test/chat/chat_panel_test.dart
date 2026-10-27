@@ -211,4 +211,90 @@ void main() {
     expect(link?.contains(TextDecoration.underline), isTrue);
     semantics.dispose();
   });
+
+  testWidgets('emotes and their fallback names grow with the text size', (
+    tester,
+  ) async {
+    Future<({double emote, double fallback})> heightsAt(double scale) async {
+      // A fresh tree, so no earlier failure carries over.
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+            child: Scaffold(
+              body: ChatPanel(
+                chat: _chatWith([
+                  ChatFragmentEmote(
+                    // A fresh URL, or the cached failure skips the loading.
+                    emote: EmoteImage(name: 'Kappa', url: 'https://e/$scale'),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      );
+      // Still loading: the image holds its height.
+      final emote = tester.getRect(find.byType(Image)).height;
+      // Test HTTP fails, so the name stands in.
+      await tester.pumpAndSettle();
+      final fallback = tester.getRect(find.text('Kappa')).height;
+      return (emote: emote, fallback: fallback);
+    }
+
+    final normal = await heightsAt(1);
+    final large = await heightsAt(2);
+
+    expect(large.emote, moreOrLessEquals(normal.emote * 2));
+    expect(large.fallback, moreOrLessEquals(normal.fallback * 2));
+  });
+
+  testWidgets('an overlay emote reads as one image, its base', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatPanel(
+            chat: _chatWith(const [
+              ChatFragmentText(text: 'hi '),
+              ChatFragmentOverlay(
+                base: EmoteImage(name: 'Base', url: 'https://e/b.png'),
+                overlays: [
+                  EmoteImage(name: 'Hat', url: 'https://e/h.png'),
+                  EmoteImage(name: 'Rain', url: 'https://e/r.png'),
+                ],
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Base')),
+      matchesSemantics(label: 'Base', isImage: true),
+    );
+    expect(find.bySemanticsLabel(RegExp('Hat|Rain')), findsNothing);
+    semantics.dispose();
+  });
+}
+
+ChatHolder _chatWith(List<ChatFragment> fragments) {
+  return ChatHolder(sendTheme: (_) {})..apply(
+    ChatUpdateSnapshot(
+      messages: [
+        ChatLine(
+          id: 'a',
+          name: 'alice',
+          color: 0xFFFF0000,
+          action: false,
+          deleted: false,
+          fragments: fragments,
+        ),
+      ],
+      status: const ChatStatus(modes: []),
+    ),
+  );
 }

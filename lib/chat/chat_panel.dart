@@ -9,7 +9,8 @@ import 'package:url_launcher/url_launcher_string.dart';
 /// Scrolled further up than this, the list stops following new messages.
 const double _pauseOffset = 24;
 
-/// Emotes are drawn this tall, about two lines of text.
+/// Emotes are laid out this tall, about two lines of text. The message's
+/// text scale then applies on top, as to everything in a [WidgetSpan].
 const double _emoteHeight = 28;
 
 /// The chat, live or a VOD's replay: its status lines, then the messages,
@@ -208,17 +209,11 @@ class _Message extends StatelessWidget {
       ChatFragmentText(:final text) => TextSpan(text: text, style: body),
       ChatFragmentEmote(:final emote) => WidgetSpan(
         alignment: PlaceholderAlignment.middle,
-        child: _Emote(emote: emote),
+        child: _Emote(name: emote.name, layers: [emote]),
       ),
       ChatFragmentOverlay(:final base, :final overlays) => WidgetSpan(
         alignment: PlaceholderAlignment.middle,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            _Emote(emote: base),
-            for (final overlay in overlays) _Emote(emote: overlay),
-          ],
-        ),
+        child: _Emote(name: base.name, layers: [base, ...overlays]),
       ),
       ChatFragmentLink(:final text, :final url) => WidgetSpan(
         alignment: PlaceholderAlignment.baseline,
@@ -261,19 +256,42 @@ class _Link extends StatelessWidget {
   }
 }
 
+/// An emote, or an overlay emote's layers stacked bottom-up: one tooltip
+/// and one image named [name], so a stack reads as one emote, not as each
+/// layer. A layer that fails to load shows its own name instead.
 class _Emote extends StatelessWidget {
-  const new({required this.emote});
+  const new({required this.name, required this.layers});
 
-  final EmoteImage emote;
+  final String name;
+  final List<EmoteImage> layers;
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: emote.name,
-      child: Image.network(
-        emote.url,
-        height: _emoteHeight,
-        errorBuilder: (context, error, stack) => Text(emote.name),
+      message: name,
+      excludeFromSemantics: true,
+      child: Semantics(
+        // Its own node, so it reads where it sits in the message.
+        container: true,
+        image: true,
+        label: name,
+        child: ExcludeSemantics(
+          // The message already scales this whole span with its text; a
+          // fallback name scaled again would grow twice as fast.
+          child: MediaQuery.withNoTextScaling(
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                for (final layer in layers)
+                  Image.network(
+                    layer.url,
+                    height: _emoteHeight,
+                    errorBuilder: (context, error, stack) => Text(layer.name),
+                  ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
