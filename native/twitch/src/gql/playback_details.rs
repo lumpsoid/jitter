@@ -3,9 +3,11 @@
 //! `publishedAt` is when it was made public, which for an upload can be long
 //! after. The channel is the live user itself, or the VOD's `owner`; one Twitch
 //! cannot fully describe (missing a field, or an id or login core rejects) is
-//! left unknown rather than failing the details.
+//! left unknown rather than failing the details. A live stream's viewers and
+//! start are its `viewersCount` and `createdAt`; a stream without a viewer
+//! count has no live details.
 
-use jitter_core::models::{ChannelLogin, PlaybackDetails, VideoId};
+use jitter_core::models::{ChannelLogin, LiveDetails, PlaybackDetails, VideoId};
 use jitter_core::playback::PlaybackTarget;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -18,7 +20,7 @@ pub const LIVE_QUERY: RawQuery = RawQuery {
     operation: "PlaybackDetailsLive",
     document: "query($login: String!) { user(login: $login) { \
                id login displayName profileImageURL(width: 50) \
-               stream { game { id displayName } } } }",
+               stream { viewersCount createdAt game { id displayName } } } }",
 };
 
 pub const VOD_QUERY: RawQuery = RawQuery {
@@ -36,7 +38,8 @@ pub fn vod_variables(id: &VideoId) -> Value {
 }
 
 /// Decodes a live response. An unknown login (`"user": null`) is
-/// `NotFound`; an offline channel (`"stream": null`) has no game.
+/// `NotFound`; an offline channel (`"stream": null`) has no game and no
+/// live details.
 pub fn parse_live(body: &[u8]) -> Result<PlaybackDetails, TwitchError> {
     map_live(super::decode(body, LIVE_QUERY.operation)?)
 }
@@ -49,13 +52,15 @@ pub fn parse_vod(body: &[u8]) -> Result<PlaybackDetails, TwitchError> {
 
 fn map_live(data: LiveData) -> Result<PlaybackDetails, TwitchError> {
     let user = data.user.ok_or(TwitchError::NotFound)?;
+    let stream = user.stream;
+    let live = stream.as_ref().and_then(Stream::live_details);
     Ok(PlaybackDetails {
         channel: user.node.into_channel(),
-        game: user
-            .stream
+        game: stream
             .and_then(|s| s.game)
             .and_then(GameNode::into_game_ref),
         streamed_at: None,
+        live,
     })
 }
 
@@ -65,6 +70,7 @@ fn map_vod(data: VodData) -> Result<PlaybackDetails, TwitchError> {
         channel: video.owner.and_then(UserNode::into_channel),
         game: video.game.and_then(GameNode::into_game_ref),
         streamed_at: video.created_at.as_deref().and_then(parse_timestamp),
+        live: None,
     })
 }
 
@@ -98,8 +104,20 @@ struct User {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Stream {
+    viewers_count: Option<u32>,
+    created_at: Option<String>,
     game: Option<GameNode>,
+}
+
+impl Stream {
+    fn live_details(&self) -> Option<LiveDetails> {
+        Some(LiveDetails {
+            viewers: self.viewers_count?,
+            started_at: self.created_at.as_deref().and_then(parse_timestamp),
+        })
+    }
 }
 
 #[derive(Deserialize)]

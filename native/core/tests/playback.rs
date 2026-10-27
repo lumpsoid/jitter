@@ -140,6 +140,7 @@ fn gta() -> PlaybackDetails {
             name: "Grand Theft Auto V".to_owned(),
         }),
         streamed_at: None,
+        live: None,
     }
 }
 
@@ -213,6 +214,7 @@ fn a_vod_carries_when_it_was_streamed() {
         channel: None,
         game: None,
         streamed_at: Some(Timestamp::from_unix(1_792_875_046)),
+        live: None,
     };
     let mut c = PlaybackController::new();
     c.begin(PlaybackTarget::Vod(vod()));

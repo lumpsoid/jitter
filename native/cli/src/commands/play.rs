@@ -4,7 +4,7 @@ use jitter_core::models::{Playback, Timestamp};
 use jitter_core::playback::{PlaybackController, PlaybackState, PlaybackTarget};
 use jitter_core::resume::ResumeController;
 
-use super::{Result, ctx, login, open_store, twitch, video_id};
+use super::{Result, ctx, login, now, open_store, twitch, video_id};
 
 #[derive(Args)]
 pub struct PlayArgs {
@@ -99,6 +99,13 @@ pub async fn run(args: PlayArgs) -> Result<()> {
     }
     if let Some(streamed) = details.streamed_at.and_then(local_time) {
         println!("Streamed: {}", streamed.format("%Y-%m-%d %H:%M %:z"));
+    }
+    if let Some(live) = &details.live {
+        let uptime = live.uptime(now()?).map_or_else(
+            || "?".to_owned(),
+            |up| format!("{}h{:02}m", up.get() / 3600, up.get() / 60 % 60),
+        );
+        println!("Live: {} viewers, up {uptime}", live.viewers);
     }
     for q in &resolved.qualities {
         let marker = if q.name == *selected { '*' } else { ' ' };

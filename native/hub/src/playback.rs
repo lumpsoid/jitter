@@ -13,11 +13,11 @@ use jitter_twitch::{Twitch, TwitchError};
 use rinf::{RustSignal, debug_print};
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::format::{streamed_label, twitch_error};
+use crate::format::{streamed_label, twitch_error, uptime_label, viewers_label};
 use crate::run::Fetched;
 use crate::signals::{
-    LeavePlayer, PlaybackChannel, PlaybackDetails, PlaybackTarget, PlaybackUpdate, PlayerCommand,
-    PlayerPosition, QualityOption, SelectQuality,
+    LeavePlayer, PlaybackChannel, PlaybackDetails, PlaybackLive, PlaybackTarget, PlaybackUpdate,
+    PlayerCommand, PlayerPosition, QualityOption, SelectQuality,
 };
 
 /// `Play`: starts resolving `target` through twitch, and loading what it
@@ -38,7 +38,7 @@ pub fn play(
         }
     };
     playback.begin(target.clone());
-    PlaybackUpdate::from(playback.state()).send_signal_to_dart();
+    send_state(playback);
     let (twitch, fetch, playing) = (twitch.clone(), fetch.clone(), target.clone());
     tokio::spawn(async move {
         let resolve = async {
@@ -76,7 +76,7 @@ pub fn resolved(
     }
     match playback.open(resume) {
         Ok(open) => {
-            PlaybackUpdate::from(playback.state()).send_signal_to_dart();
+            send_state(playback);
             send_open(open);
         }
         Err(e) => PlaybackUpdate::Failed {
@@ -90,7 +90,7 @@ pub fn resolved(
 /// name changes nothing.
 pub fn select_quality(playback: &mut PlaybackController, signal: SelectQuality) {
     let open = playback.switch_quality(&signal.name, Seconds::new(signal.position_s));
-    PlaybackUpdate::from(playback.state()).send_signal_to_dart();
+    send_state(playback);
     send_open(open);
 }
 
@@ -143,10 +143,16 @@ pub fn leave(
     ));
     let left = playback.leave(&target);
     if left {
-        PlaybackUpdate::from(playback.state()).send_signal_to_dart();
+        send_state(playback);
         PlayerCommand::Stop.send_signal_to_dart();
     }
     left
+}
+
+/// Sends the page's state, a live stream's uptime as of now. A clock that
+/// cannot be read is logged, and the state goes out without the uptime.
+fn send_state(playback: &PlaybackController) {
+    update(playback.state(), report(now())).send_signal_to_dart();
 }
 
 fn send_open(open: Option<Open>) {
@@ -204,36 +210,38 @@ impl TryFrom<PlaybackTarget> for playback::PlaybackTarget {
     }
 }
 
-impl From<&PlaybackState> for PlaybackUpdate {
-    fn from(state: &PlaybackState) -> Self {
-        match state {
-            PlaybackState::Idle => Self::Idle,
-            PlaybackState::Resolving { .. } => Self::Resolving,
-            PlaybackState::Ready {
-                target,
-                playback,
-                selected,
-                details,
-            } => Self::Ready {
-                qualities: playback.qualities.iter().map(QualityOption::from).collect(),
-                selected: selected.clone(),
-                live: matches!(target, playback::PlaybackTarget::Live(_)),
-                details: PlaybackDetails::from(details.as_ref()),
-            },
-            PlaybackState::Failed { message } => Self::Failed {
-                message: message.clone(),
-            },
-        }
+/// The page's state as sent, a live stream's uptime as of `now` (none
+/// without a clock).
+fn update(state: &PlaybackState, now: Option<Timestamp>) -> PlaybackUpdate {
+    match state {
+        PlaybackState::Idle => PlaybackUpdate::Idle,
+        PlaybackState::Resolving { .. } => PlaybackUpdate::Resolving,
+        PlaybackState::Ready {
+            target,
+            playback,
+            selected,
+            details,
+        } => PlaybackUpdate::Ready {
+            qualities: playback.qualities.iter().map(QualityOption::from).collect(),
+            selected: selected.clone(),
+            live: matches!(target, playback::PlaybackTarget::Live(_)),
+            details: playback_details(details, now),
+        },
+        PlaybackState::Failed { message } => PlaybackUpdate::Failed {
+            message: message.clone(),
+        },
     }
 }
 
-impl From<&models::PlaybackDetails> for PlaybackDetails {
-    fn from(details: &models::PlaybackDetails) -> Self {
-        Self {
-            channel: details.channel.as_ref().map(PlaybackChannel::from),
-            game: details.game.as_ref().map(|game| game.name.clone()),
-            streamed: details.streamed_at.and_then(streamed_label),
-        }
+fn playback_details(details: &models::PlaybackDetails, now: Option<Timestamp>) -> PlaybackDetails {
+    PlaybackDetails {
+        channel: details.channel.as_ref().map(PlaybackChannel::from),
+        game: details.game.as_ref().map(|game| game.name.clone()),
+        streamed: details.streamed_at.and_then(streamed_label),
+        live: details.live.map(|live| PlaybackLive {
+            viewers: viewers_label(live.viewers),
+            uptime: now.and_then(|now| live.uptime(now)).map(uptime_label),
+        }),
     }
 }
 
@@ -279,14 +287,18 @@ mod tests {
     fn details_send_the_game_name_and_the_streamed_day() -> Result<(), String> {
         let id = CategoryId::parse("509658").map_err(|e| format!("{e:?}"))?;
         let at = Timestamp::from_unix(1_792_875_000);
-        let details = PlaybackDetails::from(&models::PlaybackDetails {
-            channel: None,
-            game: Some(GameRef {
-                id,
-                name: "Just Chatting".to_owned(),
-            }),
-            streamed_at: Some(at),
-        });
+        let details = playback_details(
+            &models::PlaybackDetails {
+                channel: None,
+                game: Some(GameRef {
+                    id,
+                    name: "Just Chatting".to_owned(),
+                }),
+                streamed_at: Some(at),
+                live: None,
+            },
+            None,
+        );
         assert_eq!(details.game.as_deref(), Some("Just Chatting"));
         assert_eq!(details.streamed, streamed_label(at));
         assert!(details.streamed.is_some());
@@ -295,11 +307,15 @@ mod tests {
 
     #[test]
     fn details_without_a_date_send_none() {
-        let details = PlaybackDetails::from(&models::PlaybackDetails {
-            channel: None,
-            game: None,
-            streamed_at: None,
-        });
+        let details = playback_details(
+            &models::PlaybackDetails {
+                channel: None,
+                game: None,
+                streamed_at: None,
+                live: None,
+            },
+            None,
+        );
         assert!(details.channel.is_none());
         assert_eq!(details.game, None);
         assert_eq!(details.streamed, None);
@@ -315,11 +331,15 @@ mod tests {
                 avatar_url: avatar_url.to_owned(),
             })
         };
-        let details = PlaybackDetails::from(&models::PlaybackDetails {
-            channel: Some(channel("https://example.test/xqc.jpeg")?),
-            game: None,
-            streamed_at: None,
-        });
+        let details = playback_details(
+            &models::PlaybackDetails {
+                channel: Some(channel("https://example.test/xqc.jpeg")?),
+                game: None,
+                streamed_at: None,
+                live: None,
+            },
+            None,
+        );
         let sent = details.channel.ok_or("no channel")?;
         assert_eq!(sent.login, "xqc");
         assert_eq!(sent.display_name, "xQc");
@@ -329,5 +349,45 @@ mod tests {
         );
         assert_eq!(PlaybackChannel::from(&channel("")?).avatar_url, None);
         Ok(())
+    }
+
+    fn live(started_at: Option<i64>) -> models::PlaybackDetails {
+        models::PlaybackDetails {
+            live: Some(models::LiveDetails {
+                viewers: 1_234,
+                started_at: started_at.map(Timestamp::from_unix),
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_live_stream_sends_its_viewers_and_uptime_as_of_now() -> Result<(), String> {
+        let now = Some(Timestamp::from_unix(1_000 + 8_100));
+        let sent = playback_details(&live(Some(1_000)), now)
+            .live
+            .ok_or("no live details")?;
+        assert_eq!(sent.viewers, "1.2K viewers");
+        assert_eq!(sent.uptime.as_deref(), Some("2h 15m"));
+        Ok(())
+    }
+
+    #[test]
+    fn no_start_time_or_no_clock_means_no_uptime() -> Result<(), String> {
+        let now = Some(Timestamp::from_unix(100));
+        let unstarted = playback_details(&live(None), now).live;
+        assert_eq!(unstarted.ok_or("no live details")?.uptime, None);
+        let clockless = playback_details(&live(Some(0)), None).live;
+        let clockless = clockless.ok_or("no live details")?;
+        assert_eq!(clockless.viewers, "1.2K viewers");
+        assert_eq!(clockless.uptime, None);
+        Ok(())
+    }
+
+    #[test]
+    fn a_vod_sends_no_live_details() {
+        let now = Some(Timestamp::from_unix(100));
+        let details = playback_details(&models::PlaybackDetails::default(), now);
+        assert!(details.live.is_none());
     }
 }

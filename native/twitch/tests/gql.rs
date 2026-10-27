@@ -36,8 +36,8 @@ const CHANNEL_UNKNOWN: &[u8] = include_bytes!("fixtures/gql_channel_by_login_unk
 // Hand-written after the raw `PlaybackDetails*` documents' live answers
 // (checked with `jitter play` on 2026-10-27; VOD 2909822254 is in Just
 // Chatting and was streamed 2026-10-24 20:50 UTC, seconds not shown; its
-// owner is xQc), with `users_stream`'s recorded game and user: not
-// recorded.
+// owner is xQc), with `users_stream`'s recorded game, user, viewers and
+// start: not recorded.
 const DETAILS_LIVE: &[u8] = include_bytes!("fixtures/gql_playback_details_live.json");
 const DETAILS_VOD: &[u8] = include_bytes!("fixtures/gql_playback_details_vod.json");
 const BOGUS_HASH: &[u8] = include_bytes!("fixtures/gql_persisted_bogus_hash.json");
@@ -323,6 +323,30 @@ fn offline_channel_and_gameless_vod_have_no_game() {
     assert_eq!(ok(playback_details::parse_live(offline)).game, None);
     let no_game = br#"{"data":{"video":{"game":null}}}"#;
     assert_eq!(ok(playback_details::parse_vod(no_game)).game, None);
+}
+
+#[test]
+fn live_details_carry_the_viewers_and_when_it_went_live() {
+    let live = ok(ok(playback_details::parse_live(DETAILS_LIVE))
+        .live
+        .ok_or("no live details"));
+    assert_eq!(live.viewers, 22_239);
+    // 2026-10-26T20:59:27Z
+    assert_eq!(live.started_at, Some(Timestamp::from_unix(1_793_048_367)));
+}
+
+#[test]
+fn only_a_live_stream_with_a_viewer_count_has_live_details() {
+    let offline = br#"{"data":{"user":{"stream":null}}}"#;
+    assert_eq!(ok(playback_details::parse_live(offline)).live, None);
+    let uncounted = br#"{"data":{"user":{"stream":{"createdAt":"2026-10-26T20:59:27Z"}}}}"#;
+    assert_eq!(ok(playback_details::parse_live(uncounted)).live, None);
+    let undated = br#"{"data":{"user":{"stream":{"viewersCount":5,"createdAt":"soon"}}}}"#;
+    let live = ok(ok(playback_details::parse_live(undated))
+        .live
+        .ok_or("no live details"));
+    assert_eq!((live.viewers, live.started_at), (5, None));
+    assert_eq!(ok(playback_details::parse_vod(DETAILS_VOD)).live, None);
 }
 
 #[test]

@@ -1,7 +1,7 @@
 use jitter_core::models::{
     Category, CategoryId, CategoryIdError, Channel, ChannelId, ChannelIdError, ChannelLogin,
-    ChannelLoginError, Playback, QualityKind, Resolution, Seconds, Stream, Timestamp, Variant,
-    VideoId, VideoIdError,
+    ChannelLoginError, LiveDetails, Playback, QualityKind, Resolution, Seconds, Stream, Timestamp,
+    Variant, VideoId, VideoIdError,
 };
 
 fn login(s: &str) -> ChannelLogin {
@@ -204,6 +204,21 @@ fn an_uptime_beyond_u32_saturates() {
         started(Some(i64::MIN)).uptime(Timestamp::from_unix(i64::MAX)),
         Some(Seconds::new(u32::MAX))
     );
+}
+
+#[test]
+fn a_live_streams_uptime_is_the_time_since_it_went_live() {
+    let live = |at: Option<i64>| LiveDetails {
+        viewers: 1_234,
+        started_at: at.map(Timestamp::from_unix),
+    };
+    let now = Timestamp::from_unix(1_000_000);
+    assert_eq!(
+        live(Some(1_000_000 - 8_100)).uptime(now),
+        Some(Seconds::new(8_100))
+    );
+    assert_eq!(live(Some(1_000_100)).uptime(now), Some(Seconds::ZERO));
+    assert_eq!(live(None).uptime(now), None);
 }
 
 #[test]

@@ -28,8 +28,6 @@ impl Stream {
     /// time. A start after `now` (clock skew) reads as zero, and an uptime
     /// beyond `u32` seconds saturates.
     pub fn uptime(&self, now: Timestamp) -> Option<Seconds> {
-        let started = self.started_at?;
-        let elapsed = now.unix().saturating_sub(started.unix()).max(0);
-        Some(Seconds::new(u32::try_from(elapsed).unwrap_or(u32::MAX)))
+        Some(now.since(self.started_at?))
     }
 }

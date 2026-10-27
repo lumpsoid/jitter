@@ -43,6 +43,42 @@ void main() {
     expect(find.text('Just Chatting · Oct 24'), findsOneWidget);
   });
 
+  testWidgets('marks a live stream and shows its viewers, uptime and game', (
+    tester,
+  ) async {
+    await pumpTitle(
+      tester,
+      const PlaybackDetails(
+        game: 'Just Chatting',
+        live: PlaybackLive(viewers: '1.2K viewers', uptime: '2h 15m'),
+      ),
+    );
+
+    expect(find.text('LIVE'), findsOneWidget);
+    expect(find.text('1.2K viewers · 2h 15m · Just Chatting'), findsOneWidget);
+  });
+
+  testWidgets('a live stream without an uptime shows its viewers', (
+    tester,
+  ) async {
+    await pumpTitle(
+      tester,
+      const PlaybackDetails(live: PlaybackLive(viewers: '950 viewers')),
+    );
+
+    expect(find.text('LIVE'), findsOneWidget);
+    expect(find.text('950 viewers'), findsOneWidget);
+  });
+
+  testWidgets('a VOD has no live badge', (tester) async {
+    await pumpTitle(
+      tester,
+      const PlaybackDetails(game: 'Just Chatting', streamed: 'Oct 24'),
+    );
+
+    expect(find.text('LIVE'), findsNothing);
+  });
+
   testWidgets('shows the streamed day alone without a game', (tester) async {
     await pumpTitle(tester, const PlaybackDetails(streamed: 'Dec 31, 2025'));
 

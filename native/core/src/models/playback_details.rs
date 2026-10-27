@@ -1,4 +1,4 @@
-use super::{Channel, GameRef, Timestamp};
+use super::{Channel, GameRef, LiveDetails, Timestamp};
 
 /// What is playing, beside how to play it: what the player page shows
 /// about the stream or VOD. Empty when Twitch could not tell.
@@ -13,4 +13,7 @@ pub struct PlaybackDetails {
     /// When a VOD was streamed, i.e. its recording began. `None` for a
     /// live stream, or when it is not known.
     pub streamed_at: Option<Timestamp>,
+    /// A live stream's viewers and start. `None` for a VOD, or when it is
+    /// not known.
+    pub live: Option<LiveDetails>,
 }

@@ -71,6 +71,19 @@ pub struct PlaybackDetails {
     /// The day a VOD was streamed, ready to show (`Oct 24`); `None` for a
     /// live stream or when it is not known.
     pub streamed: Option<String>,
+    /// A live stream's figures; `None` for a VOD or when they are not
+    /// known.
+    pub live: Option<PlaybackLive>,
+}
+
+/// What a live stream shows beside its video, ready to show.
+#[derive(Serialize, SignalPiece)]
+pub struct PlaybackLive {
+    /// `1.2K viewers`.
+    pub viewers: String,
+    /// How long it has been live as of when the state was sent (`2h 15m`);
+    /// `None` when its start or the clock is not known.
+    pub uptime: Option<String>,
 }
 
 /// The channel a player page shows. Tapping it opens the channel by

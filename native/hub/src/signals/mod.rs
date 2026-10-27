@@ -43,8 +43,8 @@ pub use favorites::{
 };
 // Playback
 pub use playback::{
-    LeavePlayer, Play, PlaybackChannel, PlaybackDetails, PlaybackTarget, PlaybackUpdate,
-    PlayerCommand, PlayerPosition, QualityOption, SelectQuality,
+    LeavePlayer, Play, PlaybackChannel, PlaybackDetails, PlaybackLive, PlaybackTarget,
+    PlaybackUpdate, PlayerCommand, PlayerPosition, QualityOption, SelectQuality,
 };
 // Channel
 pub use channel::{
