@@ -13,7 +13,7 @@ use jitter_twitch::{Twitch, TwitchError};
 use rinf::RustSignal;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::format::viewers_label;
+use crate::format::{twitch_error, viewers_label};
 use crate::run::Fetched;
 use crate::signals::{FavoriteRow, FavoriteStatus, FavoritesUpdate};
 
@@ -90,7 +90,9 @@ pub fn on_fetched(favorites: &mut FavoritesController, fetched: FavoritesFetched
         FavoritesFetched::Live(Ok(streams)) => {
             report(favorites.apply_live(streams), "Couldn't rename a favorite");
         }
-        FavoritesFetched::Live(Err(e)) => send_failed(format!("Couldn't check who is live: {e}")),
+        FavoritesFetched::Live(Err(e)) => {
+            send_failed(format!("Couldn't check who is live: {}", twitch_error(&e)));
+        }
     }
     send_snapshot(favorites);
 }
@@ -99,7 +101,7 @@ fn add_found(
     favorites: &mut FavoritesController,
     found: Result<Channel, TwitchError>,
 ) -> Result<(), String> {
-    let channel = found.map_err(|e| e.to_string())?;
+    let channel = found.map_err(|e| twitch_error(&e))?;
     favorites.add(channel, now()?).map_err(|e| e.to_string())
 }
 

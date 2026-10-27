@@ -11,7 +11,7 @@ use jitter_twitch::Twitch;
 use rinf::RustSignal;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::format::viewers_label;
+use crate::format::{twitch_error, viewers_label};
 use crate::run::Fetched;
 use crate::signals::{BrowseMore, BrowseState, BrowseUpdate, StreamCard};
 
@@ -61,7 +61,7 @@ fn spawn_fetch(request: PageRequest, twitch: &Twitch, fetch: &UnboundedSender<Fe
         let result = twitch
             .top_streams(request.cursor.as_ref())
             .await
-            .map_err(|e| e.to_string());
+            .map_err(|e| twitch_error(&e));
         let _ = fetch.send(Fetched::TopStreams { request, result });
     });
 }

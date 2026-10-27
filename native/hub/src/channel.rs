@@ -17,7 +17,7 @@ use jitter_twitch::{Twitch, TwitchError};
 use rinf::RustSignal;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::format::{duration_label, viewers_label};
+use crate::format::{duration_label, twitch_error, viewers_label};
 use crate::run::Fetched;
 use crate::signals::{
     ChannelLive, ChannelUpdate, VodKind, VodTile, VodsMore, VodsState, VodsUpdate,
@@ -148,7 +148,7 @@ pub fn on_fetched(
         }
         ChannelFetched::Live { id, result } => {
             page.header
-                .apply_live(&id, result.map_err(|e| e.to_string()));
+                .apply_live(&id, result.map_err(|e| twitch_error(&e)));
             send_header(&page.header);
         }
         ChannelFetched::Vods { request, result } => {
@@ -164,7 +164,7 @@ pub fn on_fetched(
 fn lookup_error(error: TwitchError) -> ChannelLookupError {
     match error {
         TwitchError::NotFound => ChannelLookupError::NotFound,
-        other => ChannelLookupError::Failed(other.to_string()),
+        other => ChannelLookupError::Failed(twitch_error(&other)),
     }
 }
 
@@ -197,7 +197,7 @@ fn spawn_vods(
         let result = twitch
             .channel_videos(&channel, kind, request.cursor.as_ref())
             .await
-            .map_err(|e| e.to_string());
+            .map_err(|e| twitch_error(&e));
         let _ = fetch.send(Fetched::Channel(ChannelFetched::Vods { request, result }));
     });
 }
@@ -471,7 +471,8 @@ mod tests {
         let update = ChannelUpdate::from(header.state());
         assert!(matches!(
             update,
-            ChannelUpdate::Failed { message, .. } if message == "HTTP status 500"
+            ChannelUpdate::Failed { message, .. }
+                if message == "Twitch answered with an error (HTTP 500). Try again later."
         ));
         Ok(())
     }

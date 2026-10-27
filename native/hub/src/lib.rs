@@ -21,6 +21,7 @@ use jitter_store::SqliteStore;
 use jitter_twitch::Twitch;
 use rinf::{DartSignal, RustSignal, dart_shutdown, write_interface};
 
+use crate::format::twitch_error;
 use crate::run::Controllers;
 use crate::signals::{Boot, BootFailed, Booted};
 
@@ -55,7 +56,7 @@ async fn boot_then_run() {
 fn boot_at(dir: &str) -> Result<(Controllers, Twitch), String> {
     let open = || Controllers::boot(&SqliteStore::open(db_path(dir)?)?);
     let controllers = open().map_err(|e: StoreError| e.to_string())?;
-    let twitch = Twitch::new().map_err(|e| e.to_string())?;
+    let twitch = Twitch::new().map_err(|e| twitch_error(&e))?;
     Ok((controllers, twitch))
 }
 

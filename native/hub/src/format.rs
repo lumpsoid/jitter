@@ -1,7 +1,40 @@
-//! Labels the GUI shows as sent, formatted once here so every page that
-//! shows the same value shows it the same way.
+//! Labels and error messages the GUI shows as sent, formatted once here so
+//! every page that shows the same value shows it the same way.
 
 use jitter_core::models::Seconds;
+use jitter_twitch::TwitchError;
+
+/// What the user reads when a Twitch call failed: one sentence per
+/// [`TwitchError`] variant, in the viewer's terms. twitch's own `Display`
+/// stays the diagnostic text (the CLI, logs); its detail (a decode error,
+/// GQL's messages) means nothing to a viewer.
+pub fn twitch_error(error: &TwitchError) -> String {
+    match error {
+        TwitchError::Network(_) => "Couldn't reach Twitch. Check your connection.".to_owned(),
+        TwitchError::Http { status } => {
+            format!("Twitch answered with an error (HTTP {status}). Try again later.")
+        }
+        TwitchError::Decode(_) => {
+            "Twitch sent a response jitter doesn't understand. jitter may need an update."
+                .to_owned()
+        }
+        TwitchError::Gql(_) => "Twitch reported an error. Try again later.".to_owned(),
+        TwitchError::IntegrityRequired => {
+            "Twitch asked for an integrity check, which jitter can't pass without signing in."
+                .to_owned()
+        }
+        TwitchError::QueryRetired { operation } => {
+            format!(
+                "Twitch no longer answers jitter's {operation} request. jitter needs an update."
+            )
+        }
+        TwitchError::PlaybackForbidden => "Twitch does not allow playing this without signing in \
+             (subscriber-only or region-blocked)."
+            .to_owned(),
+        TwitchError::Offline => "This channel is offline.".to_owned(),
+        TwitchError::NotFound => "No such channel or video.".to_owned(),
+    }
+}
 
 /// A live viewer count, compact like Twitch's own: `1 viewer`,
 /// `950 viewers`, `12.3K viewers`, `1.2M viewers`. Truncated, never
@@ -38,8 +71,78 @@ fn tenths(tenths: u32, suffix: &str) -> String {
 #[cfg(test)]
 mod tests {
     use jitter_core::models::Seconds;
+    use jitter_twitch::TwitchError;
 
-    use super::{duration_label, viewers_label};
+    use super::{duration_label, twitch_error, viewers_label};
+
+    fn reads(error: TwitchError, message: &str) {
+        assert_eq!(twitch_error(&error), message, "{error:?}");
+    }
+
+    #[test]
+    fn a_network_failure_points_at_the_connection() {
+        reads(
+            TwitchError::Network("dns error: no such host".to_owned()),
+            "Couldn't reach Twitch. Check your connection.",
+        );
+    }
+
+    #[test]
+    fn an_http_failure_names_the_status() {
+        reads(
+            TwitchError::Http { status: 503 },
+            "Twitch answered with an error (HTTP 503). Try again later.",
+        );
+    }
+
+    #[test]
+    fn a_decode_failure_hides_the_parser_detail() {
+        reads(
+            TwitchError::Decode("missing field `data`".to_owned()),
+            "Twitch sent a response jitter doesn't understand. jitter may need an update.",
+        );
+    }
+
+    #[test]
+    fn gql_errors_hide_twitchs_messages() {
+        reads(
+            TwitchError::Gql(vec!["service timeout".to_owned()]),
+            "Twitch reported an error. Try again later.",
+        );
+    }
+
+    #[test]
+    fn an_integrity_check_says_why_it_cannot_pass() {
+        reads(
+            TwitchError::IntegrityRequired,
+            "Twitch asked for an integrity check, which jitter can't pass without signing in.",
+        );
+    }
+
+    #[test]
+    fn a_retired_query_names_the_operation() {
+        reads(
+            TwitchError::QueryRetired {
+                operation: "ChannelByLogin",
+            },
+            "Twitch no longer answers jitter's ChannelByLogin request. jitter needs an update.",
+        );
+    }
+
+    #[test]
+    fn forbidden_playback_names_the_likely_causes() {
+        reads(
+            TwitchError::PlaybackForbidden,
+            "Twitch does not allow playing this without signing in \
+             (subscriber-only or region-blocked).",
+        );
+    }
+
+    #[test]
+    fn offline_and_not_found_are_plain() {
+        reads(TwitchError::Offline, "This channel is offline.");
+        reads(TwitchError::NotFound, "No such channel or video.");
+    }
 
     #[test]
     fn durations_show_hours_only_from_an_hour() {

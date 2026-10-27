@@ -13,6 +13,7 @@ use jitter_twitch::{Twitch, TwitchError};
 use rinf::{RustSignal, debug_print};
 use tokio::sync::mpsc::UnboundedSender;
 
+use crate::format::twitch_error;
 use crate::run::Fetched;
 use crate::signals::{
     LeavePlayer, PlaybackTarget, PlaybackUpdate, PlayerCommand, PlayerPosition, QualityOption,
@@ -57,7 +58,7 @@ pub fn resolved(
     target: playback::PlaybackTarget,
     result: Result<Playback, TwitchError>,
 ) {
-    if !playback.apply(target, result.map_err(|e| failure_message(&e))) {
+    if !playback.apply(target, result.map_err(|e| twitch_error(&e))) {
         return;
     }
     match playback.open(resume) {
@@ -162,19 +163,6 @@ fn now() -> Result<Timestamp, String> {
     let seconds =
         i64::try_from(since_epoch.as_secs()).map_err(|e| format!("reading the clock: {e}"))?;
     Ok(Timestamp::from_unix(seconds))
-}
-
-/// The failures a viewer runs into get their own words; the rest keep
-/// twitch's.
-fn failure_message(error: &TwitchError) -> String {
-    match error {
-        TwitchError::Offline => "This channel is offline.".to_owned(),
-        TwitchError::NotFound => "No such channel or video.".to_owned(),
-        TwitchError::PlaybackForbidden => "Twitch does not allow playing this without signing in \
-             (subscriber-only or region-blocked)."
-            .to_owned(),
-        other => format!("Could not load the stream: {other}"),
-    }
 }
 
 impl TryFrom<PlaybackTarget> for playback::PlaybackTarget {
