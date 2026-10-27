@@ -1,7 +1,7 @@
 use jitter_core::chat::{ChatController, Connection, MESSAGE_LIMIT};
 use jitter_core::models::{
-    ChannelId, ChatChange, ChatEvent, ChatMessage, Chatter, Emote, EmoteProvider, EmoteScope,
-    Fragment, RoomStateUpdate, Seconds, Timestamp,
+    ChannelId, ChatChange, ChatEntry, ChatEvent, ChatMessage, Chatter, Emote, EmoteProvider,
+    EmoteScope, Fragment, RoomStateUpdate, Seconds, Timestamp, UserNotice,
 };
 
 fn uid(raw: &str) -> ChannelId {
@@ -38,8 +38,18 @@ fn emote(name: &str) -> Emote {
     }
 }
 
+fn notice(system: &str, message: Option<ChatMessage>) -> UserNotice {
+    UserNotice {
+        system: system.to_owned(),
+        message,
+    }
+}
+
 fn deleted(chat: &ChatController) -> Vec<(String, bool)> {
-    chat.messages().map(|m| (m.id.clone(), m.deleted)).collect()
+    chat.entries()
+        .filter_map(ChatEntry::message)
+        .map(|m| (m.id.clone(), m.deleted))
+        .collect()
 }
 
 #[test]
@@ -49,19 +59,29 @@ fn the_601st_message_evicts_the_oldest() {
         let m = message(&i.to_string(), "1", "hi");
         assert_eq!(
             chat.apply(ChatEvent::Message(m.clone())),
-            vec![ChatChange::Appended { message: m }]
+            vec![ChatChange::Appended {
+                entry: ChatEntry::Message(m)
+            }]
         );
     }
     let last = message("last", "1", "hi");
     assert_eq!(
         chat.apply(ChatEvent::Message(last.clone())),
         vec![
-            ChatChange::Appended { message: last },
+            ChatChange::Appended {
+                entry: ChatEntry::Message(last)
+            },
             ChatChange::Evicted { count: 1 }
         ]
     );
-    assert_eq!(chat.messages().count(), MESSAGE_LIMIT);
-    assert_eq!(chat.messages().next().map(|m| m.id.as_str()), Some("1"));
+    assert_eq!(chat.entries().count(), MESSAGE_LIMIT);
+    assert_eq!(
+        chat.entries()
+            .next()
+            .and_then(ChatEntry::message)
+            .map(|m| m.id.as_str()),
+        Some("1")
+    );
 }
 
 #[test]
@@ -176,7 +196,7 @@ fn clear_all_empties_the_buffer() {
     let mut chat = ChatController::new();
     chat.apply(ChatEvent::Message(message("a", "1", "x")));
     chat.apply(ChatEvent::ClearAll);
-    assert_eq!(chat.messages().count(), 0);
+    assert_eq!(chat.entries().count(), 0);
 }
 
 #[test]
@@ -233,4 +253,87 @@ fn a_failed_provider_is_visible_until_it_loads() {
     assert_eq!(chat.failed_providers(), &[EmoteProvider::Bttv]);
     chat.set_emotes(EmoteScope::Global, EmoteProvider::Bttv, vec![]);
     assert!(chat.failed_providers().is_empty());
+}
+
+#[test]
+fn user_notices_are_entries_in_arrival_order() {
+    let mut chat = ChatController::new();
+    let streak = notice("x watched 3 consecutive streams!", None);
+    chat.apply(ChatEvent::Message(message("a", "1", "hi")));
+    assert_eq!(
+        chat.apply(ChatEvent::UserNotice(streak.clone())),
+        vec![ChatChange::Appended {
+            entry: ChatEntry::UserNotice(streak.clone())
+        }]
+    );
+    chat.apply(ChatEvent::Message(message("b", "1", "yo")));
+    assert_eq!(
+        chat.entries().cloned().collect::<Vec<_>>(),
+        vec![
+            ChatEntry::Message(message("a", "1", "hi")),
+            ChatEntry::UserNotice(streak),
+            ChatEntry::Message(message("b", "1", "yo")),
+        ]
+    );
+    // A user notice is not the room's notice.
+    assert_eq!(chat.notice(), None);
+}
+
+#[test]
+fn user_notices_count_towards_the_limit_and_are_evicted() {
+    let mut chat = ChatController::new();
+    chat.apply(ChatEvent::UserNotice(notice("raid", None)));
+    for i in 1..MESSAGE_LIMIT {
+        chat.apply(ChatEvent::Message(message(&i.to_string(), "1", "hi")));
+    }
+    assert_eq!(chat.entries().count(), MESSAGE_LIMIT);
+    let changes = chat.apply(ChatEvent::Message(message("last", "1", "hi")));
+    assert_eq!(changes.last(), Some(&ChatChange::Evicted { count: 1 }));
+    assert!(chat.entries().all(|e| matches!(e, ChatEntry::Message(_))));
+}
+
+#[test]
+fn clearing_a_notices_message_keeps_its_system_line() {
+    let mut chat = ChatController::new();
+    chat.apply(ChatEvent::UserNotice(notice(
+        "x subscribed for 11 months!",
+        Some(message("a", "1", "hype")),
+    )));
+    chat.apply(ChatEvent::UserNotice(notice("y subscribed.", None)));
+    assert_eq!(
+        chat.apply(ChatEvent::ClearMessage { id: "a".into() }),
+        vec![ChatChange::Marked {
+            ids: vec!["a".to_owned()]
+        }]
+    );
+    let Some(ChatEntry::UserNotice(first)) = chat.entries().next() else {
+        unreachable!("the notice is first");
+    };
+    assert_eq!(first.system, "x subscribed for 11 months!");
+    assert_eq!(first.message.as_ref().map(|m| m.deleted), Some(true));
+    assert_eq!(chat.entries().count(), 2);
+}
+
+#[test]
+fn clear_user_marks_the_message_a_notice_carries() {
+    let mut chat = ChatController::new();
+    chat.apply(ChatEvent::UserNotice(notice(
+        "x resubscribed",
+        Some(message("a", "1", "hype")),
+    )));
+    chat.apply(ChatEvent::Message(message("b", "2", "y")));
+    assert_eq!(
+        chat.apply(ChatEvent::ClearUser { user_id: uid("1") }),
+        vec![ChatChange::Marked {
+            ids: vec!["a".to_owned()]
+        }]
+    );
+}
+
+#[test]
+fn clear_all_removes_user_notices_too() {
+    let mut chat = ChatController::new();
+    chat.apply(ChatEvent::UserNotice(notice("raid", None)));
+    chat.apply(ChatEvent::ClearAll);
+    assert_eq!(chat.entries().count(), 0);
 }

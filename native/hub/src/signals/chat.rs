@@ -25,7 +25,7 @@ pub struct ShowChat;
 
 /// The chat panel: a live channel's chat, or a VOD's replayed in step
 /// with the player. One type, so a snapshot and the diffs after it arrive
-/// in order. Messages are oldest first.
+/// in order. Messages (user notices among them) are oldest first.
 #[derive(Serialize, RustSignal)]
 pub enum ChatUpdate {
     /// Nothing plays: there is no chat to show.
@@ -35,11 +35,11 @@ pub enum ChatUpdate {
     Hidden,
     /// Replaces the messages and the status.
     Snapshot {
-        messages: Vec<ChatLine>,
+        messages: Vec<ChatItem>,
         status: ChatStatus,
     },
     /// New messages at the newest end, gathered over a short window.
-    Appended { messages: Vec<ChatLine> },
+    Appended { messages: Vec<ChatItem> },
     /// Drop the `count` oldest messages.
     Evicted { count: u32 },
     /// These messages were removed by a moderator; keep them, shown as
@@ -49,6 +49,19 @@ pub enum ChatUpdate {
     Cleared,
     /// Replaces the status; the messages stay.
     Status { status: ChatStatus },
+}
+
+/// One entry of the chat, as the panel draws it.
+#[derive(Serialize, SignalPiece)]
+pub enum ChatItem {
+    /// What a user wrote.
+    Message { line: ChatLine },
+    /// Twitch's own line about a sub, a raid, a watch streak and the like,
+    /// drawn as such, then what the user wrote with it, if anything.
+    Notice {
+        system: String,
+        line: Option<ChatLine>,
+    },
 }
 
 /// One chat message as the panel draws it.

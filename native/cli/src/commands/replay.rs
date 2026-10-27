@@ -4,7 +4,7 @@ use jitter_core::playback::PlaybackTarget;
 use jitter_twitch::Twitch;
 use jitter_twitch::emotes::ProviderEmotes;
 
-use super::chat::render;
+use super::chat::render_entry;
 use super::{Result, settings, twitch, video_id};
 
 /// Replays a VOD's chat as a player would see it from `at` for `span`
@@ -49,8 +49,12 @@ async fn fetch(twitch: &Twitch, replay: &mut ChatReplay, request: ReplayRequest)
 fn print_changes(replay: &ChatReplay, position: Seconds, step: &ReplayStep) {
     for change in &step.changes {
         match change {
-            ChatChange::Appended { message } => {
-                println!("[{}] {}", clock(position), render(replay.chat(), message));
+            ChatChange::Appended { entry } => {
+                println!(
+                    "[{}] {}",
+                    clock(position),
+                    render_entry(replay.chat(), entry)
+                );
             }
             ChatChange::Cleared => println!("-- chat cleared (seek)"),
             _ => {}

@@ -3,7 +3,10 @@ import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/chat/chat_mode.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 
-ChatLine line(String id, {bool deleted = false}) => ChatLine(
+ChatItem line(String id, {bool deleted = false}) =>
+    ChatItemMessage(line: said(id, deleted: deleted));
+
+ChatLine said(String id, {bool deleted = false}) => ChatLine(
   id: id,
   name: 'user$id',
   color: 0xFFFF0000,
@@ -19,10 +22,10 @@ void main() {
   late ChatHolder holder;
   late int notifications;
 
-  List<String> ids() => [for (final m in holder.messages) m.line.id];
-  List<String> deleted() => [
+  List<String?> ids() => [for (final m in holder.messages) m.line?.id];
+  List<String?> deleted() => [
     for (final m in holder.messages)
-      if (m.deleted) m.line.id,
+      if (m.deleted) m.line?.id,
   ];
 
   setUp(() {
@@ -77,6 +80,31 @@ void main() {
       ..apply(const ChatUpdateMarked(ids: ['a']));
 
     expect(paused.single.deleted, isTrue);
+  });
+
+  test("a mark deletes a notice's message; a bare notice stays", () {
+    final notice = ChatItemNotice(
+      system: 'riamot subscribed for 11 months!',
+      line: said('a'),
+    );
+    holder
+      ..apply(
+        ChatUpdateSnapshot(
+          messages: [
+            notice,
+            const ChatItemNotice(system: 'raid'),
+          ],
+          status: connected,
+        ),
+      )
+      ..apply(const ChatUpdateMarked(ids: ['a']));
+
+    expect(ids(), ['a', null]);
+    expect(deleted(), ['a']);
+    expect(
+      [for (final m in holder.messages) m.system],
+      ['riamot subscribed for 11 months!', 'raid'],
+    );
   });
 
   test('marking an id no longer listed changes nothing', () {

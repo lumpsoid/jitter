@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use futures_util::StreamExt;
 use jitter_core::chat::ChatController;
-use jitter_core::models::{ChatEvent, ChatMessage, EmoteScope, Fragment};
+use jitter_core::models::{ChatEntry, ChatEvent, ChatMessage, EmoteScope, Fragment, UserNotice};
 use jitter_twitch::emotes::ProviderEmotes;
 
 use super::{Result, ctx, login, settings, twitch};
@@ -59,6 +59,7 @@ fn load_emotes(chat: &mut ChatController, scope: EmoteScope, results: Vec<Provid
 fn print_event(chat: &ChatController, event: &ChatEvent, channel: &str) {
     match event {
         ChatEvent::Message(message) => println!("{}", render(chat, message)),
+        ChatEvent::UserNotice(notice) => println!("{}", render_notice(chat, notice)),
         ChatEvent::Connected => println!("-- connected to #{channel}"),
         ChatEvent::Disconnected => println!("-- disconnected; reconnecting"),
         ChatEvent::Notice(text) => println!("-- {text}"),
@@ -67,8 +68,29 @@ fn print_event(chat: &ChatController, event: &ChatEvent, channel: &str) {
     }
 }
 
+/// `* <system text>`, then the user's message on the next line if any.
+fn render_notice(chat: &ChatController, notice: &UserNotice) -> String {
+    match &notice.message {
+        Some(message) => format!(
+            "* {}
+{}",
+            notice.system,
+            render(chat, message)
+        ),
+        None => format!("* {}", notice.system),
+    }
+}
+
+/// An entry as [`render`] or [`render_notice`] prints it.
+pub(super) fn render_entry(chat: &ChatController, entry: &ChatEntry) -> String {
+    match entry {
+        ChatEntry::Message(message) => render(chat, message),
+        ChatEntry::UserNotice(notice) => render_notice(chat, notice),
+    }
+}
+
 /// `12:34:56 name: text [Emote] text`, or `12:34:56 * name text` for /me.
-pub(super) fn render(chat: &ChatController, message: &ChatMessage) -> String {
+fn render(chat: &ChatController, message: &ChatMessage) -> String {
     let body: String = chat
         .fragments(message)
         .into_iter()

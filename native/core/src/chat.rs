@@ -1,15 +1,17 @@
-//! Chat state: a bounded message buffer, the room's modes and the emote set.
+//! Chat state: a bounded buffer of messages and user notices, the room's
+//! modes and the emote set.
 //! Heads feed it `ChatEvent`s from twitch and emotes from the providers.
 
 use std::collections::VecDeque;
 
 use crate::models::{
-    ChatChange, ChatEvent, ChatMessage, Emote, EmoteProvider, EmoteScope, EmoteSet, Fragment,
-    RoomState,
+    ChatChange, ChatEntry, ChatEvent, ChatMessage, Emote, EmoteProvider, EmoteScope, EmoteSet,
+    Fragment, RoomState,
 };
 use crate::tokenize::tokenize;
 
-/// Oldest messages are dropped beyond this many.
+/// Oldest entries (messages and user notices) are dropped beyond this
+/// many.
 pub const MESSAGE_LIMIT: usize = 600;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,7 +22,7 @@ pub enum Connection {
 
 #[derive(Debug)]
 pub struct ChatController {
-    messages: VecDeque<ChatMessage>,
+    entries: VecDeque<ChatEntry>,
     room: RoomState,
     emotes: EmoteSet,
     failed_providers: Vec<EmoteProvider>,
@@ -37,7 +39,7 @@ impl Default for ChatController {
 impl ChatController {
     pub fn new() -> Self {
         Self {
-            messages: VecDeque::new(),
+            entries: VecDeque::new(),
             room: RoomState::default(),
             emotes: EmoteSet::new(),
             failed_providers: Vec::new(),
@@ -46,8 +48,9 @@ impl ChatController {
         }
     }
 
-    pub fn messages(&self) -> impl Iterator<Item = &ChatMessage> {
-        self.messages.iter()
+    /// Oldest first.
+    pub fn entries(&self) -> impl Iterator<Item = &ChatEntry> {
+        self.entries.iter()
     }
 
     pub fn room(&self) -> RoomState {
@@ -58,7 +61,8 @@ impl ChatController {
         self.connection
     }
 
-    /// The latest NOTICE text, if any.
+    /// The latest NOTICE text, if any: the server's word about the room.
+    /// User notices are entries instead.
     pub fn notice(&self) -> Option<&str> {
         self.notice.as_deref()
     }
@@ -72,20 +76,12 @@ impl ChatController {
     /// nothing did (e.g. clearing a message no longer in the buffer).
     pub fn apply(&mut self, event: ChatEvent) -> Vec<ChatChange> {
         match event {
-            ChatEvent::Message(message) => {
-                self.messages.push_back(message.clone());
-                let mut changes = vec![ChatChange::Appended { message }];
-                let count = self.messages.len().saturating_sub(MESSAGE_LIMIT);
-                if count > 0 {
-                    self.messages.drain(..count);
-                    changes.push(ChatChange::Evicted { count });
-                }
-                changes
-            }
+            ChatEvent::Message(message) => self.append(ChatEntry::Message(message)),
+            ChatEvent::UserNotice(notice) => self.append(ChatEntry::UserNotice(notice)),
             ChatEvent::ClearMessage { id } => self.mark(|m| m.id == id),
             ChatEvent::ClearUser { user_id } => self.mark(|m| m.sender.user_id == user_id),
             ChatEvent::ClearAll => {
-                self.messages.clear();
+                self.entries.clear();
                 vec![ChatChange::Cleared]
             }
             ChatEvent::RoomState(update) => {
@@ -107,11 +103,26 @@ impl ChatController {
         }
     }
 
-    /// Marks the matching messages not yet deleted; their ids, if any.
+    /// Adds an entry at the newest end, dropping the oldest beyond
+    /// [`MESSAGE_LIMIT`].
+    fn append(&mut self, entry: ChatEntry) -> Vec<ChatChange> {
+        self.entries.push_back(entry.clone());
+        let mut changes = vec![ChatChange::Appended { entry }];
+        let count = self.entries.len().saturating_sub(MESSAGE_LIMIT);
+        if count > 0 {
+            self.entries.drain(..count);
+            changes.push(ChatChange::Evicted { count });
+        }
+        changes
+    }
+
+    /// Marks the matching messages not yet deleted, a user notice's own
+    /// message among them; their ids, if any. A notice's system line stays.
     fn mark(&mut self, matches: impl Fn(&ChatMessage) -> bool) -> Vec<ChatChange> {
         let ids: Vec<String> = self
-            .messages
+            .entries
             .iter_mut()
+            .filter_map(ChatEntry::message_mut)
             .filter(|m| !m.deleted && matches(m))
             .map(|m| {
                 m.deleted = true;

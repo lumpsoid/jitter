@@ -28,8 +28,8 @@ use jitter_core::chat::{ChatController, Connection};
 use jitter_core::chat_panel::{ChatPanelController, ChatPanelState, SessionChange};
 use jitter_core::chat_replay::{ChatReplay, ReplayRequest, ReplayStep};
 use jitter_core::models::{
-    ChannelId, ChannelLogin, ChatChange, ChatEvent, ChatMessage, Emote, EmoteProvider, EmoteScope,
-    Fragment, Page, ReplayComment, RoomState, Seconds, Settings, VideoId,
+    ChannelId, ChannelLogin, ChatChange, ChatEntry, ChatEvent, ChatMessage, Emote, EmoteProvider,
+    EmoteScope, Fragment, Page, ReplayComment, RoomState, Seconds, Settings, VideoId,
 };
 use jitter_core::name_color::{Theme, name_color};
 use jitter_core::playback::PlaybackTarget;
@@ -42,7 +42,7 @@ use tokio::time::Instant;
 
 use crate::format::twitch_error;
 use crate::run::Fetched;
-use crate::signals::{ChatFragment, ChatLine, ChatStatus, ChatUpdate, EmoteImage};
+use crate::signals::{ChatFragment, ChatItem, ChatLine, ChatStatus, ChatUpdate, EmoteImage};
 
 /// Appended messages are gathered this long and sent as one `Appended`:
 /// transport batching, so a busy channel (~8 messages a second) costs
@@ -98,7 +98,7 @@ impl Drop for Tasks {
 /// sending all appends and then one summed eviction ends in the same list.
 #[derive(Default)]
 struct Batch {
-    messages: Vec<ChatLine>,
+    messages: Vec<ChatItem>,
     evicted: usize,
     due: Option<Instant>,
 }
@@ -509,8 +509,8 @@ fn pass_on(session: &SessionChat, look: Look, batch: &mut Batch, changes: Vec<Ch
     let chat = session.chat();
     for change in changes {
         match change {
-            ChatChange::Appended { message } => {
-                batch.messages.push(line(chat, &message, look));
+            ChatChange::Appended { entry } => {
+                batch.messages.push(item(chat, &entry, look));
                 batch
                     .due
                     .get_or_insert_with(|| Instant::now() + BATCH_WINDOW);
@@ -589,8 +589,20 @@ fn send_snapshot(panel: &mut ChatPanel) {
     .send_signal_to_dart();
 }
 
-fn lines(chat: &ChatController, look: Look) -> Vec<ChatLine> {
-    chat.messages().map(|m| line(chat, m, look)).collect()
+fn lines(chat: &ChatController, look: Look) -> Vec<ChatItem> {
+    chat.entries().map(|e| item(chat, e, look)).collect()
+}
+
+fn item(chat: &ChatController, entry: &ChatEntry, look: Look) -> ChatItem {
+    match entry {
+        ChatEntry::Message(message) => ChatItem::Message {
+            line: line(chat, message, look),
+        },
+        ChatEntry::UserNotice(notice) => ChatItem::Notice {
+            system: notice.system.clone(),
+            line: notice.message.as_ref().map(|m| line(chat, m, look)),
+        },
+    }
 }
 
 fn line(chat: &ChatController, message: &ChatMessage, look: Look) -> ChatLine {
@@ -703,8 +715,84 @@ fn link_url(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{emote_hint, link_url, modes};
-    use jitter_core::models::{EmoteProvider, RoomState, Seconds};
+    use super::{Look, emote_hint, item, link_url, modes};
+    use crate::signals::{ChatFragment, ChatItem};
+    use jitter_core::chat::ChatController;
+    use jitter_core::models::{
+        ChannelId, ChatEvent, ChatMessage, Chatter, EmoteProvider, RoomState, Seconds, Timestamp,
+        UserNotice,
+    };
+    use jitter_core::name_color::Theme;
+
+    const LOOK: Look = Look {
+        theme: Theme::Dark,
+        animated_emotes: true,
+    };
+
+    fn message(id: &str, text: &str) -> ChatMessage {
+        let Ok(user_id) = ChannelId::parse("1") else {
+            unreachable!("valid id");
+        };
+        ChatMessage {
+            id: id.to_owned(),
+            sender: Chatter {
+                user_id,
+                display_name: "Riamot".to_owned(),
+                color: None,
+                badges: vec![],
+            },
+            text: text.to_owned(),
+            action: false,
+            emotes: vec![],
+            sent_at: Timestamp::from_unix(0),
+            deleted: false,
+        }
+    }
+
+    /// The chat's entries as the panel gets them.
+    fn items(events: Vec<ChatEvent>) -> Vec<ChatItem> {
+        let mut chat = ChatController::new();
+        for event in events {
+            chat.apply(event);
+        }
+        chat.entries().map(|e| item(&chat, e, LOOK)).collect()
+    }
+
+    #[test]
+    fn a_user_notice_carries_its_system_line_and_its_message() {
+        let items = items(vec![
+            ChatEvent::UserNotice(UserNotice {
+                system: "Riamot subscribed for 11 months!".to_owned(),
+                message: Some(message("a", "still here")),
+            }),
+            ChatEvent::UserNotice(UserNotice {
+                system: "1234 raiders from Raider have joined!".to_owned(),
+                message: None,
+            }),
+            ChatEvent::Message(message("b", "hi")),
+        ]);
+        let [first, second, third] = items.as_slice() else {
+            unreachable!("three entries");
+        };
+        let ChatItem::Notice {
+            system,
+            line: Some(line),
+        } = first
+        else {
+            unreachable!("a notice with a message");
+        };
+        assert_eq!(system, "Riamot subscribed for 11 months!");
+        assert_eq!(line.id, "a");
+        assert_eq!(line.name, "Riamot");
+        assert!(
+            matches!(line.fragments.as_slice(), [ChatFragment::Text { text }] if text == "still here")
+        );
+        assert!(matches!(
+            second,
+            ChatItem::Notice { system, line: None } if system == "1234 raiders from Raider have joined!"
+        ));
+        assert!(matches!(third, ChatItem::Message { line } if line.id == "b"));
+    }
 
     #[test]
     fn www_links_open_over_https() {

@@ -185,7 +185,7 @@ impl ChatReplay {
         self.pending.clear();
         self.next = None;
         self.failure = None;
-        let shown = self.chat.messages().next().is_some();
+        let shown = self.chat.entries().next().is_some();
         let changes = match shown {
             true => self.chat.apply(ChatEvent::ClearAll),
             false => Vec::new(),

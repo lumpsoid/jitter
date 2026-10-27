@@ -2,7 +2,7 @@
 
 use jitter_core::models::{
     Badge, ChannelId, ChatEvent, ChatMessage, Chatter, EmoteSpan, Rgb, RoomStateUpdate, Seconds,
-    Timestamp,
+    Timestamp, UserNotice,
 };
 
 use super::irc::IrcMessage;
@@ -16,16 +16,13 @@ const ACTION_SUFFIX: char = '\u{1}';
 /// events (PING, RECONNECT, numerics, JOIN, ...) and for lines missing data
 /// their event needs. Connection control is the caller's business.
 ///
-/// A USERNOTICE with user text (e.g. an announcement) is a `Message`; one
-/// without (a bare sub) is a `Notice` carrying `system-msg`. `system-msg` of
-/// a USERNOTICE that also has text is dropped.
+/// A USERNOTICE (a sub, a raid, a watch streak, ...) is a `UserNotice`
+/// carrying `system-msg` and the user's text, if any. One with an empty
+/// `system-msg` (an announcement) is just its text, a `Message`.
 pub fn to_event(msg: &IrcMessage) -> Option<ChatEvent> {
     match msg.command.as_str() {
         "PRIVMSG" => message(msg).map(ChatEvent::Message),
-        "USERNOTICE" => match msg.trailing.as_deref() {
-            Some(_) => message(msg).map(ChatEvent::Message),
-            None => non_empty(msg.tag("system-msg")?).map(|s| ChatEvent::Notice(s.to_owned())),
-        },
+        "USERNOTICE" => user_notice(msg),
         "CLEARMSG" => Some(ChatEvent::ClearMessage {
             id: non_empty(msg.tag("target-msg-id")?)?.to_owned(),
         }),
@@ -40,6 +37,16 @@ pub fn to_event(msg: &IrcMessage) -> Option<ChatEvent> {
         "NOTICE" => Some(ChatEvent::Notice(msg.trailing.clone()?)),
         "ROOMSTATE" => Some(ChatEvent::RoomState(room_state(msg))),
         _ => None,
+    }
+}
+
+fn user_notice(msg: &IrcMessage) -> Option<ChatEvent> {
+    match msg.tag("system-msg").and_then(non_empty) {
+        Some(system) => Some(ChatEvent::UserNotice(UserNotice {
+            system: system.to_owned(),
+            message: message(msg),
+        })),
+        None => message(msg).map(ChatEvent::Message),
     }
 }
 

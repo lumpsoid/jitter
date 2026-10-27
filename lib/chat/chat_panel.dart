@@ -213,6 +213,11 @@ class _StatusLine extends StatelessWidget {
 /// body through in a muted, still readable colour. The marker comes before
 /// the body so a screen reader announces it first, ahead of any link, which
 /// is its own semantics node.
+///
+/// A user notice (a sub, a raid, a watch streak) is set off by a stripe in
+/// the theme's primary colour: Twitch's line in muted italics, then the
+/// user's message, if any, beneath it like any other. Both are one text, so
+/// a screen reader reads them as one item, the system line first.
 class _Message extends StatelessWidget {
   const new({required this.entry});
 
@@ -220,11 +225,44 @@ class _Message extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final line = entry.line;
-    final deleted = entry.deleted;
     final colors = Theme.of(context).colorScheme;
-    final nameColor = Color(line.color);
     final style = DefaultTextStyle.of(context).style;
+    final system = entry.system;
+    final line = entry.line;
+    final text = Text.rich(
+      TextSpan(
+        children: [
+          if (system != null)
+            TextSpan(
+              text: line == null ? system : '$system\n',
+              style: style.copyWith(
+                color: colors.onSurfaceVariant,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          if (line != null) _message(line, style, colors),
+        ],
+      ),
+      style: style,
+    );
+    const padding = EdgeInsets.symmetric(horizontal: 8, vertical: 2);
+    if (system == null) return Padding(padding: padding, child: text);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.primary.withValues(alpha: 0.06),
+          border: Border(left: BorderSide(color: colors.primary, width: 3)),
+        ),
+        child: Padding(padding: padding, child: text),
+      ),
+    );
+  }
+
+  /// The message, under its body style as the base for the whole of it.
+  InlineSpan _message(ChatLine line, TextStyle style, ColorScheme colors) {
+    final deleted = entry.deleted;
+    final nameColor = Color(line.color);
     final body = switch ((deleted, line.action)) {
       (true, _) => style.copyWith(
         color: colors.onSurfaceVariant,
@@ -240,30 +278,25 @@ class _Message extends StatelessWidget {
         if (deleted) TextDecoration.lineThrough,
       ]),
     );
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      child: Text.rich(
+    return TextSpan(
+      style: body,
+      children: [
         TextSpan(
-          children: [
-            TextSpan(
-              text: line.name,
-              style: TextStyle(color: nameColor, fontWeight: FontWeight.bold),
-            ),
-            TextSpan(text: line.action ? ' ' : ': '),
-            if (deleted)
-              TextSpan(
-                text: '(deleted) ',
-                style: style.copyWith(
-                  color: colors.onSurfaceVariant,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            for (final fragment in line.fragments)
-              _fragment(fragment, body, linkStyle),
-          ],
+          text: line.name,
+          style: TextStyle(color: nameColor, fontWeight: FontWeight.bold),
         ),
-        style: body,
-      ),
+        TextSpan(text: line.action ? ' ' : ': '),
+        if (deleted)
+          TextSpan(
+            text: '(deleted) ',
+            style: style.copyWith(
+              color: colors.onSurfaceVariant,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        for (final fragment in line.fragments)
+          _fragment(fragment, body, linkStyle),
+      ],
     );
   }
 

@@ -13,16 +13,18 @@ void main() {
       ..apply(
         const ChatUpdateSnapshot(
           messages: [
-            ChatLine(
-              id: 'a',
-              name: 'alice',
-              color: 0xFFFF0000,
-              action: false,
-              deleted: false,
-              fragments: [
-                ChatFragmentText(text: 'see '),
-                ChatFragmentLink(text: 'www.a.b', url: 'https://www.a.b'),
-              ],
+            ChatItemMessage(
+              line: ChatLine(
+                id: 'a',
+                name: 'alice',
+                color: 0xFFFF0000,
+                action: false,
+                deleted: false,
+                fragments: [
+                  ChatFragmentText(text: 'see '),
+                  ChatFragmentLink(text: 'www.a.b', url: 'https://www.a.b'),
+                ],
+              ),
             ),
           ],
           status: ChatStatus(
@@ -52,13 +54,15 @@ void main() {
       ..apply(
         const ChatUpdateSnapshot(
           messages: [
-            ChatLine(
-              id: 'a',
-              name: 'alice',
-              color: 0xFFFF0000,
-              action: false,
-              deleted: false,
-              fragments: [ChatFragmentText(text: 'hi')],
+            ChatItemMessage(
+              line: ChatLine(
+                id: 'a',
+                name: 'alice',
+                color: 0xFFFF0000,
+                action: false,
+                deleted: false,
+                fragments: [ChatFragmentText(text: 'hi')],
+              ),
             ),
           ],
           status: ChatStatus(
@@ -90,13 +94,15 @@ void main() {
       ..apply(
         const ChatUpdateSnapshot(
           messages: [
-            ChatLine(
-              id: 'a',
-              name: 'alice',
-              color: 0xFFFF0000,
-              action: false,
-              deleted: false,
-              fragments: [ChatFragmentText(text: 'hi')],
+            ChatItemMessage(
+              line: ChatLine(
+                id: 'a',
+                name: 'alice',
+                color: 0xFFFF0000,
+                action: false,
+                deleted: false,
+                fragments: [ChatFragmentText(text: 'hi')],
+              ),
             ),
           ],
           status: ChatStatus(
@@ -151,16 +157,18 @@ void main() {
       ..apply(
         const ChatUpdateSnapshot(
           messages: [
-            ChatLine(
-              id: 'a',
-              name: 'alice',
-              color: 0xFFFF0000,
-              action: false,
-              deleted: false,
-              fragments: [
-                ChatFragmentText(text: 'see '),
-                ChatFragmentLink(text: 'www.a.b', url: 'https://www.a.b'),
-              ],
+            ChatItemMessage(
+              line: ChatLine(
+                id: 'a',
+                name: 'alice',
+                color: 0xFFFF0000,
+                action: false,
+                deleted: false,
+                fragments: [
+                  ChatFragmentText(text: 'see '),
+                  ChatFragmentLink(text: 'www.a.b', url: 'https://www.a.b'),
+                ],
+              ),
             ),
           ],
           status: ChatStatus(modes: []),
@@ -194,6 +202,101 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('a user notice is an inline system line, read as one item', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    const streak =
+        'riamot watched 3 consecutive streams and sparked a watch streak!';
+    const resub = 'riamot subscribed for 11 months!';
+    final chat = ChatHolder(sendTheme: (_) {})
+      ..apply(
+        ChatUpdateSnapshot(
+          messages: [
+            _line('a', 'before'),
+            const ChatItemNotice(system: streak),
+            const ChatItemNotice(
+              system: resub,
+              line: ChatLine(
+                id: 'b',
+                name: 'riamot',
+                color: 0xFF0000FF,
+                action: false,
+                deleted: false,
+                fragments: [
+                  ChatFragmentText(text: 'still here '),
+                  ChatFragmentLink(text: 'x.y', url: 'https://x.y'),
+                ],
+              ),
+            ),
+          ],
+          status: const ChatStatus(modes: []),
+        ),
+      );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: ChatPanel(chat: chat)),
+      ),
+    );
+
+    // Inline in the list, in order, not a status line above it.
+    final top = tester.getTopLeft(find.textContaining('before')).dy;
+    final streakTop = tester.getTopLeft(find.textContaining(streak)).dy;
+    final resubTop = tester.getTopLeft(find.textContaining(resub)).dy;
+    expect(top < streakTop && streakTop < resubTop, isTrue);
+    expect(
+      tester.getSemantics(find.bySemanticsLabel(streak)),
+      isSemantics(label: streak, isLiveRegion: false),
+    );
+    // The system line, then the message, as one text without a name
+    // for the system line; the link stays its own node.
+    expect(
+      find.bySemanticsLabel(RegExp('^$resub\\nriamot: still here')),
+      findsOne,
+    );
+    expect(find.bySemanticsLabel(RegExp(':.*$streak')), findsNothing);
+    expect(
+      tester.getSemantics(find.text('x.y')),
+      matchesSemantics(
+        label: 'x.y',
+        isLink: true,
+        isFocusable: true,
+        hasTapAction: true,
+        hasFocusAction: true,
+      ),
+    );
+
+    final system = tester.widget<RichText>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText && widget.text.toPlainText().contains(resub),
+      ),
+    );
+    final italic = <String>[];
+    system.text.visitChildren((span) {
+      if (span is TextSpan && span.style?.fontStyle == FontStyle.italic) {
+        italic.add(span.text ?? '');
+      }
+      return true;
+    });
+    expect(italic, ['$resub\n']);
+
+    final primary = Theme.of(tester.element(find.byType(ChatPanel)))
+        .colorScheme
+        .primary;
+    final stripes = tester.widgetList<DecoratedBox>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is DecoratedBox &&
+            widget.decoration is BoxDecoration &&
+            (widget.decoration as BoxDecoration).border ==
+                Border(left: BorderSide(color: primary, width: 3)),
+      ),
+    );
+    expect(stripes, hasLength(2));
+    semantics.dispose();
+  });
+
   testWidgets('marks a deleted message as deleted, not only faded', (
     tester,
   ) async {
@@ -202,24 +305,28 @@ void main() {
       ..apply(
         const ChatUpdateSnapshot(
           messages: [
-            ChatLine(
-              id: 'a',
-              name: 'alice',
-              color: 0xFFFF0000,
-              action: false,
-              deleted: false,
-              fragments: [ChatFragmentText(text: 'hi')],
+            ChatItemMessage(
+              line: ChatLine(
+                id: 'a',
+                name: 'alice',
+                color: 0xFFFF0000,
+                action: false,
+                deleted: false,
+                fragments: [ChatFragmentText(text: 'hi')],
+              ),
             ),
-            ChatLine(
-              id: 'b',
-              name: 'bob',
-              color: 0xFF0000FF,
-              action: false,
-              deleted: false,
-              fragments: [
-                ChatFragmentText(text: 'bad words '),
-                ChatFragmentLink(text: 'x.y', url: 'https://x.y'),
-              ],
+            ChatItemMessage(
+              line: ChatLine(
+                id: 'b',
+                name: 'bob',
+                color: 0xFF0000FF,
+                action: false,
+                deleted: false,
+                fragments: [
+                  ChatFragmentText(text: 'bad words '),
+                  ChatFragmentLink(text: 'x.y', url: 'https://x.y'),
+                ],
+              ),
             ),
           ],
           status: ChatStatus(modes: []),
@@ -449,13 +556,15 @@ ChatHolder _chatWith(List<ChatFragment> fragments) {
   return ChatHolder(sendTheme: (_) {})..apply(
     ChatUpdateSnapshot(
       messages: [
-        ChatLine(
-          id: 'a',
-          name: 'alice',
-          color: 0xFFFF0000,
-          action: false,
-          deleted: false,
-          fragments: fragments,
+        ChatItemMessage(
+          line: ChatLine(
+            id: 'a',
+            name: 'alice',
+            color: 0xFFFF0000,
+            action: false,
+            deleted: false,
+            fragments: fragments,
+          ),
         ),
       ],
       status: const ChatStatus(modes: []),
@@ -463,11 +572,13 @@ ChatHolder _chatWith(List<ChatFragment> fragments) {
   );
 }
 
-ChatLine _line(String id, String text) => ChatLine(
-  id: id,
-  name: 'alice',
-  color: 0xFFFF0000,
-  action: false,
-  deleted: false,
-  fragments: [ChatFragmentText(text: text)],
+ChatItem _line(String id, String text) => ChatItemMessage(
+  line: ChatLine(
+    id: id,
+    name: 'alice',
+    color: 0xFFFF0000,
+    action: false,
+    deleted: false,
+    fragments: [ChatFragmentText(text: text)],
+  ),
 );

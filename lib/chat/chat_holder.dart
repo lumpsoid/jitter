@@ -28,7 +28,7 @@ class ChatHolder extends ChangeNotifier {
   ChatMode get mode => _mode;
   ChatMode _mode = ChatMode.off;
 
-  /// Oldest first.
+  /// Messages and user notices, oldest first.
   List<ChatEntry> get messages => _messages;
   var _messages = <ChatEntry>[];
 
@@ -82,7 +82,7 @@ class ChatHolder extends ChangeNotifier {
       case ChatUpdateMarked(:final ids):
         final marked = ids.toSet();
         for (final entry in _messages) {
-          if (marked.contains(entry.line.id)) entry.deleted = true;
+          if (marked.contains(entry.line?.id)) entry.deleted = true;
         }
       case ChatUpdateCleared():
         _messages = [];

@@ -2,9 +2,10 @@
 //! `irc_lines.txt` are recorded from Twitch. Hand-written (Twitch did not
 //! produce them in the recording session): partial ROOMSTATE, CLEARCHAT
 //! without a target, permanent-ban CLEARCHAT, NOTICE, RECONNECT, tag values
-//! containing `=`, `\:` and `\\`, and the malformed lines.
+//! containing `=`, `\:` and `\\`, the malformed lines, and the watch streak,
+//! resub with text and raid USERNOTICEs.
 
-use jitter_core::models::{ChatEvent, Rgb, RoomStateUpdate, Seconds};
+use jitter_core::models::{ChatEvent, Rgb, RoomStateUpdate, Seconds, UserNotice};
 use jitter_twitch::chat::{IrcMessage, parse, split_frame, to_event};
 
 const RECORDED: &str = include_str!("fixtures/irc_lines.txt");
@@ -190,8 +191,25 @@ fn privmsg_missing_required_tags_is_none() {
     assert_eq!(to_event(&m), None);
 }
 
+/// Hand-written in the shape Twitch sends (no such line came up while
+/// recording): a watch streak, to which a test appends the user's text.
+const WATCH_STREAK: &str = r"@badge-info=subscriber/5;badges=subscriber/3;color=#1E90FF;display-name=Riamot;emotes=;flags=;id=3d1b4f0e-6c1a-4f53-9b9e-0b5f8a3c1e21;login=riamot;mod=0;msg-id=viewermilestone;msg-param-category=watch-streak;msg-param-copoReward=450;msg-param-id=8f7e2b8c-5d3a-4a52-a0f1-2c4e9d6b7a10;msg-param-value=3;room-id=92038375;subscriber=1;system-msg=Riamot\swatched\s3\sconsecutive\sstreams\sand\ssparked\sa\swatch\sstreak!;tmi-sent-ts=1793053900000;user-id=403252242;user-type=;vip=0 :tmi.twitch.tv USERNOTICE #caedrel";
+
+/// Hand-written: a resub with the user's text and an emote in it.
+const RESUB_WITH_TEXT: &str = r"@badge-info=subscriber/11;badges=subscriber/9;color=#0000FF;display-name=Riamot;emotes=25:11-15;flags=;id=a4864201-4da1-466d-b11d-ea288b0d8e9c;login=riamot;mod=0;msg-id=resub;msg-param-cumulative-months=11;msg-param-months=0;msg-param-sub-plan=Prime;room-id=92038375;subscriber=1;system-msg=Riamot\ssubscribed\swith\sPrime.\sThey've\ssubscribed\sfor\s11\smonths!;tmi-sent-ts=1793053801834;user-id=403252242;user-type=;vip=0 :tmi.twitch.tv USERNOTICE #caedrel :still here Kappa";
+
+/// Hand-written: a raid, which carries no text.
+const RAID: &str = r"@badge-info=;badges=partner/1;color=#9ACD32;display-name=Raider;emotes=;flags=;id=5e1c7a3b-2f4d-4e6a-8b9c-1d2e3f4a5b6c;login=raider;mod=0;msg-id=raid;msg-param-displayName=Raider;msg-param-login=raider;msg-param-viewerCount=1234;room-id=92038375;subscriber=0;system-msg=1234\sraiders\sfrom\sRaider\shave\sjoined!;tmi-sent-ts=1793053950000;user-id=12826;user-type=;vip=0 :tmi.twitch.tv USERNOTICE #caedrel";
+
+fn user_notice(line: &str) -> UserNotice {
+    match event(line) {
+        ChatEvent::UserNotice(n) => n,
+        other => unreachable!("expected UserNotice, got {other:?}"),
+    }
+}
+
 #[test]
-fn usernotice_with_text_is_a_message() {
+fn usernotice_with_an_empty_system_msg_is_a_message() {
     let m = message(recorded("USERNOTICE announcement"));
     assert_eq!(m.sender.display_name, "StreamElements");
     assert_eq!(
@@ -201,15 +219,79 @@ fn usernotice_with_text_is_a_message() {
 }
 
 #[test]
-fn usernotice_without_text_is_a_notice() {
+fn usernotice_without_text_is_a_bare_user_notice() {
     assert_eq!(
-        event(recorded("USERNOTICE sub")),
-        ChatEvent::Notice("acaugu514 subscribed at Tier 1.".into())
+        user_notice(recorded("USERNOTICE sub")),
+        UserNotice {
+            system: "acaugu514 subscribed at Tier 1.".into(),
+            message: None,
+        }
     );
     assert_eq!(
-        event(recorded("USERNOTICE subgift")),
-        ChatEvent::Notice("acaugu514 gifted a Tier 1 sub to mtdt1234!".into())
+        user_notice(recorded("USERNOTICE subgift")),
+        UserNotice {
+            system: "acaugu514 gifted a Tier 1 sub to mtdt1234!".into(),
+            message: None,
+        }
     );
+    assert_eq!(
+        user_notice(recorded("USERNOTICE resub (system-msg with \\s escapes)")).system,
+        "Riamot subscribed with Prime. They've subscribed for 11 months!"
+    );
+}
+
+#[test]
+fn a_watch_streak_is_a_user_notice_not_the_rooms_notice() {
+    let system = "Riamot watched 3 consecutive streams and sparked a watch streak!";
+    assert_eq!(
+        user_notice(WATCH_STREAK),
+        UserNotice {
+            system: system.into(),
+            message: None,
+        }
+    );
+    let with_text = user_notice(&format!("{WATCH_STREAK} :three in a row"));
+    assert_eq!(with_text.system, system);
+    let Some(m) = with_text.message else {
+        unreachable!("the streak carries text");
+    };
+    assert_eq!(m.text, "three in a row");
+    assert_eq!(m.id, "3d1b4f0e-6c1a-4f53-9b9e-0b5f8a3c1e21");
+}
+
+#[test]
+fn a_resub_with_text_keeps_both_its_system_line_and_its_message() {
+    let notice = user_notice(RESUB_WITH_TEXT);
+    assert_eq!(
+        notice.system,
+        "Riamot subscribed with Prime. They've subscribed for 11 months!"
+    );
+    let Some(m) = notice.message else {
+        unreachable!("the resub carries text");
+    };
+    assert_eq!(m.sender.display_name, "Riamot");
+    assert_eq!(m.text, "still here Kappa");
+    assert_eq!(m.emotes.len(), 1);
+    assert_eq!(m.emotes[0].emote.name, "Kappa");
+    assert_eq!((m.emotes[0].start, m.emotes[0].end), (11, 15));
+}
+
+#[test]
+fn a_raid_is_a_bare_user_notice() {
+    assert_eq!(
+        user_notice(RAID),
+        UserNotice {
+            system: "1234 raiders from Raider have joined!".into(),
+            message: None,
+        }
+    );
+}
+
+#[test]
+fn usernotice_with_neither_system_msg_nor_text_is_none() {
+    let line =
+        "@id=a;user-id=1;display-name=N;tmi-sent-ts=5000;system-msg= :tmi.twitch.tv USERNOTICE #c";
+    assert_eq!(to_event(&parsed(line)), None);
 }
 
 #[test]

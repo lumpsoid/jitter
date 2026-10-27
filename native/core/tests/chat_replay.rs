@@ -1,7 +1,7 @@
 use jitter_core::chat_replay::{BACKFILL, ChatReplay, LOW_WATER, ReplayRequest, SEEK_JUMP};
 use jitter_core::models::{
-    ChannelId, ChannelLogin, ChatChange, ChatMessage, Chatter, Cursor, Page, ReplayComment,
-    ReplayFrom, Seconds, Timestamp, VideoId,
+    ChannelId, ChannelLogin, ChatChange, ChatEntry, ChatMessage, Chatter, Cursor, Page,
+    ReplayComment, ReplayFrom, Seconds, Timestamp, VideoId,
 };
 use jitter_core::playback::PlaybackTarget;
 
@@ -68,14 +68,19 @@ fn after(cursor: &str) -> ReplayRequest {
 }
 
 fn shown(replay: &ChatReplay) -> Vec<String> {
-    replay.chat().messages().map(|m| m.id.clone()).collect()
+    replay
+        .chat()
+        .entries()
+        .filter_map(ChatEntry::message)
+        .map(|m| m.id.clone())
+        .collect()
 }
 
 fn appended(changes: &[ChatChange]) -> Vec<String> {
     changes
         .iter()
         .filter_map(|c| match c {
-            ChatChange::Appended { message } => Some(message.id.clone()),
+            ChatChange::Appended { entry } => entry.message().map(|m| m.id.clone()),
             _ => None,
         })
         .collect()

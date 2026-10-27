@@ -13,16 +13,18 @@ ChatHolder _chat() => ChatHolder(sendTheme: (_) {})
   ..apply(
     const ChatUpdateSnapshot(
       messages: [
-        ChatLine(
-          id: 'a',
-          name: 'alice',
-          color: 0xFFFF0000,
-          action: false,
-          deleted: false,
-          fragments: [
-            ChatFragmentText(text: 'see '),
-            ChatFragmentLink(text: 'www.a.b', url: 'https://www.a.b'),
-          ],
+        ChatItemMessage(
+          line: ChatLine(
+            id: 'a',
+            name: 'alice',
+            color: 0xFFFF0000,
+            action: false,
+            deleted: false,
+            fragments: [
+              ChatFragmentText(text: 'see '),
+              ChatFragmentLink(text: 'www.a.b', url: 'https://www.a.b'),
+            ],
+          ),
         ),
       ],
       status: ChatStatus(banner: 'Connecting to chat…', modes: ['Emote-only']),

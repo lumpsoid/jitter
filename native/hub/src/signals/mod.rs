@@ -35,8 +35,8 @@ pub use categories::{
 };
 // Chat
 pub use chat::{
-    ChatFragment, ChatLine, ChatReady, ChatStatus, ChatUpdate, EmoteImage, HideChat, SetTheme,
-    ShowChat,
+    ChatFragment, ChatItem, ChatLine, ChatReady, ChatStatus, ChatUpdate, EmoteImage, HideChat,
+    SetTheme, ShowChat,
 };
 // Favorites
 pub use favorites::{
