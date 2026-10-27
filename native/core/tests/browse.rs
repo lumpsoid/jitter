@@ -1,5 +1,7 @@
-use jitter_core::browse::{BrowseController, FirstPage, ListState, MorePages};
-use jitter_core::models::{Channel, ChannelId, ChannelLogin, Cursor, Page, Stream};
+use jitter_core::browse::BrowseController;
+use jitter_core::models::{
+    Channel, ChannelId, ChannelLogin, Cursor, FirstPage, ListState, MorePages, Page, Stream,
+};
 
 fn stream(id: &str) -> Stream {
     let (Ok(channel_id), Ok(login)) = (ChannelId::parse("1"), ChannelLogin::parse("xqc")) else {
