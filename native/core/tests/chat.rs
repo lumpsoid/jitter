@@ -1,7 +1,7 @@
 use jitter_core::chat::{ChatController, Connection, MESSAGE_LIMIT};
 use jitter_core::models::{
-    ChannelId, ChatEvent, ChatMessage, Chatter, Emote, EmoteProvider, EmoteScope, Fragment,
-    RoomStateUpdate, Seconds, Timestamp,
+    ChannelId, ChatChange, ChatEvent, ChatMessage, Chatter, Emote, EmoteProvider, EmoteScope,
+    Fragment, RoomStateUpdate, Seconds, Timestamp,
 };
 
 fn uid(raw: &str) -> ChannelId {
@@ -44,11 +44,101 @@ fn deleted(chat: &ChatController) -> Vec<(String, bool)> {
 #[test]
 fn the_601st_message_evicts_the_oldest() {
     let mut chat = ChatController::new();
-    for i in 0..=MESSAGE_LIMIT {
-        chat.apply(ChatEvent::Message(message(&i.to_string(), "1", "hi")));
+    for i in 0..MESSAGE_LIMIT {
+        let m = message(&i.to_string(), "1", "hi");
+        assert_eq!(
+            chat.apply(ChatEvent::Message(m.clone())),
+            vec![ChatChange::Appended { message: m }]
+        );
     }
+    let last = message("last", "1", "hi");
+    assert_eq!(
+        chat.apply(ChatEvent::Message(last.clone())),
+        vec![
+            ChatChange::Appended { message: last },
+            ChatChange::Evicted { count: 1 }
+        ]
+    );
     assert_eq!(chat.messages().count(), MESSAGE_LIMIT);
     assert_eq!(chat.messages().next().map(|m| m.id.as_str()), Some("1"));
+}
+
+#[test]
+fn clear_message_reports_the_marked_id() {
+    let mut chat = ChatController::new();
+    chat.apply(ChatEvent::Message(message("a", "1", "x")));
+    assert_eq!(
+        chat.apply(ChatEvent::ClearMessage { id: "a".into() }),
+        vec![ChatChange::Marked {
+            ids: vec!["a".to_owned()]
+        }]
+    );
+}
+
+#[test]
+fn clearing_nothing_new_changes_nothing() {
+    let mut chat = ChatController::new();
+    chat.apply(ChatEvent::Message(message("a", "1", "x")));
+    assert_eq!(
+        chat.apply(ChatEvent::ClearMessage { id: "gone".into() }),
+        vec![]
+    );
+    chat.apply(ChatEvent::ClearMessage { id: "a".into() });
+    assert_eq!(
+        chat.apply(ChatEvent::ClearMessage { id: "a".into() }),
+        vec![]
+    );
+    assert_eq!(
+        chat.apply(ChatEvent::ClearUser { user_id: uid("1") }),
+        vec![]
+    );
+}
+
+#[test]
+fn clear_user_reports_that_users_ids() {
+    let mut chat = ChatController::new();
+    chat.apply(ChatEvent::Message(message("a", "1", "x")));
+    chat.apply(ChatEvent::Message(message("b", "2", "y")));
+    chat.apply(ChatEvent::Message(message("c", "1", "z")));
+    assert_eq!(
+        chat.apply(ChatEvent::ClearUser { user_id: uid("1") }),
+        vec![ChatChange::Marked {
+            ids: vec!["a".to_owned(), "c".to_owned()]
+        }]
+    );
+}
+
+#[test]
+fn clear_all_room_connection_and_notice_report_their_change() {
+    let mut chat = ChatController::new();
+    chat.apply(ChatEvent::Message(message("a", "1", "x")));
+    assert_eq!(chat.apply(ChatEvent::ClearAll), vec![ChatChange::Cleared]);
+    assert_eq!(
+        chat.apply(ChatEvent::RoomState(RoomStateUpdate::default())),
+        vec![ChatChange::RoomChanged]
+    );
+    assert_eq!(
+        chat.apply(ChatEvent::Connected),
+        vec![ChatChange::ConnectionChanged]
+    );
+    assert_eq!(
+        chat.apply(ChatEvent::Disconnected),
+        vec![ChatChange::ConnectionChanged]
+    );
+    assert_eq!(
+        chat.apply(ChatEvent::Notice("n".into())),
+        vec![ChatChange::NoticeChanged]
+    );
+}
+
+#[test]
+fn set_emotes_asks_for_a_rerender() {
+    let mut chat = ChatController::new();
+    chat.apply(ChatEvent::Message(message("a", "1", "LUL")));
+    assert_eq!(
+        chat.set_emotes(EmoteScope::Global, EmoteProvider::Bttv, vec![emote("LUL")]),
+        ChatChange::Rerender
+    );
 }
 
 #[test]
