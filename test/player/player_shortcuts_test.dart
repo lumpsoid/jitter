@@ -19,6 +19,9 @@ Future<List<String>> pumpShortcuts(
         onToggleFullscreen: () => pressed.add('fullscreen'),
         onTogglePlay: () => pressed.add('play'),
         onToggleTheatre: () => pressed.add('theatre'),
+        onZoomIn: () => pressed.add('zoom in'),
+        onZoomOut: () => pressed.add('zoom out'),
+        onResetZoom: () => pressed.add('reset zoom'),
         child: Scaffold(
           body: Column(
             children: [
@@ -56,6 +59,19 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.keyT);
 
     expect(pressed, ['chat', 'mute', 'fullscreen', 'play', 'theatre']);
+  });
+
+  testWidgets('+ and = zoom in, - zooms out and 0 resets the zoom', (
+    tester,
+  ) async {
+    final pressed = await pumpShortcuts(tester);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.numpadAdd, character: '+');
+    await tester.sendKeyEvent(LogicalKeyboardKey.equal, character: '=');
+    await tester.sendKeyEvent(LogicalKeyboardKey.minus, character: '-');
+    await tester.sendKeyEvent(LogicalKeyboardKey.digit0, character: '0');
+
+    expect(pressed, ['zoom in', 'zoom in', 'zoom out', 'reset zoom']);
   });
 
   testWidgets('Space plays or pauses while a button has the focus', (

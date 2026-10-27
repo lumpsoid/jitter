@@ -52,6 +52,9 @@ Future<List<String>> pumpLayout(
         onToggleFullscreen: () {},
         onTogglePlay: () => pressed.add('play'),
         onToggleTheatre: () {},
+        onZoomIn: () {},
+        onZoomOut: () {},
+        onResetZoom: () {},
         child: Scaffold(
           appBar: AppBar(
             title: TextButton(onPressed: () {}, child: const Text('Title')),
