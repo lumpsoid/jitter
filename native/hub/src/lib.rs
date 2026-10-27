@@ -17,6 +17,8 @@ mod playback;
 mod run;
 // Search
 mod search;
+// Settings
+mod settings;
 mod signals;
 
 use std::path::PathBuf;

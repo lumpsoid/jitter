@@ -23,6 +23,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 2,
         sql: V2_FAVORITE_AVATARS,
     },
+    Migration {
+        version: 3,
+        sql: V3_SETTINGS,
+    },
 ];
 
 /// v1: favorite channels (login and display name are display caches; the
@@ -48,6 +52,24 @@ CREATE TABLE resume_points (
 /// v1 have none until the channel is next seen live.
 const V2_FAVORITE_AVATARS: &str = "
 ALTER TABLE favorites ADD COLUMN avatar_url TEXT;
+";
+
+/// v3: the user's settings, one row (`id` 1, inserted here) with a column
+/// per setting, so a head writes one setting with an `UPDATE` and leaves
+/// the others as another head stored them. `NULL` is a setting never
+/// stored, which has core's default. Enums are core's stable names, bools
+/// 0 or 1. A new setting is a new column, and so a new version.
+const V3_SETTINGS: &str = "
+CREATE TABLE settings (
+    id                 INTEGER PRIMARY KEY NOT NULL CHECK (id = 1),
+    theme              TEXT,
+    animated_emotes    INTEGER,
+    auto_load_chat     INTEGER,
+    start_quality      TEXT,
+    third_party_emotes INTEGER
+);
+
+INSERT INTO settings (id) VALUES (1);
 ";
 
 /// Applies every pending migration in one transaction: the database ends at
@@ -98,11 +120,28 @@ mod tests {
     }
 
     #[test]
-    fn empty_database_ends_at_v2_with_both_tables() -> TestResult {
+    fn empty_database_ends_at_v3_with_every_table() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 2);
-        assert_eq!(tables(&conn)?, ["favorites", "resume_points"]);
+        assert_eq!(user_version(&conn)?, 3);
+        assert_eq!(tables(&conn)?, ["favorites", "resume_points", "settings"]);
+        Ok(())
+    }
+
+    #[test]
+    fn a_v2_database_gains_one_settings_row_of_nulls() -> TestResult {
+        let mut conn = Connection::open_in_memory()?;
+        conn.execute_batch(V1_SCHEMA)?;
+        conn.execute_batch(V2_FAVORITE_AVATARS)?;
+        conn.pragma_update(None, "user_version", 2)?;
+        migrate(&mut conn)?;
+        assert_eq!(user_version(&conn)?, 3);
+        let row: (i64, Option<String>, Option<i64>) = conn.query_row(
+            "SELECT COUNT(*), MAX(theme), MAX(animated_emotes) FROM settings WHERE id = 1",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )?;
+        assert_eq!(row, (1, None, None));
         Ok(())
     }
 
@@ -112,7 +151,7 @@ mod tests {
         migrate(&mut conn)?;
         conn.execute("INSERT INTO favorites VALUES ('1', 'a', 'A', 0, NULL)", [])?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 2);
+        assert_eq!(user_version(&conn)?, 3);
         let rows: i64 = conn.query_row("SELECT COUNT(*) FROM favorites", [], |r| r.get(0))?;
         assert_eq!(rows, 1);
         Ok(())
@@ -125,7 +164,7 @@ mod tests {
         conn.pragma_update(None, "user_version", 1)?;
         conn.execute("INSERT INTO favorites VALUES ('1', 'a', 'A', 7)", [])?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 2);
+        assert_eq!(user_version(&conn)?, 3);
         let row: (String, Option<String>, i64) = conn.query_row(
             "SELECT login, avatar_url, added_at FROM favorites WHERE channel_id = '1'",
             [],
@@ -138,9 +177,9 @@ mod tests {
     #[test]
     fn newer_database_is_refused_and_left_alone() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
-        conn.pragma_update(None, "user_version", 3)?;
+        conn.pragma_update(None, "user_version", 4)?;
         assert!(migrate(&mut conn).is_err());
-        assert_eq!(user_version(&conn)?, 3);
+        assert_eq!(user_version(&conn)?, 4);
         assert!(tables(&conn)?.is_empty());
         Ok(())
     }

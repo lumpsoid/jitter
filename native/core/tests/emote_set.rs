@@ -5,6 +5,7 @@ fn emote(id: &str, name: &str) -> Emote {
         id: id.to_owned(),
         name: name.to_owned(),
         url: String::new(),
+        still_url: None,
         zero_width: false,
     }
 }

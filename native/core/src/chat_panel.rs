@@ -2,7 +2,8 @@
 //! channel or a VOD plays and the user has not hidden the panel: a live
 //! channel's chat, or a VOD's chat replay. Hiding it leaves the chat,
 //! showing it again starts a fresh session. The choice outlives one player
-//! page: a chat hidden on one channel stays hidden on the next.
+//! page: a chat hidden on one channel stays hidden on the next. With the
+//! auto-load setting off, every player page starts with the chat hidden.
 //! Pure state; the head starts and ends sessions as told.
 
 use crate::models::{ChannelLogin, VideoId};
@@ -66,9 +67,14 @@ impl ChatPanelController {
 
     /// A player page opened on `target` (`None`: playback rejected it). A
     /// live channel joins its chat and a VOD replays its own, unless the
-    /// panel is hidden; a rejected target leaves.
-    pub fn play(&mut self, target: Option<&PlaybackTarget>) -> SessionChange {
+    /// panel is hidden; a rejected target leaves. Without `auto_load` (the
+    /// user's setting) the panel starts hidden, so nothing is joined until
+    /// the user shows it.
+    pub fn play(&mut self, target: Option<&PlaybackTarget>, auto_load: bool) -> SessionChange {
         self.playing = target.cloned();
+        if !auto_load {
+            self.hidden = true;
+        }
         self.session()
     }
 

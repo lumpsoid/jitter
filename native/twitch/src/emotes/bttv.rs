@@ -11,8 +11,11 @@ const GLOBAL_URL: &str = "https://api.betterttv.net/3/cached/emotes/global";
 const USER_URL: &str = "https://api.betterttv.net/3/cached/users/twitch";
 
 /// Emote images; `2x` is shown.
+/// An animated emote's still is under `static/` (`{id}/static/2x.webp`),
+/// as the BetterTTV extension's CDN helper builds it.
 const IMAGE_URL: &str = "https://cdn.betterttv.net/emote";
 const IMAGE_FILE: &str = "2x.webp";
+const STILL_DIR: &str = "static";
 
 /// Names BTTV draws over the previous emote.
 const ZERO_WIDTH: [&str; 8] = [
@@ -51,6 +54,8 @@ pub(crate) async fn channel(
 struct Entry {
     id: Option<String>,
     code: Option<String>,
+    #[serde(default)]
+    animated: bool,
 }
 
 #[derive(Deserialize)]
@@ -84,6 +89,9 @@ fn map(entries: impl IntoIterator<Item = Entry>) -> Vec<Emote> {
             let (id, name) = (e.id?, e.code?);
             Some(Emote {
                 url: format!("{IMAGE_URL}/{id}/{IMAGE_FILE}"),
+                still_url: e
+                    .animated
+                    .then(|| format!("{IMAGE_URL}/{id}/{STILL_DIR}/{IMAGE_FILE}")),
                 zero_width: ZERO_WIDTH.contains(&name.as_str()),
                 id,
                 name,

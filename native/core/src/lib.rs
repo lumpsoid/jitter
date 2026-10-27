@@ -21,5 +21,6 @@ pub mod ports;
 pub mod resume;
 pub mod resume_policy;
 pub mod search;
+pub mod settings;
 pub mod tokenize;
 pub mod vods;

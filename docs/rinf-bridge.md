@@ -34,7 +34,7 @@ Dependencies point down the arrows only.
   ask core what to load, call twitch, and hand the result back. Storage
   enters through core's ports. No decisions; no rinf.
 - **store** persists. `SqliteStore` implements core's storage ports
-  (`FavoritesStore`, `ResumeStore`) over one SQLite file that every head on
+  (`FavoritesStore`, `ResumeStore`, `SettingsStore`) over one SQLite file that every head on
   the machine shares: WAL, migrations in an `IMMEDIATE` transaction, and no
   upsert that could bring back a row another process removed. No decisions;
   no rinf.
@@ -76,7 +76,7 @@ Two ways in, one rule for choosing:
 
 | Dependency | Enters through | Why |
 |---|---|---|
-| Infrastructure: `RecipeStore`, `SettingsStore`, `IdGen` (jitter: `FavoritesStore`, `ResumeStore`) | constructor (`Box<dyn Trait>`) | Border dependency; traits live in core, real impls in `store` (`SqliteStore`, `UuidIds`; jitter: `jitter_store::SqliteStore`, one clone per controller), fakes in core's `fakes/` |
+| Infrastructure: `RecipeStore`, `SettingsStore`, `IdGen` (jitter: `FavoritesStore`, `ResumeStore`, `SettingsStore`) | constructor (`Box<dyn Trait>`) | Border dependency; traits live in core, real impls in `store` (`SqliteStore`, `UuidIds`; jitter: `jitter_store::SqliteStore`, one clone per controller), fakes in core's `fakes/` |
 | Shared controller: `RecipeCatalog` | method argument (`&` / `&mut`) | Shared mutable state; the borrow checker proves who reads and who writes, with no `Rc<RefCell>` and no runtime borrow failures |
 
 - The controller that owns data owns its persistence: `RecipeCatalog`
@@ -217,9 +217,10 @@ This also covers Flutter hot restart, where Dart state resets but Rust keeps
 running.
 
 **jitter: only features that hold state before any page asks have one.**
-`BrowseReady`, `CategoriesReady`, `FavoritesReady` and `ChatReady` exist:
-the top streams and top categories load at start, the favorites at boot,
-and a chat session runs while the player does. Playback, the channel page,
+`BrowseReady`, `CategoriesReady`, `FavoritesReady`, `ChatReady` and
+`SettingsReady` exist: the top streams and top categories load at start,
+the favorites and the settings at boot, and a chat session runs while the
+player does. Playback, the channel page,
 the category page and search have none: they show nothing until a page
 opens or the user types, and that intent (`Play`, `OpenChannel`,
 `OpenCategory`, `SearchTyped`) is answered with the whole state, so it is
@@ -374,6 +375,21 @@ favorites change `run.rs`'s `favorites_changed` sends both again: the strip
 as `CategoriesUpdate::FromYourChannels`, the category as a whole
 `Snapshot`. Between two snapshots the category's unpinned streams only
 grow, so its next pages still go out as `Appended`.
+
+### Settings take effect where they belong
+
+`SettingsController` loads at boot and writes one setting per
+`ChangeSetting` (the store updates only that setting's column, so a GUI
+change never undoes a CLI one). No controller reads it: the hub passes
+plain values down. The chat panel holds a copy, replaced by
+`chat::settings_changed` after each change and resent at once, so name
+colours and animated or still emotes apply to the lines on screen;
+`auto_load_chat` (core's `ChatPanelController::play`) and the emote
+providers (`Settings::emote_providers`) apply from the next session. The
+start quality is read when a resolve comes back
+(`PlaybackController::apply`); switching quality on the page does not
+change it. Like the favorites, a setting changed in the CLI reaches a
+running GUI only after a restart.
 
 ### Error messages
 

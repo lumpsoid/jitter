@@ -5,8 +5,8 @@ use std::fmt::Display;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use jitter_core::models::{
-    self, Channel, ChannelLogin, FadeLevel, Open, Playback, Quality, QualityKind, Seconds,
-    SleepStep, SleepTimer, Timestamp, VideoId,
+    self, Channel, ChannelLogin, FadeLevel, Open, Playback, Quality, QualityKind,
+    QualityPreference, Seconds, SleepStep, SleepTimer, Timestamp, VideoId,
 };
 use jitter_core::playback::{self, PlaybackController, PlaybackState, SLEEP_PRESETS};
 use jitter_core::resume::ResumeController;
@@ -75,20 +75,27 @@ pub fn timed_out(playback: &mut PlaybackController, attempt: playback::Attempt) 
 }
 
 /// A resolve finished: shows the result and, if it is the one being
-/// resolved, opens the selected quality where core says to start. A stale
-/// result changes nothing. A details failure is logged; core decides what
-/// the page shows without them.
+/// resolved, opens the quality core picks for `preferred` (the user's
+/// start quality) where core says to start. A stale result changes
+/// nothing. A details failure is logged; core decides what the page shows
+/// without them.
 pub fn resolved(
     playback: &mut PlaybackController,
     resume: &ResumeController,
     target: playback::PlaybackTarget,
     result: Result<Playback, TwitchError>,
     details: Result<models::PlaybackDetails, TwitchError>,
+    preferred: QualityPreference,
 ) {
     let details = details
         .map_err(|e| e.to_string())
         .inspect_err(|e| debug_print!("loading the playback details: {e}"));
-    if !playback.apply(target, result.map_err(|e| twitch_error(&e)), details) {
+    if !playback.apply(
+        target,
+        result.map_err(|e| twitch_error(&e)),
+        details,
+        preferred,
+    ) {
         return;
     }
     match playback.open(resume) {

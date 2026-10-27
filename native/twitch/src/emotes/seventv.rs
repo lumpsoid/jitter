@@ -18,6 +18,8 @@ const USER_URL: &str = "https://7tv.io/v3/users/twitch";
 const FLAG_ZERO_WIDTH: u64 = 1;
 
 /// The image size shown in chat; every emote offers `1x`..`4x` as WebP.
+/// Each file names its still in `static_name` (`2x_static.webp` for an
+/// animated emote, the file itself for one that never moves).
 const IMAGE_FILE: &str = "2x.webp";
 
 pub fn channel_url(channel: &ChannelId) -> String {
@@ -69,6 +71,27 @@ struct Data {
 #[derive(Deserialize)]
 struct Host {
     url: Option<String>,
+    #[serde(default)]
+    files: Vec<File>,
+}
+
+#[derive(Deserialize)]
+struct File {
+    name: Option<String>,
+    static_name: Option<String>,
+}
+
+impl Host {
+    /// The still of [`IMAGE_FILE`], when the host names one other than
+    /// the file itself.
+    fn still_file(&self) -> Option<&str> {
+        self.files
+            .iter()
+            .find(|f| f.name.as_deref() == Some(IMAGE_FILE))?
+            .static_name
+            .as_deref()
+            .filter(|still| *still != IMAGE_FILE)
+    }
 }
 
 pub fn parse_global(body: &[u8]) -> Result<Vec<Emote>, TwitchError> {
@@ -90,11 +113,13 @@ fn map(set: EmoteSet) -> Vec<Emote> {
     set.emotes
         .into_iter()
         .filter_map(|e| {
-            let host = e.data?.host?.url?;
+            let host = e.data?.host?;
+            let base = absolute(host.url.as_deref()?);
             Some(Emote {
                 id: e.id?,
                 name: e.name?,
-                url: format!("{}/{IMAGE_FILE}", absolute(&host)),
+                url: format!("{base}/{IMAGE_FILE}"),
+                still_url: host.still_file().map(|still| format!("{base}/{still}")),
                 zero_width: e.flags & FLAG_ZERO_WIDTH != 0,
             })
         })

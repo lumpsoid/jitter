@@ -1,12 +1,12 @@
 //! Maps parsed IRC lines to core chat events. Pure.
 
 use jitter_core::models::{
-    Badge, ChannelId, ChatEvent, ChatMessage, Chatter, Emote, EmoteSpan, Rgb, RoomStateUpdate,
-    Seconds, Timestamp,
+    Badge, ChannelId, ChatEvent, ChatMessage, Chatter, EmoteSpan, Rgb, RoomStateUpdate, Seconds,
+    Timestamp,
 };
 
 use super::irc::IrcMessage;
-use crate::emotes::{TwitchEmoteScale, twitch_emote_url};
+use crate::emotes::twitch_emote;
 
 /// How a `/me` message is wrapped: `\u{1}ACTION <text>\u{1}`.
 const ACTION_PREFIX: &str = "\u{1}ACTION ";
@@ -138,12 +138,7 @@ fn emote_spans(tag: &str, text: &str) -> Vec<EmoteSpan> {
             spans.push(EmoteSpan {
                 start,
                 end,
-                emote: Emote {
-                    id: id.to_owned(),
-                    name: name.iter().collect(),
-                    url: twitch_emote_url(id, TwitchEmoteScale::Two),
-                    zero_width: false,
-                },
+                emote: twitch_emote(id.to_owned(), name.iter().collect()),
             });
         }
     }

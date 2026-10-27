@@ -3,15 +3,15 @@
 //! earlier page's last comment.
 
 use jitter_core::models::{
-    Badge, ChannelId, ChatMessage, Chatter, Cursor, Emote, EmoteSpan, Page, ReplayComment,
-    ReplayFrom, Rgb, Seconds, VideoId,
+    Badge, ChannelId, ChatMessage, Chatter, Cursor, EmoteSpan, Page, ReplayComment, ReplayFrom,
+    Rgb, Seconds, VideoId,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{PersistedQuery, parse_timestamp};
 use crate::client::Twitch;
-use crate::emotes::{TwitchEmoteScale, twitch_emote_url};
+use crate::emotes::twitch_emote;
 use crate::error::TwitchError;
 
 pub const QUERY: PersistedQuery = PersistedQuery {
@@ -217,12 +217,7 @@ fn text_and_emotes(fragments: Vec<Fragment>) -> (String, Vec<EmoteSpan>) {
             spans.push(EmoteSpan {
                 start,
                 end: start + len - 1,
-                emote: Emote {
-                    url: twitch_emote_url(&id, TwitchEmoteScale::Two),
-                    id,
-                    name: piece.clone(),
-                    zero_width: false,
-                },
+                emote: twitch_emote(id, piece.clone()),
             });
         }
         text.push_str(&piece);

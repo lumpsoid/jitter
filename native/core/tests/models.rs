@@ -366,3 +366,27 @@ fn a_fade_level_is_clamped_to_silence_and_full() {
     assert_eq!(FadeLevel::new(f64::NAN).get(), 0.0);
     assert_eq!(FadeLevel::new(0.25).get(), 0.25);
 }
+
+fn emote_with(still_url: Option<&str>) -> jitter_core::models::Emote {
+    jitter_core::models::Emote {
+        id: "1".to_owned(),
+        name: "Kappa".to_owned(),
+        url: "https://e/animated".to_owned(),
+        still_url: still_url.map(str::to_owned),
+        zero_width: false,
+    }
+}
+
+#[test]
+fn an_emote_shows_its_still_only_with_animation_off() {
+    let emote = emote_with(Some("https://e/still"));
+    assert_eq!(emote.image_url(true), "https://e/animated");
+    assert_eq!(emote.image_url(false), "https://e/still");
+}
+
+#[test]
+fn an_emote_without_a_still_shows_its_url_either_way() {
+    let emote = emote_with(None);
+    assert_eq!(emote.image_url(true), "https://e/animated");
+    assert_eq!(emote.image_url(false), "https://e/animated");
+}

@@ -1,5 +1,9 @@
 //! FrankerFaceZ. No zero-width rule: `modifier` emotes are drawn as normal
 //! emotes.
+//!
+//! `urls` are still images; an animated emote's moving ones are under a
+//! separate `animated` key, not read here. So every FFZ emote shows still
+//! and has no other still to offer.
 
 use std::collections::HashMap;
 
@@ -108,6 +112,7 @@ fn map(set: Set) -> Vec<Emote> {
                 id: e.id?.to_string(),
                 name: e.name?,
                 url: absolute(url),
+                still_url: None,
                 zero_width: false,
             })
         })

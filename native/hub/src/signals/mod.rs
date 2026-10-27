@@ -19,6 +19,8 @@ mod playback;
 mod channel;
 // Search
 mod search;
+// Settings
+mod settings;
 
 pub use boot::{Boot, BootFailed, Booted};
 // Browse
@@ -56,4 +58,9 @@ pub use channel::{
 pub use search::{
     ChannelResult, NextSearchPage, RefreshSearch, SearchCategoriesState, SearchChannelsState,
     SearchList, SearchMore, SearchTyped, SearchUpdate,
+};
+// Settings
+pub use settings::{
+    AppTheme, ChangeSetting, SettingChange, SettingsReady, SettingsUpdate, StartQuality,
+    StartQualityChoice,
 };

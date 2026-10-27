@@ -11,6 +11,7 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand};
 use commands::fav::FavCommand;
 use commands::play::PlayArgs;
+use commands::settings::SettingsCommand;
 
 #[derive(Parser)]
 #[command(name = "jitter", about = "Watch Twitch without an account")]
@@ -84,6 +85,11 @@ enum Command {
         #[arg(long, short)]
         verbose: bool,
     },
+    /// Show the settings the GUI and the CLI share; `set` changes one.
+    Settings {
+        #[command(subcommand)]
+        command: Option<SettingsCommand>,
+    },
     /// Record a VOD position by hand.
     Resume {
         id: String,
@@ -129,5 +135,6 @@ async fn run(command: Command) -> commands::Result<()> {
             position_s,
             duration_s,
         } => commands::resume::run(&id, position_s, duration_s),
+        Command::Settings { command } => commands::settings::run(command),
     }
 }

@@ -33,6 +33,7 @@ fn emote(name: &str) -> Emote {
         id: name.to_owned(),
         name: name.to_owned(),
         url: format!("https://e/{name}"),
+        still_url: None,
         zero_width: false,
     }
 }

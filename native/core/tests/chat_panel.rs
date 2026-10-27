@@ -29,7 +29,7 @@ fn a_live_channel_joins_its_chat() {
     let mut c = ChatPanelController::new();
     assert_eq!(c.state(), ChatPanelState::Off);
     assert_eq!(
-        c.play(Some(&live("xqc"))),
+        c.play(Some(&live("xqc")), true),
         SessionChange::Join(login("xqc"))
     );
     assert_eq!(c.state(), ChatPanelState::Shown);
@@ -38,26 +38,26 @@ fn a_live_channel_joins_its_chat() {
 #[test]
 fn a_vod_replays_its_chat() {
     let mut c = ChatPanelController::new();
-    c.play(Some(&live("xqc")));
-    assert_eq!(c.play(Some(&vod())), SessionChange::Replay(video()));
+    c.play(Some(&live("xqc")), true);
+    assert_eq!(c.play(Some(&vod()), true), SessionChange::Replay(video()));
     assert_eq!(c.state(), ChatPanelState::Shown);
 }
 
 #[test]
 fn a_rejected_target_has_no_chat() {
     let mut c = ChatPanelController::new();
-    c.play(Some(&live("xqc")));
-    assert_eq!(c.play(None), SessionChange::Leave);
+    c.play(Some(&live("xqc")), true);
+    assert_eq!(c.play(None, true), SessionChange::Leave);
     assert_eq!(c.state(), ChatPanelState::Off);
-    c.play(Some(&vod()));
-    assert_eq!(c.play(None), SessionChange::Leave);
+    c.play(Some(&vod()), true);
+    assert_eq!(c.play(None, true), SessionChange::Leave);
     assert_eq!(c.state(), ChatPanelState::Off);
 }
 
 #[test]
 fn hiding_a_replay_leaves_it_and_showing_replays_again() {
     let mut c = ChatPanelController::new();
-    c.play(Some(&vod()));
+    c.play(Some(&vod()), true);
     assert_eq!(c.hide(), SessionChange::Leave);
     assert_eq!(c.state(), ChatPanelState::Hidden);
     assert_eq!(c.show(), SessionChange::Replay(video()));
@@ -67,16 +67,16 @@ fn hiding_a_replay_leaves_it_and_showing_replays_again() {
 #[test]
 fn a_chat_hidden_on_a_channel_stays_hidden_on_a_vod() {
     let mut c = ChatPanelController::new();
-    c.play(Some(&live("xqc")));
+    c.play(Some(&live("xqc")), true);
     c.hide();
-    assert_eq!(c.play(Some(&vod())), SessionChange::Leave);
+    assert_eq!(c.play(Some(&vod()), true), SessionChange::Leave);
     assert_eq!(c.state(), ChatPanelState::Hidden);
 }
 
 #[test]
 fn hiding_leaves_the_chat_and_showing_rejoins_it() {
     let mut c = ChatPanelController::new();
-    c.play(Some(&live("xqc")));
+    c.play(Some(&live("xqc")), true);
     assert_eq!(c.hide(), SessionChange::Leave);
     assert_eq!(c.state(), ChatPanelState::Hidden);
     assert_eq!(c.show(), SessionChange::Join(login("xqc")));
@@ -86,7 +86,7 @@ fn hiding_leaves_the_chat_and_showing_rejoins_it() {
 #[test]
 fn repeating_hide_or_show_changes_nothing() {
     let mut c = ChatPanelController::new();
-    c.play(Some(&live("xqc")));
+    c.play(Some(&live("xqc")), true);
     assert_eq!(c.show(), SessionChange::Keep);
     c.hide();
     assert_eq!(c.hide(), SessionChange::Keep);
@@ -96,11 +96,11 @@ fn repeating_hide_or_show_changes_nothing() {
 #[test]
 fn a_hidden_chat_stays_hidden_on_the_next_channel() {
     let mut c = ChatPanelController::new();
-    c.play(Some(&live("xqc")));
+    c.play(Some(&live("xqc")), true);
     c.hide();
     c.stop();
     assert_eq!(c.state(), ChatPanelState::Off);
-    assert_eq!(c.play(Some(&live("shroud"))), SessionChange::Leave);
+    assert_eq!(c.play(Some(&live("shroud")), true), SessionChange::Leave);
     assert_eq!(c.state(), ChatPanelState::Hidden);
     assert_eq!(c.show(), SessionChange::Join(login("shroud")));
 }
@@ -108,7 +108,7 @@ fn a_hidden_chat_stays_hidden_on_the_next_channel() {
 #[test]
 fn stopping_leaves_the_chat() {
     let mut c = ChatPanelController::new();
-    c.play(Some(&live("xqc")));
+    c.play(Some(&live("xqc")), true);
     assert_eq!(c.stop(), SessionChange::Leave);
     assert_eq!(c.state(), ChatPanelState::Off);
 }
@@ -116,13 +116,31 @@ fn stopping_leaves_the_chat() {
 #[test]
 fn showing_with_nothing_playing_joins_nothing() {
     let mut c = ChatPanelController::new();
-    c.play(Some(&live("xqc")));
+    c.play(Some(&live("xqc")), true);
     c.hide();
     c.stop();
     assert_eq!(c.show(), SessionChange::Leave);
     assert_eq!(c.state(), ChatPanelState::Off);
     assert_eq!(
-        c.play(Some(&live("xqc"))),
+        c.play(Some(&live("xqc")), true),
         SessionChange::Join(login("xqc"))
     );
+}
+
+#[test]
+fn without_auto_load_a_player_page_starts_hidden_and_joins_nothing() {
+    let mut c = ChatPanelController::new();
+    assert_eq!(c.play(Some(&live("xqc")), false), SessionChange::Leave);
+    assert_eq!(c.state(), ChatPanelState::Hidden);
+    assert_eq!(c.show(), SessionChange::Join(login("xqc")));
+    assert_eq!(c.state(), ChatPanelState::Shown);
+}
+
+#[test]
+fn without_auto_load_a_chat_shown_on_one_page_starts_hidden_on_the_next() {
+    let mut c = ChatPanelController::new();
+    c.play(Some(&live("xqc")), false);
+    c.show();
+    assert_eq!(c.play(Some(&vod()), false), SessionChange::Leave);
+    assert_eq!(c.state(), ChatPanelState::Hidden);
 }

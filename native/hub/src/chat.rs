@@ -15,6 +15,11 @@
 //! Whether a session runs at all is core's [`ChatPanelController`]: the
 //! user can hide the panel, which ends the session, and show it again,
 //! which starts a new one.
+//!
+//! The user's settings reach the panel through [`settings_changed`]: a
+//! player page opening with auto-load off starts hidden, a session asks
+//! only for the emote providers the settings name, and lines show still
+//! emotes with animation off.
 
 use std::time::Duration;
 
@@ -24,7 +29,7 @@ use jitter_core::chat_panel::{ChatPanelController, ChatPanelState, SessionChange
 use jitter_core::chat_replay::{ChatReplay, ReplayRequest, ReplayStep};
 use jitter_core::models::{
     ChannelId, ChannelLogin, ChatChange, ChatEvent, ChatMessage, Emote, EmoteProvider, EmoteScope,
-    Fragment, Page, ReplayComment, RoomState, Seconds, VideoId,
+    Fragment, Page, ReplayComment, RoomState, Seconds, Settings, VideoId,
 };
 use jitter_core::name_color::{Theme, name_color};
 use jitter_core::playback::PlaybackTarget;
@@ -52,7 +57,17 @@ pub struct ChatPanel {
     /// Sessions started so far; the latest one's tag.
     sessions: u64,
     theme: Theme,
+    /// The user's settings, as the hub last passed them.
+    settings: Settings,
     batch: Batch,
+}
+
+/// How lines render: name colours for the background, and whether emotes
+/// move.
+#[derive(Clone, Copy)]
+struct Look {
+    theme: Theme,
+    animated_emotes: bool,
 }
 
 /// The chat of what is being played.
@@ -88,6 +103,9 @@ struct Batch {
     due: Option<Instant>,
 }
 
+/// One provider's emotes, or why they did not load.
+type ProviderResult = (EmoteProvider, Result<Vec<Emote>, String>);
+
 /// A chat task's output, back in the loop as [`Fetched::Chat`].
 pub struct ChatFetched {
     session: u64,
@@ -98,7 +116,7 @@ enum Payload {
     Event(ChatEvent),
     Emotes {
         scope: EmoteScope,
-        results: [(EmoteProvider, Result<Vec<Emote>, String>); 3],
+        results: Vec<ProviderResult>,
     },
     /// A replay page, the error already in words for the panel.
     ReplayPage {
@@ -108,13 +126,22 @@ enum Payload {
 }
 
 impl ChatPanel {
-    pub fn new() -> Self {
+    /// Empty, under the user's `settings` as loaded at boot.
+    pub fn new(settings: Settings) -> Self {
         Self {
             view: ChatPanelController::new(),
             session: None,
             sessions: 0,
             theme: Theme::Dark,
+            settings,
             batch: Batch::default(),
+        }
+    }
+
+    fn look(&self) -> Look {
+        Look {
+            theme: self.theme,
+            animated_emotes: self.settings.animated_emotes,
         }
     }
 }
@@ -164,16 +191,23 @@ pub fn set_theme(panel: &mut ChatPanel, dark: bool) {
     send_snapshot(panel);
 }
 
+/// The user changed a setting: lines render with the new settings at
+/// once; auto-load and the emote providers apply from the next session.
+pub fn settings_changed(panel: &mut ChatPanel, settings: Settings) {
+    panel.settings = settings;
+    send_snapshot(panel);
+}
+
 /// A player page opened on `target` (`None`: core rejected it). A shown
 /// live channel or VOD gets a new session; anything else ends the current
-/// one.
+/// one. Core starts the panel hidden when the settings do not auto-load.
 pub fn play(
     panel: &mut ChatPanel,
     twitch: &Twitch,
     fetch: &UnboundedSender<Fetched>,
     target: Option<&PlaybackTarget>,
 ) {
-    let change = panel.view.play(target);
+    let change = panel.view.play(target, panel.settings.auto_load_chat);
     apply(panel, twitch, fetch, change);
 }
 
@@ -207,12 +241,8 @@ pub fn position(
     position: Seconds,
     duration: Seconds,
 ) {
-    let ChatPanel {
-        session,
-        theme,
-        batch,
-        ..
-    } = panel;
+    let look = panel.look();
+    let ChatPanel { session, batch, .. } = panel;
     let Some(Session { tag, chat, .. }) = session.as_mut() else {
         return;
     };
@@ -220,7 +250,7 @@ pub fn position(
         return;
     };
     let step = replay.position(target, position, duration);
-    carry_out(chat, *tag, *theme, batch, step, twitch, fetch);
+    carry_out(chat, *tag, look, batch, step, twitch, fetch);
 }
 
 /// Carries out core's session change, then sends the panel.
@@ -248,10 +278,11 @@ fn start_live(
 ) {
     panel.sessions += 1;
     let tag = panel.sessions;
+    let providers = panel.settings.emote_providers();
     let tasks = Tasks(vec![
         spawn_connection(tag, login.clone(), fetch.clone()),
-        spawn_global_emotes(tag, twitch.clone(), fetch.clone()),
-        spawn_channel_emotes(tag, login.clone(), twitch.clone(), fetch.clone()),
+        spawn_global_emotes(tag, providers, twitch.clone(), fetch.clone()),
+        spawn_channel_emotes(tag, login.clone(), providers, twitch.clone(), fetch.clone()),
     ]);
     // Replacing the session drops (and so aborts) the previous tasks.
     panel.session = Some(Session {
@@ -271,9 +302,10 @@ fn start_replay(
 ) {
     panel.sessions += 1;
     let tag = panel.sessions;
+    let providers = panel.settings.emote_providers();
     let tasks = Tasks(vec![
-        spawn_global_emotes(tag, twitch.clone(), fetch.clone()),
-        spawn_owner_emotes(tag, video.clone(), twitch.clone(), fetch.clone()),
+        spawn_global_emotes(tag, providers, twitch.clone(), fetch.clone()),
+        spawn_owner_emotes(tag, video.clone(), providers, twitch.clone(), fetch.clone()),
     ]);
     panel.session = Some(Session {
         tag,
@@ -325,13 +357,16 @@ fn spawn_page(
     });
 }
 
+/// The global emotes of `providers`, which core's settings chose; none
+/// asks no provider.
 fn spawn_global_emotes(
     session: u64,
+    providers: &'static [EmoteProvider],
     twitch: Twitch,
     fetch: UnboundedSender<Fetched>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
-        let results = with_messages(twitch.global_emotes().await);
+        let results = with_messages(twitch.global_emotes(providers).await);
         send_emotes(&fetch, session, EmoteScope::Global, results);
     })
 }
@@ -341,13 +376,14 @@ fn spawn_global_emotes(
 fn spawn_channel_emotes(
     session: u64,
     login: ChannelLogin,
+    providers: &'static [EmoteProvider],
     twitch: Twitch,
     fetch: UnboundedSender<Fetched>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         let results = match twitch.channel(&login).await {
-            Ok(channel) => with_messages(twitch.channel_emotes(&channel.id).await),
-            Err(e) => all_failed(&format!("looking up {login}: {e}")),
+            Ok(channel) => with_messages(twitch.channel_emotes(&channel.id, providers).await),
+            Err(e) => all_failed(providers, &format!("looking up {login}: {e}")),
         };
         send_emotes(&fetch, session, EmoteScope::Channel, results);
     })
@@ -358,6 +394,7 @@ fn spawn_channel_emotes(
 fn spawn_owner_emotes(
     session: u64,
     video: VideoId,
+    providers: &'static [EmoteProvider],
     twitch: Twitch,
     fetch: UnboundedSender<Fetched>,
 ) -> JoinHandle<()> {
@@ -369,31 +406,35 @@ fn spawn_owner_emotes(
             .and_then(|details| details.channel.ok_or_else(|| "no channel".to_owned()))
             .map(|channel| channel.id);
         let results = match owner {
-            Ok(id) => with_messages(twitch.channel_emotes(&id).await),
-            Err(e) => all_failed(&format!("looking up the channel of VOD {video}: {e}")),
+            Ok(id) => with_messages(twitch.channel_emotes(&id, providers).await),
+            Err(e) => all_failed(
+                providers,
+                &format!("looking up the channel of VOD {video}: {e}"),
+            ),
         };
         send_emotes(&fetch, session, EmoteScope::Channel, results);
     })
 }
 
-fn all_failed(message: &str) -> [(EmoteProvider, Result<Vec<Emote>, String>); 3] {
-    [
-        EmoteProvider::SevenTv,
-        EmoteProvider::Bttv,
-        EmoteProvider::Ffz,
-    ]
-    .map(|provider| (provider, Err(message.to_owned())))
+fn all_failed(providers: &[EmoteProvider], message: &str) -> Vec<ProviderResult> {
+    providers
+        .iter()
+        .map(|&provider| (provider, Err(message.to_owned())))
+        .collect()
 }
 
-fn with_messages(results: [ProviderEmotes; 3]) -> [(EmoteProvider, Result<Vec<Emote>, String>); 3] {
-    results.map(|(provider, result)| (provider, result.map_err(|e| e.to_string())))
+fn with_messages(results: Vec<ProviderEmotes>) -> Vec<ProviderResult> {
+    results
+        .into_iter()
+        .map(|(provider, result)| (provider, result.map_err(|e| e.to_string())))
+        .collect()
 }
 
 fn send_emotes(
     fetch: &UnboundedSender<Fetched>,
     session: u64,
     scope: EmoteScope,
-    results: [(EmoteProvider, Result<Vec<Emote>, String>); 3],
+    results: Vec<ProviderResult>,
 ) {
     let fetched = ChatFetched {
         session,
@@ -410,12 +451,8 @@ pub fn on_fetched(
     fetch: &UnboundedSender<Fetched>,
     fetched: ChatFetched,
 ) {
-    let ChatPanel {
-        session,
-        theme,
-        batch,
-        ..
-    } = panel;
+    let look = panel.look();
+    let ChatPanel { session, batch, .. } = panel;
     let Some(Session { tag, chat, .. }) = session.as_mut().filter(|s| s.tag == fetched.session)
     else {
         return;
@@ -423,11 +460,11 @@ pub fn on_fetched(
     match (fetched.payload, &mut *chat) {
         (Payload::Event(event), SessionChat::Live(live)) => {
             let changes = live.apply(event);
-            pass_on(chat, *theme, batch, changes);
+            pass_on(chat, look, batch, changes);
         }
         (Payload::ReplayPage { request, result }, SessionChat::Replay(replay)) => {
             let step = replay.apply(request, result);
-            carry_out(chat, *tag, *theme, batch, step, twitch, fetch);
+            carry_out(chat, *tag, look, batch, step, twitch, fetch);
         }
         // A session's tasks only send what its kind of chat takes.
         (Payload::Event(_) | Payload::ReplayPage { .. }, _) => {}
@@ -442,7 +479,7 @@ pub fn on_fetched(
                 }
             }
             // `set_emotes` always asks for a rerender and a failure changes
-            // the hint, so one snapshot covers all three results.
+            // the hint, so one snapshot covers every result.
             send_snapshot(panel);
         }
     }
@@ -453,13 +490,13 @@ pub fn on_fetched(
 fn carry_out(
     chat: &SessionChat,
     tag: u64,
-    theme: Theme,
+    look: Look,
     batch: &mut Batch,
     step: ReplayStep,
     twitch: &Twitch,
     fetch: &UnboundedSender<Fetched>,
 ) {
-    pass_on(chat, theme, batch, step.changes);
+    pass_on(chat, look, batch, step.changes);
     if let Some(request) = step.fetch {
         spawn_page(tag, request, twitch.clone(), fetch.clone());
     }
@@ -468,12 +505,12 @@ fn carry_out(
 /// Sends each change as its diff, in order. Appends and evictions wait in
 /// the batch; anything else sends the batch first, so Dart sees every
 /// change in the order core made it.
-fn pass_on(session: &SessionChat, theme: Theme, batch: &mut Batch, changes: Vec<ChatChange>) {
+fn pass_on(session: &SessionChat, look: Look, batch: &mut Batch, changes: Vec<ChatChange>) {
     let chat = session.chat();
     for change in changes {
         match change {
             ChatChange::Appended { message } => {
-                batch.messages.push(line(chat, &message, theme));
+                batch.messages.push(line(chat, &message, look));
                 batch
                     .due
                     .get_or_insert_with(|| Instant::now() + BATCH_WINDOW);
@@ -490,7 +527,7 @@ fn pass_on(session: &SessionChat, theme: Theme, batch: &mut Batch, changes: Vec<
             ChatChange::Rerender => {
                 *batch = Batch::default();
                 ChatUpdate::Snapshot {
-                    messages: lines(chat, theme),
+                    messages: lines(chat, look),
                     status: session.status(),
                 }
                 .send_signal_to_dart();
@@ -543,7 +580,7 @@ fn send_snapshot(panel: &mut ChatPanel) {
     panel.batch = Batch::default();
     match (panel.view.state(), &panel.session) {
         (ChatPanelState::Shown, Some(session)) => ChatUpdate::Snapshot {
-            messages: lines(session.chat.chat(), panel.theme),
+            messages: lines(session.chat.chat(), panel.look()),
             status: session.chat.status(),
         },
         (ChatPanelState::Hidden, _) => ChatUpdate::Hidden,
@@ -552,13 +589,13 @@ fn send_snapshot(panel: &mut ChatPanel) {
     .send_signal_to_dart();
 }
 
-fn lines(chat: &ChatController, theme: Theme) -> Vec<ChatLine> {
-    chat.messages().map(|m| line(chat, m, theme)).collect()
+fn lines(chat: &ChatController, look: Look) -> Vec<ChatLine> {
+    chat.messages().map(|m| line(chat, m, look)).collect()
 }
 
-fn line(chat: &ChatController, message: &ChatMessage, theme: Theme) -> ChatLine {
+fn line(chat: &ChatController, message: &ChatMessage, look: Look) -> ChatLine {
     let sender = &message.sender;
-    let color = name_color(sender.color, &sender.user_id, theme);
+    let color = name_color(sender.color, &sender.user_id, look.theme);
     ChatLine {
         id: message.id.clone(),
         name: sender.display_name.clone(),
@@ -571,7 +608,7 @@ fn line(chat: &ChatController, message: &ChatMessage, theme: Theme) -> ChatLine 
         fragments: chat
             .fragments(message)
             .into_iter()
-            .map(ChatFragment::from)
+            .map(|fragment| chat_fragment(fragment, look.animated_emotes))
             .collect(),
     }
 }
@@ -626,31 +663,32 @@ fn provider_name(provider: EmoteProvider) -> &'static str {
     }
 }
 
-impl From<Fragment> for ChatFragment {
-    fn from(fragment: Fragment) -> Self {
-        match fragment {
-            Fragment::Text(text) => Self::Text { text },
-            Fragment::Emote(emote) => Self::Emote {
-                emote: EmoteImage::from(emote),
-            },
-            Fragment::Overlay { base, overlays } => Self::Overlay {
-                base: EmoteImage::from(base),
-                overlays: overlays.into_iter().map(EmoteImage::from).collect(),
-            },
-            Fragment::Link(text) => Self::Link {
-                url: link_url(&text),
-                text,
-            },
-        }
+/// One fragment as the panel draws it; core's `Emote::image_url` picks
+/// each emote's image for `animated`.
+fn chat_fragment(fragment: Fragment, animated: bool) -> ChatFragment {
+    match fragment {
+        Fragment::Text(text) => ChatFragment::Text { text },
+        Fragment::Emote(emote) => ChatFragment::Emote {
+            emote: emote_image(&emote, animated),
+        },
+        Fragment::Overlay { base, overlays } => ChatFragment::Overlay {
+            base: emote_image(&base, animated),
+            overlays: overlays
+                .iter()
+                .map(|overlay| emote_image(overlay, animated))
+                .collect(),
+        },
+        Fragment::Link(text) => ChatFragment::Link {
+            url: link_url(&text),
+            text,
+        },
     }
 }
 
-impl From<Emote> for EmoteImage {
-    fn from(emote: Emote) -> Self {
-        Self {
-            name: emote.name,
-            url: emote.url,
-        }
+fn emote_image(emote: &Emote, animated: bool) -> EmoteImage {
+    EmoteImage {
+        name: emote.name.clone(),
+        url: emote.image_url(animated).to_owned(),
     }
 }
 

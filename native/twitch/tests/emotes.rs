@@ -7,7 +7,9 @@
 use jitter_core::models::{ChannelId, Emote};
 use jitter_twitch::TwitchError;
 use jitter_twitch::client::{headers, third_party_headers};
-use jitter_twitch::emotes::{TwitchEmoteScale, bttv, ffz, seventv, twitch_emote_url};
+use jitter_twitch::emotes::{
+    TwitchEmoteScale, bttv, ffz, seventv, twitch_emote_url, twitch_still_emote_url,
+};
 
 const SEVENTV_GLOBAL: &[u8] = include_bytes!("fixtures/seventv_global.json");
 const SEVENTV_CHANNEL: &[u8] = include_bytes!("fixtures/seventv_channel.json");
@@ -206,4 +208,47 @@ fn twitch_emote_url_per_scale() {
         "https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/1.0"
     );
     assert!(twitch_emote_url("25", TwitchEmoteScale::Three).ends_with("/dark/3.0"));
+}
+
+#[test]
+fn twitch_still_emote_url_is_the_static_format() {
+    assert_eq!(
+        twitch_still_emote_url("25", TwitchEmoteScale::Two),
+        "https://static-cdn.jtvnw.net/emoticons/v2/25/static/dark/2.0"
+    );
+}
+
+#[test]
+fn seventv_animated_emotes_carry_the_hosts_still_and_static_ones_none() {
+    let emotes = ok(seventv::parse_global(SEVENTV_GLOBAL));
+    assert_eq!(
+        find(&emotes, "PETPET").still_url.as_deref(),
+        Some("https://cdn.7tv.app/emote/01FSNK0GP000038GDBZ91HT6SQ/2x_static.webp")
+    );
+    assert_eq!(find(&emotes, "reckH").still_url, None);
+}
+
+#[test]
+fn seventv_without_a_file_list_has_no_still() {
+    let body = br#"{"emotes":[
+        {"id":"a","name":"Bare","data":{"host":{"url":"//cdn.7tv.app/emote/a"}}}
+    ]}"#;
+    let emotes = ok(seventv::parse_global(body));
+    assert_eq!(find(&emotes, "Bare").still_url, None);
+}
+
+#[test]
+fn bttv_animated_emotes_have_a_static_still() {
+    let emotes = ok(bttv::parse_global(BTTV_GLOBAL));
+    assert_eq!(
+        find(&emotes, "SourPls").still_url.as_deref(),
+        Some("https://cdn.betterttv.net/emote/566ca38765dbbdab32ec0560/static/2x.webp")
+    );
+    assert_eq!(find(&emotes, "CiGrip").still_url, None);
+}
+
+#[test]
+fn ffz_emotes_are_already_still() {
+    let emotes = ok(ffz::parse_global(FFZ_GLOBAL));
+    assert!(emotes.iter().all(|e| e.still_url.is_none()));
 }

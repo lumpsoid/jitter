@@ -8,8 +8,10 @@
 
 mod favorites_store;
 mod resume_store;
+mod settings_store;
 mod store_error;
 
 pub use favorites_store::FavoritesStore;
 pub use resume_store::ResumeStore;
+pub use settings_store::SettingsStore;
 pub use store_error::StoreError;

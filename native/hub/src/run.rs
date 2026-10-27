@@ -15,6 +15,7 @@ use jitter_core::models::{Category, Page, PageRequest, Playback, PlaybackDetails
 use jitter_core::playback::{Attempt, PlaybackController, PlaybackTarget};
 use jitter_core::ports::StoreError;
 use jitter_core::resume::ResumeController;
+use jitter_core::settings::SettingsController;
 use jitter_store::SqliteStore;
 use jitter_twitch::{Twitch, TwitchError};
 use rinf::{DartSignal, DartSignalPack, RustSignal, SignalReceiver};
@@ -49,6 +50,9 @@ use crate::signals::{OpenChannel, RefreshChannel, SelectVodKind, VodsNextPage};
 // Search
 use crate::search::{self, SearchFetched, SearchPanel};
 use crate::signals::{NextSearchPage, RefreshSearch, SearchTyped};
+// Settings
+use crate::settings;
+use crate::signals::{ChangeSetting, SettingsReady};
 
 /// Every controller, built and loaded from one store.
 pub struct Controllers {
@@ -67,14 +71,18 @@ pub struct Controllers {
     chat: ChatPanel,
     // Search
     search: SearchPanel,
+    // Settings
+    settings: SettingsController,
 }
 
 impl Controllers {
     /// Builds each controller on a clone of `store`, then loads the
-    /// favorites.
+    /// favorites and the settings; the chat starts under the settings.
     pub fn boot(store: &SqliteStore) -> Result<Self, StoreError> {
         let mut favorites = FavoritesController::new(Box::new(store.clone()));
         favorites.load()?;
+        let mut settings = SettingsController::new(Box::new(store.clone()));
+        settings.load()?;
         Ok(Self {
             favorites,
             resume: ResumeController::new(Box::new(store.clone())),
@@ -88,9 +96,11 @@ impl Controllers {
             // Channel
             channel: ChannelPage::default(),
             // Chat
-            chat: ChatPanel::new(),
+            chat: ChatPanel::new(*settings.state()),
             // Search
             search: SearchPanel::default(),
+            // Settings
+            settings,
         })
     }
 }
@@ -195,6 +205,10 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
     let search_typed = SearchTyped::get_dart_signal_receiver();
     let refresh_search = RefreshSearch::get_dart_signal_receiver();
     let next_search_page = NextSearchPage::get_dart_signal_receiver();
+
+    // Settings
+    let settings_ready = SettingsReady::get_dart_signal_receiver();
+    let change_setting = ChangeSetting::get_dart_signal_receiver();
 
     loop {
         // Chat: the batch deadline, copied out so its timer arm borrows nothing.
@@ -312,6 +326,15 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
             // The same sleep as the chat batch's: pending while nothing waits.
             () = chat::until(search_due_at) => search::settle(&mut c.search, &twitch, &fetch),
 
+            // Settings: the chat takes a change at once; playback reads the
+            // settings on the next `Play`.
+            Some(_) = settings_ready.recv() => settings::ready(&c.settings),
+            Some(pack) = change_setting.recv() => {
+                if settings::change(&mut c.settings, pack.message) {
+                    chat::settings_changed(&mut c.chat, *c.settings.state());
+                }
+            }
+
             // Network results
             Some(result) = fetched.recv() => on_fetched(&mut c, result, &twitch, &fetch),
 
@@ -349,7 +372,15 @@ fn on_fetched(
             result,
             details,
         } => {
-            playback::resolved(&mut c.playback, &c.resume, target, result, details);
+            let preferred = c.settings.state().start_quality;
+            playback::resolved(
+                &mut c.playback,
+                &c.resume,
+                target,
+                result,
+                details,
+                preferred,
+            );
         }
         Fetched::PlaybackTimedOut(attempt) => playback::timed_out(&mut c.playback, attempt),
         // Channel

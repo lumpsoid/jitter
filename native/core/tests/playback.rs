@@ -3,7 +3,8 @@ use std::time::{Duration, Instant};
 use jitter_core::fakes::FakeResumeStore;
 use jitter_core::models::{
     CategoryId, ChannelLogin, FadeLevel, GameRef, Open, Playback, PlaybackDetails, QualityKind,
-    Resolution, ResumePoint, SLEEP_FADE, Seconds, SleepStep, Timestamp, Variant, VideoId,
+    QualityPreference, Resolution, ResumePoint, SLEEP_FADE, Seconds, SleepStep, Timestamp, Variant,
+    VideoId,
 };
 use jitter_core::playback::{PlaybackController, PlaybackState, PlaybackTarget, TIMED_OUT};
 use jitter_core::resume::ResumeController;
@@ -50,17 +51,28 @@ fn result_for_another_target_is_ignored() {
     assert!(!c.apply(
         live("a"),
         Ok(playback(vec![variant("720p", 720, QualityKind::Transcode)])),
-        no_details()
+        no_details(),
+        QualityPreference::Source
     ));
     assert_eq!(c.state(), &PlaybackState::Resolving { target: live("b") });
-    assert!(!c.apply(live("a"), Err("late".to_owned()), no_details()));
+    assert!(!c.apply(
+        live("a"),
+        Err("late".to_owned()),
+        no_details(),
+        QualityPreference::Source
+    ));
     assert_eq!(c.state(), &PlaybackState::Resolving { target: live("b") });
 }
 
 #[test]
 fn result_while_idle_is_ignored() {
     let mut c = PlaybackController::new();
-    c.apply(live("a"), Err("x".to_owned()), no_details());
+    c.apply(
+        live("a"),
+        Err("x".to_owned()),
+        no_details(),
+        QualityPreference::Source,
+    );
     assert_eq!(c.state(), &PlaybackState::Idle);
 }
 
@@ -76,7 +88,12 @@ fn a_resolve_that_times_out_fails_and_its_late_result_is_ignored() {
     let attempt = c.begin(live("a"));
     assert!(c.time_out(attempt));
     assert_eq!(c.state(), &timed_out());
-    assert!(!c.apply(live("a"), one_quality(), no_details()));
+    assert!(!c.apply(
+        live("a"),
+        one_quality(),
+        no_details(),
+        QualityPreference::Source
+    ));
     assert_eq!(c.state(), &timed_out());
 }
 
@@ -95,7 +112,12 @@ fn a_retry_gets_a_fresh_attempt_the_old_timeout_cannot_fail() {
 fn a_timeout_after_the_answer_or_leaving_changes_nothing() {
     let mut c = PlaybackController::new();
     let attempt = c.begin(live("a"));
-    assert!(c.apply(live("a"), one_quality(), no_details()));
+    assert!(c.apply(
+        live("a"),
+        one_quality(),
+        no_details(),
+        QualityPreference::Source
+    ));
     assert!(!c.time_out(attempt));
     assert!(matches!(c.state(), PlaybackState::Ready { .. }));
 
@@ -116,6 +138,7 @@ fn source_is_selected_by_default() {
             variant("1080p (source)", 1080, QualityKind::Source),
         ])),
         no_details(),
+        QualityPreference::Source,
     );
     assert_eq!(selected(&c), Some("1080p (source)"));
 }
@@ -131,6 +154,7 @@ fn no_source_selects_first_quality() {
             variant("720p", 720, QualityKind::Transcode),
         ])),
         no_details(),
+        QualityPreference::Source,
     );
     assert_eq!(selected(&c), Some("720p"));
 }
@@ -149,6 +173,7 @@ fn select_unknown_name_keeps_selection_and_known_name_changes_it() {
             variant("480p", 480, QualityKind::Transcode),
         ])),
         no_details(),
+        QualityPreference::Source,
     );
     c.select("nope");
     assert_eq!(selected(&c), Some("720p"));
@@ -160,7 +185,12 @@ fn select_unknown_name_keeps_selection_and_known_name_changes_it() {
 fn error_and_empty_playback_fail() {
     let mut c = PlaybackController::new();
     c.begin(live("a"));
-    assert!(c.apply(live("a"), Err("offline".to_owned()), no_details()));
+    assert!(c.apply(
+        live("a"),
+        Err("offline".to_owned()),
+        no_details(),
+        QualityPreference::Source
+    ));
     assert_eq!(
         c.state(),
         &PlaybackState::Failed {
@@ -168,7 +198,12 @@ fn error_and_empty_playback_fail() {
         }
     );
     c.begin(live("a"));
-    c.apply(live("a"), Ok(playback(vec![])), no_details());
+    c.apply(
+        live("a"),
+        Ok(playback(vec![])),
+        no_details(),
+        QualityPreference::Source,
+    );
     assert!(matches!(c.state(), PlaybackState::Failed { .. }));
 }
 
@@ -202,7 +237,12 @@ fn one_quality() -> Result<Playback, String> {
 fn ready_carries_the_details() {
     let mut c = PlaybackController::new();
     c.begin(live("a"));
-    assert!(c.apply(live("a"), one_quality(), Ok(gta())));
+    assert!(c.apply(
+        live("a"),
+        one_quality(),
+        Ok(gta()),
+        QualityPreference::Source
+    ));
     assert_eq!(details(&c), Some(&gta()));
 }
 
@@ -210,7 +250,12 @@ fn ready_carries_the_details() {
 fn details_that_failed_to_load_still_play_without_them() {
     let mut c = PlaybackController::new();
     c.begin(live("a"));
-    assert!(c.apply(live("a"), one_quality(), Err("timed out".to_owned())));
+    assert!(c.apply(
+        live("a"),
+        one_quality(),
+        Err("timed out".to_owned()),
+        QualityPreference::Source
+    ));
     assert_eq!(selected(&c), Some("720p"));
     assert_eq!(details(&c), Some(&PlaybackDetails::default()));
 }
@@ -219,7 +264,12 @@ fn details_that_failed_to_load_still_play_without_them() {
 fn details_do_not_rescue_a_failed_resolve() {
     let mut c = PlaybackController::new();
     c.begin(live("a"));
-    assert!(c.apply(live("a"), Err("offline".to_owned()), Ok(gta())));
+    assert!(c.apply(
+        live("a"),
+        Err("offline".to_owned()),
+        Ok(gta()),
+        QualityPreference::Source
+    ));
     assert_eq!(
         c.state(),
         &PlaybackState::Failed {
@@ -239,6 +289,7 @@ fn switching_quality_keeps_the_details() {
             variant("720p60", 720, QualityKind::Transcode),
         ])),
         Ok(gta()),
+        QualityPreference::Source,
     );
     c.switch_quality("720p60", Seconds::ZERO);
     assert_eq!(details(&c), Some(&gta()));
@@ -264,7 +315,8 @@ fn a_vod_carries_when_it_was_streamed() {
     assert!(c.apply(
         PlaybackTarget::Vod(vod()),
         one_quality(),
-        Ok(streamed.clone())
+        Ok(streamed.clone()),
+        QualityPreference::Source
     ));
     assert_eq!(details(&c), Some(&streamed));
 }
@@ -279,6 +331,7 @@ fn ready(target: PlaybackTarget) -> PlaybackController {
             variant("720p60", 720, QualityKind::Transcode),
         ])),
         no_details(),
+        QualityPreference::Source,
     );
     c
 }
@@ -473,7 +526,12 @@ fn leaving_goes_idle() {
     assert!(c.leave(&live("a")));
     assert_eq!(c.state(), &PlaybackState::Idle);
     c.begin(live("a"));
-    c.apply(live("a"), Err("offline".to_owned()), no_details());
+    c.apply(
+        live("a"),
+        Err("offline".to_owned()),
+        no_details(),
+        QualityPreference::Source,
+    );
     assert!(c.leave(&live("a")));
     assert_eq!(c.state(), &PlaybackState::Idle);
 }
@@ -601,7 +659,12 @@ fn resuming_a_slept_page_plays_it_again_without_a_timer() {
     c.sleep_tick(t0 + minutes(1));
     c.begin(live("a"));
     assert_eq!(c.state(), &PlaybackState::Resolving { target: live("a") });
-    c.apply(live("a"), one_quality(), no_details());
+    c.apply(
+        live("a"),
+        one_quality(),
+        no_details(),
+        QualityPreference::Source,
+    );
     assert!(matches!(
         c.state(),
         PlaybackState::Ready { sleep: None, .. }
@@ -632,4 +695,97 @@ fn leaving_a_slept_page_goes_idle_unless_it_was_replaced() {
     assert_eq!(c.state(), &PlaybackState::Slept { target: live("a") });
     assert!(c.leave(&live("a")));
     assert_eq!(c.state(), &PlaybackState::Idle);
+}
+
+fn video(name: &str, height: u32, fps: u32, kind: QualityKind) -> Variant {
+    Variant {
+        frame_rate: Some(fps),
+        ..variant(name, height, kind)
+    }
+}
+
+fn audio_only() -> Variant {
+    Variant {
+        resolution: None,
+        frame_rate: None,
+        ..variant("audio_only", 0, QualityKind::AudioOnly)
+    }
+}
+
+/// A typical live ladder: source 1080p60, then 720p60, 720p30, 480p, 160p
+/// and audio only.
+fn ladder() -> Playback {
+    playback(vec![
+        video("1080p60", 1080, 60, QualityKind::Source),
+        video("720p60", 720, 60, QualityKind::Transcode),
+        video("720p30", 720, 30, QualityKind::Transcode),
+        video("480p30", 480, 30, QualityKind::Transcode),
+        video("160p30", 160, 30, QualityKind::Transcode),
+        audio_only(),
+    ])
+}
+
+fn preferred(p: &Playback, preference: QualityPreference) -> Option<&str> {
+    p.preferred_quality(preference).map(|q| q.name.as_str())
+}
+
+#[test]
+fn a_preferred_height_the_stream_has_is_picked_at_its_best_frame_rate() {
+    let p = ladder();
+    assert_eq!(preferred(&p, QualityPreference::P1080), Some("1080p60"));
+    assert_eq!(preferred(&p, QualityPreference::P720), Some("720p60"));
+    assert_eq!(preferred(&p, QualityPreference::P480), Some("480p30"));
+    assert_eq!(preferred(&p, QualityPreference::P160), Some("160p30"));
+}
+
+#[test]
+fn a_missing_height_falls_to_the_closest_lower_one() {
+    assert_eq!(
+        preferred(&ladder(), QualityPreference::P360),
+        Some("160p30")
+    );
+}
+
+#[test]
+fn nothing_low_enough_falls_back_to_the_best() {
+    let p = playback(vec![
+        video("1080p60", 1080, 60, QualityKind::Source),
+        video("720p60", 720, 60, QualityKind::Transcode),
+    ]);
+    assert_eq!(preferred(&p, QualityPreference::P480), Some("1080p60"));
+    assert_eq!(preferred(&p, QualityPreference::AudioOnly), Some("1080p60"));
+}
+
+#[test]
+fn source_and_audio_only_pick_their_own_kind() {
+    let p = ladder();
+    assert_eq!(preferred(&p, QualityPreference::Source), Some("1080p60"));
+    assert_eq!(
+        preferred(&p, QualityPreference::AudioOnly),
+        Some("audio_only")
+    );
+}
+
+#[test]
+fn a_source_below_the_preference_is_the_closest_lower() {
+    let p = playback(vec![
+        video("900p60", 900, 60, QualityKind::Source),
+        video("720p30", 720, 30, QualityKind::Transcode),
+    ]);
+    assert_eq!(preferred(&p, QualityPreference::P1080), Some("900p60"));
+}
+
+#[test]
+fn the_page_opens_at_the_preferred_quality_and_a_manual_switch_leaves_it() {
+    let mut c = PlaybackController::new();
+    c.begin(live("a"));
+    assert!(c.apply(
+        live("a"),
+        Ok(ladder()),
+        no_details(),
+        QualityPreference::P480
+    ));
+    assert_eq!(selected(&c), Some("480p30"));
+    assert!(c.switch_quality("1080p60", Seconds::ZERO).is_some());
+    assert_eq!(selected(&c), Some("1080p60"));
 }

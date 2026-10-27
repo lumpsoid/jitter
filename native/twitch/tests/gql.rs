@@ -751,6 +751,10 @@ fn video_comments_place_each_emote_fragment_as_a_span() {
         look.emote.url,
         "https://static-cdn.jtvnw.net/emoticons/v2/1035670/default/dark/2.0"
     );
+    assert_eq!(
+        look.emote.still_url.as_deref(),
+        Some("https://static-cdn.jtvnw.net/emoticons/v2/1035670/static/dark/2.0")
+    );
     assert!(!look.emote.zero_width);
 }
 

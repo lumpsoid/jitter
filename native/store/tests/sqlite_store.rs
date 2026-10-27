@@ -8,10 +8,12 @@ use std::thread;
 
 use jitter_core::favorites::FavoritesController;
 use jitter_core::models::{
-    Channel, ChannelId, ChannelLogin, Favorite, ResumePoint, Seconds, Stream, Timestamp, VideoId,
+    Channel, ChannelId, ChannelLogin, Favorite, QualityPreference, ResumePoint, Seconds, Setting,
+    Settings, Stream, ThemeChoice, Timestamp, VideoId,
 };
-use jitter_core::ports::{FavoritesStore, ResumeStore};
+use jitter_core::ports::{FavoritesStore, ResumeStore, SettingsStore};
 use jitter_core::resume::ResumeController;
+use jitter_core::settings::SettingsController;
 use jitter_store::SqliteStore;
 use rusqlite::Connection;
 use tempfile::TempDir;
@@ -263,7 +265,7 @@ fn reopening_a_migrated_file_keeps_its_rows() -> TestResult {
     drop(store);
     let store = SqliteStore::open(&path)?;
     assert_eq!(store.load_all()?, [favorite("1", "Alpha", 10)]);
-    assert_eq!(user_version(&path)?, 2);
+    assert_eq!(user_version(&path)?, 3);
     Ok(())
 }
 
@@ -289,7 +291,7 @@ fn a_v1_file_is_migrated_and_its_favorites_load_without_an_avatar() -> TestResul
     )?;
     drop(v1);
     let mut store = SqliteStore::open(&path)?;
-    assert_eq!(user_version(&path)?, 2);
+    assert_eq!(user_version(&path)?, 3);
     assert_eq!(store.load_all()?, [favorite("1", "Alpha", 10)]);
     store.set_avatar(&id("1"), "https://a/1.png")?;
     let expected = Favorite {
@@ -344,7 +346,7 @@ fn two_connections_opening_a_fresh_file_at_once_both_succeed() -> TestResult {
             let opened = handle.join().map_err(|_| "open thread panicked")?;
             assert_eq!(opened, Ok(()));
         }
-        assert_eq!(user_version(&path)?, 2);
+        assert_eq!(user_version(&path)?, 3);
     }
     Ok(())
 }
@@ -376,5 +378,72 @@ fn a_rename_through_one_connection_does_not_resurrect_a_removal_through_the_othe
     a.remove(&id("1"))?;
     b.apply_live(vec![stream(channel("1", "AlphaNew"), 7)])?;
     assert!(a_store.load_all()?.is_empty());
+    Ok(())
+}
+
+#[test]
+fn settings_never_stored_are_the_defaults() -> TestResult {
+    let store = SqliteStore::open_in_memory()?;
+    assert_eq!(store.load_settings()?, Settings::default());
+    Ok(())
+}
+
+#[test]
+fn every_setting_round_trips() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    for setting in [
+        Setting::Theme(ThemeChoice::Light),
+        Setting::AnimatedEmotes(false),
+        Setting::AutoLoadChat(false),
+        Setting::StartQuality(QualityPreference::AudioOnly),
+        Setting::ThirdPartyEmotes(false),
+    ] {
+        store.put_setting(setting)?;
+    }
+    let expected = Settings {
+        theme: ThemeChoice::Light,
+        animated_emotes: false,
+        auto_load_chat: false,
+        start_quality: QualityPreference::AudioOnly,
+        third_party_emotes: false,
+    };
+    assert_eq!(store.load_settings()?, expected);
+    store.put_setting(Setting::AnimatedEmotes(true))?;
+    assert_eq!(
+        store.load_settings()?,
+        Settings {
+            animated_emotes: true,
+            ..expected
+        }
+    );
+    Ok(())
+}
+
+#[test]
+fn a_corrupt_setting_fails_the_load() -> TestResult {
+    let (_dir, path) = fresh_file()?;
+    let store = SqliteStore::open(&path)?;
+    Connection::open(&path)?.execute("UPDATE settings SET start_quality = '1440p'", [])?;
+    assert!(store.load_settings().is_err());
+    Connection::open(&path)?.execute(
+        "UPDATE settings SET start_quality = NULL, auto_load_chat = 2",
+        [],
+    )?;
+    assert!(store.load_settings().is_err());
+    Ok(())
+}
+
+#[test]
+fn a_setting_changed_through_one_connection_survives_a_change_through_the_other() -> TestResult {
+    let (_dir, path) = fresh_file()?;
+    let mut gui = SettingsController::new(Box::new(SqliteStore::open(&path)?));
+    let mut cli = SettingsController::new(Box::new(SqliteStore::open(&path)?));
+    gui.load()?;
+    cli.load()?;
+    cli.set(Setting::Theme(ThemeChoice::Dark))?;
+    gui.set(Setting::StartQuality(QualityPreference::P720))?;
+    gui.load()?;
+    assert_eq!(gui.state().theme, ThemeChoice::Dark);
+    assert_eq!(gui.state().start_quality, QualityPreference::P720);
     Ok(())
 }

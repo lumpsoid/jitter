@@ -6,7 +6,7 @@ use jitter_core::chat::ChatController;
 use jitter_core::models::{ChatEvent, ChatMessage, EmoteScope, Fragment};
 use jitter_twitch::emotes::ProviderEmotes;
 
-use super::{Result, ctx, login, twitch};
+use super::{Result, ctx, login, settings, twitch};
 
 /// Prints a channel's live chat until interrupted, emotes as `[name]`.
 /// `verbose` also prints the connection's own log (PING/PONG, reconnects)
@@ -23,7 +23,11 @@ pub async fn run(input: &str, verbose: bool) -> Result<()> {
         .map_err(ctx(format!("looking up {login}")))?;
 
     let mut chat = ChatController::new();
-    let (global, local) = tokio::join!(twitch.global_emotes(), twitch.channel_emotes(&channel.id));
+    let providers = settings()?.emote_providers();
+    let (global, local) = tokio::join!(
+        twitch.global_emotes(providers),
+        twitch.channel_emotes(&channel.id, providers)
+    );
     load_emotes(&mut chat, EmoteScope::Global, global);
     load_emotes(&mut chat, EmoteScope::Channel, local);
 
@@ -37,7 +41,7 @@ pub async fn run(input: &str, verbose: bool) -> Result<()> {
     Ok(())
 }
 
-fn load_emotes(chat: &mut ChatController, scope: EmoteScope, results: [ProviderEmotes; 3]) {
+fn load_emotes(chat: &mut ChatController, scope: EmoteScope, results: Vec<ProviderEmotes>) {
     for (provider, result) in results {
         match result {
             // The CLI renders each message once, on arrival; nothing to redraw.

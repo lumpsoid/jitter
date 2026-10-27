@@ -8,6 +8,7 @@
 mod favorite_rows;
 mod migrations;
 mod resume_rows;
+mod settings_rows;
 mod sqlite_store;
 
 use std::fs;

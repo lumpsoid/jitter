@@ -5,8 +5,8 @@
 use std::time::{Duration, Instant};
 
 use crate::models::{
-    ChannelLogin, Open, Playback, PlaybackDetails, Quality, Seconds, SleepStep, SleepTimer,
-    Timestamp, VideoId,
+    ChannelLogin, Open, Playback, PlaybackDetails, Quality, QualityPreference, Seconds, SleepStep,
+    SleepTimer, Timestamp, VideoId,
 };
 use crate::ports::StoreError;
 use crate::resume::ResumeController;
@@ -108,17 +108,19 @@ impl PlaybackController {
         true
     }
 
-    /// Applies a resolve result and the details fetched beside it. Ignored
-    /// unless `target` is the one being resolved, so a slow resolve for
-    /// channel A cannot replace a later pick of channel B. Details that
-    /// failed to load leave the page without them; the stream still plays.
-    /// Returns whether it applied, i.e. whether the result is the one now
-    /// shown.
+    /// Applies a resolve result and the details fetched beside it,
+    /// selecting the quality `preferred` asks for
+    /// ([`Playback::preferred_quality`]). Ignored unless `target` is the
+    /// one being resolved, so a slow resolve for channel A cannot replace a
+    /// later pick of channel B. Details that failed to load leave the page
+    /// without them; the stream still plays. Returns whether it applied,
+    /// i.e. whether the result is the one now shown.
     pub fn apply(
         &mut self,
         target: PlaybackTarget,
         result: Result<Playback, String>,
         details: Result<PlaybackDetails, String>,
+        preferred: QualityPreference,
     ) -> bool {
         let PlaybackState::Resolving { target: current } = &self.state else {
             return false;
@@ -128,7 +130,7 @@ impl PlaybackController {
         }
         self.state = match result {
             Err(message) => PlaybackState::Failed { message },
-            Ok(playback) => match playback.default_quality() {
+            Ok(playback) => match playback.preferred_quality(preferred) {
                 None => PlaybackState::Failed {
                     message: "no playable qualities".to_owned(),
                 },

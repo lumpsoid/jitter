@@ -6,7 +6,7 @@ use jitter_core::models::{Playback, Timestamp};
 use jitter_core::playback::{PlaybackController, PlaybackState, PlaybackTarget, RESOLVE_TIMEOUT};
 use jitter_core::resume::ResumeController;
 
-use super::{Result, ctx, login, now, open_store, twitch, video_id};
+use super::{Result, ctx, login, now, open_store, settings, twitch, video_id};
 
 #[derive(Args)]
 pub struct PlayArgs {
@@ -43,6 +43,7 @@ pub async fn run(args: PlayArgs) -> Result<()> {
         return Ok(());
     }
 
+    let preferred = settings()?.start_quality;
     let twitch = twitch()?;
     let mut playback = PlaybackController::new();
     let attempt = playback.begin(target.clone());
@@ -63,6 +64,7 @@ pub async fn run(args: PlayArgs) -> Result<()> {
                 target,
                 resolved.map_err(|e| e.to_string()),
                 details.map_err(|e| e.to_string()),
+                preferred,
             );
         }
         Err(_) => {

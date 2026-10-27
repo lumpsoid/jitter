@@ -9,6 +9,8 @@
 
 mod fake_favorites_store;
 mod fake_resume_store;
+mod fake_settings_store;
 
 pub use fake_favorites_store::FakeFavoritesStore;
 pub use fake_resume_store::FakeResumeStore;
+pub use fake_settings_store::FakeSettingsStore;

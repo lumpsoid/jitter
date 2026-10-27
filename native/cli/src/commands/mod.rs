@@ -9,6 +9,7 @@ pub mod play;
 pub mod replay;
 pub mod resume;
 pub mod search;
+pub mod settings;
 pub mod top;
 pub mod vods;
 
@@ -16,7 +17,8 @@ use std::fmt::Display;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use jitter_core::favorites::FavoritesController;
-use jitter_core::models::{ChannelLogin, Timestamp, VideoId};
+use jitter_core::models::{ChannelLogin, Settings, Timestamp, VideoId};
+use jitter_core::settings::SettingsController;
 use jitter_store::SqliteStore;
 use jitter_twitch::Twitch;
 
@@ -32,6 +34,13 @@ pub fn ctx<E: Display>(what: impl Display) -> impl FnOnce(E) -> String {
 pub fn open_store() -> Result<SqliteStore> {
     let path = jitter_store::default_db_path().map_err(ctx("locating the database"))?;
     SqliteStore::open(path).map_err(ctx("opening the database"))
+}
+
+/// The user's stored settings, the same the GUI reads.
+pub fn settings() -> Result<Settings> {
+    let mut settings = SettingsController::new(Box::new(open_store()?));
+    settings.load().map_err(ctx("loading the settings"))?;
+    Ok(*settings.state())
 }
 
 pub fn twitch() -> Result<Twitch> {

@@ -1,6 +1,6 @@
 use std::cmp::Reverse;
 
-use super::{Quality, QualityKind, Variant};
+use super::{Quality, QualityKind, QualityPreference, Variant};
 
 /// A resolved stream: the master playlist and its qualities in display order.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,6 +53,40 @@ impl Playback {
             .iter()
             .find(|q| q.kind == QualityKind::Source)
             .or_else(|| self.qualities.first())
+    }
+
+    /// The quality a page opens at for `preference`: the one asked for if
+    /// the stream has it, else the closest below it, else the default
+    /// selection. A height takes the tallest video quality not taller,
+    /// at its highest frame rate; audio only takes the audio-only one.
+    pub fn preferred_quality(&self, preference: QualityPreference) -> Option<&Quality> {
+        let chosen = match preference {
+            QualityPreference::Source => None,
+            QualityPreference::AudioOnly => self
+                .qualities
+                .iter()
+                .find(|q| q.kind == QualityKind::AudioOnly),
+            _ => preference
+                .height()
+                .and_then(|height| self.tallest_up_to(height)),
+        };
+        chosen.or_else(|| self.default_quality())
+    }
+
+    /// The video quality with the greatest height not above `height`, then
+    /// the greatest frame rate; on a tie, the earlier (the source first).
+    /// Qualities without a known resolution are never picked.
+    fn tallest_up_to(&self, height: u32) -> Option<&Quality> {
+        self.qualities
+            .iter()
+            .filter(|q| q.kind != QualityKind::AudioOnly)
+            .filter_map(|q| Some((q, q.resolution?.height)))
+            .filter(|(_, h)| *h <= height)
+            .fold(None, |best: Option<(&Quality, u32)>, (q, h)| match best {
+                Some((b, bh)) if (bh, b.frame_rate) >= (h, q.frame_rate) => Some((b, bh)),
+                _ => Some((q, h)),
+            })
+            .map(|(q, _)| q)
     }
 
     /// The quality called `name`, where [`Self::DEFAULT_QUALITY`] means the

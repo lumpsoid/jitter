@@ -123,6 +123,12 @@ fn privmsg_with_emotes_badges_and_color() {
         m.emotes[0].emote.url,
         "https://static-cdn.jtvnw.net/emoticons/v2/emotesv2_5ccaacdb3c4340908bfc69550dc97c85/default/dark/2.0"
     );
+    assert_eq!(
+        m.emotes[0].emote.still_url.as_deref(),
+        Some(
+            "https://static-cdn.jtvnw.net/emoticons/v2/emotesv2_5ccaacdb3c4340908bfc69550dc97c85/static/dark/2.0"
+        )
+    );
 }
 
 #[test]
