@@ -35,6 +35,17 @@ class MediaKitEngine implements PlayerEngine {
 
   Future<void> togglePlaying() => _player.playOrPause();
 
+  Future<void> play() => _player.play();
+
+  Future<void> pause() => _player.pause();
+
+  /// Whether it is playing now, then each change; an `open` passes
+  /// through `false`.
+  Stream<bool> get playing async* {
+    yield _player.state.playing;
+    yield* _player.stream.playing;
+  }
+
   /// Mutes, or unmutes back to the volume it was muted at; mid-fade, under
   /// the fade.
   Future<void> toggleMute() =>

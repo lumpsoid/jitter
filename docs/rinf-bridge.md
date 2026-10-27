@@ -362,6 +362,13 @@ and what to reopen on return; the selection stays the user's. While
 stopped away, core records no positions and the chat replay is not fed
 them.
 
+The system sees the player through `audio_service` (`MediaSession`):
+Android's media notification, whose foreground service keeps the app
+alive in the background, the lock screen and headset buttons. It folds
+`PlaybackUpdate` and media_kit's playing state into what the system
+shows, and its play and pause call the player directly, as the page's
+button does. Rust does not know about it.
+
 Dart reports where the player is with `PlayerPosition` about every second,
 and once more in `LeavePlayer`. It does not decide whether that is worth
 saving: core records only the VOD now playing and only once the player

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:jitter/app.dart';
 import 'package:jitter/boot/boot_holder.dart';
@@ -9,6 +10,7 @@ import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/player/media_kit_engine.dart';
+import 'package:jitter/player/media_session.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/player/player_command_performer.dart';
 import 'package:jitter/search/search_holder.dart';
@@ -31,6 +33,7 @@ Future<void> main() async {
   PlayerCommandPerformer(player)
       .listen(PlayerCommand.rustSignalStream.map((pack) => pack.message));
   final playback = PlaybackHolder()..connect();
+  await _startMediaSession(playback, player);
 
   // Browse
   final browse = BrowseHolder()..connect();
@@ -74,4 +77,27 @@ Future<void> main() async {
       settings: settings,
     ),
   );
+}
+
+/// Shows the playing stream to the system (a no-op on Linux and Windows).
+/// A failure is logged: the app plays in front without it.
+Future<void> _startMediaSession(
+  PlaybackHolder playback,
+  MediaKitEngine player,
+) async {
+  try {
+    final session = await AudioService.init(
+      builder: () => MediaSession(playback, player),
+      config: const AudioServiceConfig(
+        androidNotificationChannelId: 'dev.jitter.jitter.channel.playback',
+        androidNotificationChannelName: 'Playback',
+        // A pause keeps the foreground service: Android 12+ may refuse to
+        // start it again from the background.
+        androidStopForegroundOnPause: false,
+      ),
+    );
+    session.connect();
+  } on Object catch (error) {
+    debugPrint('media session: $error');
+  }
 }
