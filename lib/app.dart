@@ -13,6 +13,7 @@ import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/search/search_holder.dart';
 import 'package:jitter/settings/settings_holder.dart';
 import 'package:jitter/shell/app_shell.dart';
+import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:rinf/rinf.dart';
 
@@ -73,12 +74,19 @@ class _JitterAppState extends State<JitterApp> {
   @override
   void initState() {
     super.initState();
-    // Lets Rust shut down and close the database before the process ends.
     _lifecycle = AppLifecycleListener(
+      // Lets Rust shut down and close the database before the process ends.
       onExitRequested: () async {
         finalizeRust();
         return AppExitResponse.exit;
       },
+      // Rust decides what the player does while the app is out of sight.
+      onHide: () =>
+          AppBackgrounded(positionS: widget.player.position.inSeconds)
+              .sendSignalToRust(),
+      onShow: () =>
+          AppForegrounded(positionS: widget.player.position.inSeconds)
+              .sendSignalToRust(),
     );
   }
 

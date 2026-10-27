@@ -54,6 +54,19 @@ pub struct ArmSleepTimer {
 #[derive(Deserialize, DartSignal)]
 pub struct TurnOffSleepTimer;
 
+/// The app went to the background, with the player at `position_s`. Rust
+/// decides whether the player carries on with audio only or stops.
+#[derive(Deserialize, DartSignal)]
+pub struct AppBackgrounded {
+    pub position_s: u32,
+}
+
+/// The app is back in front, with the player at `position_s`.
+#[derive(Deserialize, DartSignal)]
+pub struct AppForegrounded {
+    pub position_s: u32,
+}
+
 /// The player page's view state; Dart replaces what it has.
 #[derive(Serialize, RustSignal)]
 pub enum PlaybackUpdate {

@@ -47,6 +47,7 @@ fn send_snapshot(settings: &Settings) {
             })
             .collect(),
         third_party_emotes: settings.third_party_emotes,
+        background_audio: settings.background_audio,
     }
     .send_signal_to_dart();
 }
@@ -72,6 +73,7 @@ impl From<SettingChange> for Setting {
             SettingChange::AutoLoadChat { on } => Self::AutoLoadChat(on),
             SettingChange::StartQuality { quality } => Self::StartQuality(quality.into()),
             SettingChange::ThirdPartyEmotes { on } => Self::ThirdPartyEmotes(on),
+            SettingChange::BackgroundAudio { on } => Self::BackgroundAudio(on),
         }
     }
 }

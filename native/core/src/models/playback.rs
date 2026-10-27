@@ -62,15 +62,19 @@ impl Playback {
     pub fn preferred_quality(&self, preference: QualityPreference) -> Option<&Quality> {
         let chosen = match preference {
             QualityPreference::Source => None,
-            QualityPreference::AudioOnly => self
-                .qualities
-                .iter()
-                .find(|q| q.kind == QualityKind::AudioOnly),
+            QualityPreference::AudioOnly => self.audio_only(),
             _ => preference
                 .height()
                 .and_then(|height| self.tallest_up_to(height)),
         };
         chosen.or_else(|| self.default_quality())
+    }
+
+    /// The audio-only quality; `None` when the stream has none.
+    pub fn audio_only(&self) -> Option<&Quality> {
+        self.qualities
+            .iter()
+            .find(|q| q.kind == QualityKind::AudioOnly)
     }
 
     /// The video quality with the greatest height not above `height`, then

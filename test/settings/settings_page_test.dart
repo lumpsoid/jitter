@@ -57,6 +57,11 @@ void main() {
     for (final label in ['Source', '1080p', '720p', 'Audio only']) {
       expect(find.widgetWithText(RadioListTile<StartQuality>, label), findsOne);
     }
+    await tester.scrollUntilVisible(
+      switchFor('Play audio in the background'),
+      200,
+    );
+    expect(switchValue(tester, 'Play audio in the background'), isTrue);
   });
 
   testWidgets('choosing a theme sends it', (tester) async {
@@ -76,12 +81,18 @@ void main() {
     await tester.tap(switchFor('Load chat automatically'));
     await tester.tap(switchFor('Animated emotes'));
     await tester.tap(switchFor('Third-party emotes'));
+    await tester.scrollUntilVisible(
+      switchFor('Play audio in the background'),
+      200,
+    );
+    await tester.tap(switchFor('Play audio in the background'));
     await tester.pump();
 
     expect(sent, const [
       SettingChangeAutoLoadChat(on: true),
       SettingChangeAnimatedEmotes(on: false),
       SettingChangeThirdPartyEmotes(on: false),
+      SettingChangeBackgroundAudio(on: false),
     ]);
   });
 

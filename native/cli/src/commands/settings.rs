@@ -20,6 +20,7 @@ pub enum SettingKey {
     AutoLoadChat,
     StartQuality,
     ThirdPartyEmotes,
+    BackgroundAudio,
 }
 
 pub fn run(command: Option<SettingsCommand>) -> Result<()> {
@@ -43,6 +44,7 @@ fn setting(key: SettingKey, value: &str) -> Result<Setting> {
         SettingKey::AnimatedEmotes => on_off(value).map(Setting::AnimatedEmotes),
         SettingKey::AutoLoadChat => on_off(value).map(Setting::AutoLoadChat),
         SettingKey::ThirdPartyEmotes => on_off(value).map(Setting::ThirdPartyEmotes),
+        SettingKey::BackgroundAudio => on_off(value).map(Setting::BackgroundAudio),
     };
     parsed.ok_or_else(|| format!("invalid value {value:?}: expected {}", expected(key)))
 }
@@ -54,9 +56,10 @@ fn expected(key: SettingKey) -> String {
         SettingKey::StartQuality => QualityPreference::ALL
             .map(QualityPreference::name)
             .join(", "),
-        SettingKey::AnimatedEmotes | SettingKey::AutoLoadChat | SettingKey::ThirdPartyEmotes => {
-            "on, off".to_owned()
-        }
+        SettingKey::AnimatedEmotes
+        | SettingKey::AutoLoadChat
+        | SettingKey::ThirdPartyEmotes
+        | SettingKey::BackgroundAudio => "on, off".to_owned(),
     }
 }
 
@@ -82,6 +85,7 @@ fn print(settings: &Settings) {
         ("auto-load-chat", shown(settings.auto_load_chat)),
         ("start-quality", settings.start_quality.name()),
         ("third-party-emotes", shown(settings.third_party_emotes)),
+        ("background-audio", shown(settings.background_audio)),
     ];
     for (key, value) in rows {
         println!("{key:<20} {value}");

@@ -53,6 +53,9 @@ class SettingsHolder extends ChangeNotifier {
   void setThirdPartyEmotes({required bool on}) =>
       _change(SettingChangeThirdPartyEmotes(on: on));
 
+  void setBackgroundAudio({required bool on}) =>
+      _change(SettingChangeBackgroundAudio(on: on));
+
   void _change(SettingChange change) => send(ChangeSetting(change: change));
 
   /// Folds one update in: a snapshot replaces the settings; a failure

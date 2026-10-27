@@ -353,6 +353,15 @@ engine keeps the one thing a fade needs remembered, the user's own volume
 and mute under it (`FadedVolume`); `Open`, `Stop` and a level of 1.0 end
 the fade.
 
+Leaving the app is reported, not decided: Dart's `AppLifecycleListener`
+sends `AppBackgrounded` on hide and `AppForegrounded` on show, each with
+the player's position. Core's `PlaybackController::background` /
+`foreground` decide, from the `background_audio` setting the hub passes
+in, whether the player carries on with the audio-only quality or stops,
+and what to reopen on return; the selection stays the user's. While
+stopped away, core records no positions and the chat replay is not fed
+them.
+
 Dart reports where the player is with `PlayerPosition` about every second,
 and once more in `LeavePlayer`. It does not decide whether that is worth
 saving: core records only the VOD now playing and only once the player

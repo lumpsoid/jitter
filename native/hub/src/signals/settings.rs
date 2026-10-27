@@ -20,6 +20,7 @@ pub enum SettingChange {
     AutoLoadChat { on: bool },
     StartQuality { quality: StartQuality },
     ThirdPartyEmotes { on: bool },
+    BackgroundAudio { on: bool },
 }
 
 /// The settings: a whole snapshot after every change. One type, so a
@@ -35,6 +36,7 @@ pub enum SettingsUpdate {
         /// Every start quality, best first, to choose from.
         start_qualities: Vec<StartQualityChoice>,
         third_party_emotes: bool,
+        background_audio: bool,
     },
     /// A change could not be stored; the settings are as last sent. A
     /// one-shot notice for a snackbar, not state.

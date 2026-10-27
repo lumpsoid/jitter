@@ -16,6 +16,9 @@ pub struct Settings {
     pub start_quality: QualityPreference,
     /// 7TV, BTTV and FFZ emotes are loaded; off, only Twitch's own render.
     pub third_party_emotes: bool,
+    /// Leaving the app keeps the player going on the audio-only quality;
+    /// off, it stops until the app is back in front.
+    pub background_audio: bool,
 }
 
 /// What a user who never changed anything gets: the system theme, the
@@ -28,6 +31,7 @@ impl Default for Settings {
             auto_load_chat: true,
             start_quality: QualityPreference::Source,
             third_party_emotes: true,
+            background_audio: true,
         }
     }
 }
@@ -51,6 +55,10 @@ impl Settings {
             },
             Setting::ThirdPartyEmotes(third_party_emotes) => Self {
                 third_party_emotes,
+                ..self
+            },
+            Setting::BackgroundAudio(background_audio) => Self {
+                background_audio,
                 ..self
             },
         }

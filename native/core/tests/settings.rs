@@ -9,6 +9,7 @@ fn changed() -> Settings {
         auto_load_chat: false,
         start_quality: QualityPreference::P720,
         third_party_emotes: false,
+        background_audio: false,
     }
 }
 
@@ -20,6 +21,7 @@ fn defaults_are_the_system_theme_the_source_and_everything_on() {
     assert!(defaults.auto_load_chat);
     assert_eq!(defaults.start_quality, QualityPreference::Source);
     assert!(defaults.third_party_emotes);
+    assert!(defaults.background_audio);
 }
 
 #[test]
@@ -78,6 +80,7 @@ fn with_changes_only_its_own_setting() {
             .with(Setting::ThirdPartyEmotes(false))
             .third_party_emotes
     );
+    assert!(!base.with(Setting::BackgroundAudio(false)).background_audio);
     let quality = base.with(Setting::StartQuality(QualityPreference::AudioOnly));
     assert_eq!(
         quality,

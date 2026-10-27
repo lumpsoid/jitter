@@ -2,9 +2,9 @@ use std::time::{Duration, Instant};
 
 use jitter_core::fakes::FakeResumeStore;
 use jitter_core::models::{
-    CategoryId, ChannelLogin, FadeLevel, GameRef, Open, Playback, PlaybackDetails, QualityKind,
-    QualityPreference, Resolution, ResumePoint, SLEEP_FADE, Seconds, SleepStep, Timestamp, Variant,
-    VideoId,
+    BackgroundStep, CategoryId, ChannelLogin, FadeLevel, GameRef, Open, Playback, PlaybackDetails,
+    QualityKind, QualityPreference, Resolution, ResumePoint, SLEEP_FADE, Seconds, SleepStep,
+    Timestamp, Variant, VideoId,
 };
 use jitter_core::playback::{PlaybackController, PlaybackState, PlaybackTarget, TIMED_OUT};
 use jitter_core::resume::ResumeController;
@@ -788,4 +788,186 @@ fn the_page_opens_at_the_preferred_quality_and_a_manual_switch_leaves_it() {
     assert_eq!(selected(&c), Some("480p30"));
     assert!(c.switch_quality("1080p60", Seconds::ZERO).is_some());
     assert_eq!(selected(&c), Some("1080p60"));
+}
+
+fn ready_with_audio(target: PlaybackTarget) -> PlaybackController {
+    let mut c = PlaybackController::new();
+    c.begin(target.clone());
+    c.apply(
+        target,
+        Ok(playback(vec![
+            variant("1080p60", 1080, QualityKind::Source),
+            variant("720p60", 720, QualityKind::Transcode),
+            variant("audio_only", 0, QualityKind::AudioOnly),
+        ])),
+        no_details(),
+        QualityPreference::Source,
+    );
+    c
+}
+
+fn no_resume() -> ResumeController {
+    ResumeController::new(Box::new(FakeResumeStore::default()))
+}
+
+fn foreground(
+    c: &mut PlaybackController,
+    position: u32,
+    resume: &ResumeController,
+) -> Option<Open> {
+    let Ok(open) = c.foreground(Seconds::new(position), resume) else {
+        unreachable!("fake store does not fail");
+    };
+    open
+}
+
+#[test]
+fn background_audio_carries_on_audio_only_and_comes_back_to_the_selection() {
+    let mut c = ready_with_audio(PlaybackTarget::Vod(vod()));
+    c.select("720p60");
+    assert_eq!(
+        c.background(true, Seconds::new(600)),
+        Some(BackgroundStep::Open(open("audio_only", 600, false)))
+    );
+    assert_eq!(selected(&c), Some("720p60"));
+    assert_eq!(
+        foreground(&mut c, 900, &no_resume()),
+        Some(open("720p60", 900, false))
+    );
+}
+
+#[test]
+fn background_audio_on_live_reopens_at_the_live_edge() {
+    let mut c = ready_with_audio(live("a"));
+    assert_eq!(
+        c.background(true, Seconds::new(600)),
+        Some(BackgroundStep::Open(open("audio_only", 0, true)))
+    );
+    assert_eq!(
+        foreground(&mut c, 900, &no_resume()),
+        Some(open("1080p60", 0, true))
+    );
+}
+
+#[test]
+fn already_audio_only_changes_nothing_either_way() {
+    let mut c = ready_with_audio(live("a"));
+    c.select("audio_only");
+    assert_eq!(c.background(true, Seconds::ZERO), None);
+    assert_eq!(foreground(&mut c, 0, &no_resume()), None);
+}
+
+#[test]
+fn a_stream_without_audio_only_keeps_its_quality_in_the_background() {
+    let mut c = ready(live("a"));
+    assert_eq!(c.background(true, Seconds::ZERO), None);
+    assert_eq!(foreground(&mut c, 0, &no_resume()), None);
+}
+
+#[test]
+fn background_audio_off_stops_and_carries_on_where_it_stopped() {
+    let mut c = ready_with_audio(PlaybackTarget::Vod(vod()));
+    assert_eq!(
+        c.background(false, Seconds::new(600)),
+        Some(BackgroundStep::Stop)
+    );
+    assert!(c.stopped_away());
+    assert_eq!(
+        foreground(&mut c, 0, &no_resume()),
+        Some(open("1080p60", 600, false))
+    );
+    assert!(!c.stopped_away());
+}
+
+#[test]
+fn a_stopped_player_records_nothing() {
+    let store = FakeResumeStore::default();
+    let mut resume = ResumeController::new(Box::new(store.clone()));
+    let target = PlaybackTarget::Vod(vod());
+    let mut c = ready_with_audio(target.clone());
+    c.background(false, Seconds::new(600));
+    assert_eq!(record(&c, &mut resume, &target, 0, 3600), None);
+    assert!(store.points().is_empty());
+}
+
+#[test]
+fn a_listening_player_records_its_position() {
+    let mut resume = no_resume();
+    let target = PlaybackTarget::Vod(vod());
+    let mut c = ready_with_audio(target.clone());
+    c.background(true, Seconds::new(600));
+    assert_eq!(
+        record(&c, &mut resume, &target, 700, 3600),
+        Some(ResumeDecision::Save)
+    );
+}
+
+#[test]
+fn backgrounding_twice_changes_nothing_the_second_time() {
+    let mut c = ready_with_audio(live("a"));
+    assert!(c.background(true, Seconds::ZERO).is_some());
+    assert_eq!(c.background(false, Seconds::ZERO), None);
+    assert!(!c.stopped_away());
+}
+
+#[test]
+fn foreground_without_background_changes_nothing() {
+    let mut c = ready_with_audio(live("a"));
+    assert_eq!(foreground(&mut c, 0, &no_resume()), None);
+}
+
+#[test]
+fn nothing_playing_has_nothing_to_change() {
+    let mut c = PlaybackController::new();
+    c.begin(live("a"));
+    assert_eq!(c.background(true, Seconds::ZERO), None);
+    assert_eq!(foreground(&mut c, 0, &no_resume()), None);
+}
+
+#[test]
+fn a_page_resolved_while_listening_opens_audio_only() {
+    let target = PlaybackTarget::Vod(vod());
+    let mut c = PlaybackController::new();
+    c.begin(target.clone());
+    c.background(true, Seconds::ZERO);
+    c.apply(
+        target,
+        Ok(playback(vec![
+            variant("1080p60", 1080, QualityKind::Source),
+            variant("audio_only", 0, QualityKind::AudioOnly),
+        ])),
+        no_details(),
+        QualityPreference::Source,
+    );
+    let resume = resume_at(300, 3600);
+    assert_eq!(c.open(&resume), Ok(Some(open("audio_only", 300, false))));
+    assert_eq!(selected(&c), Some("1080p60"));
+    assert_eq!(
+        foreground(&mut c, 310, &resume),
+        Some(open("1080p60", 310, false))
+    );
+}
+
+#[test]
+fn a_page_resolved_while_stopped_opens_nothing_until_back_then_at_its_resume_point() {
+    let target = PlaybackTarget::Vod(vod());
+    let mut c = PlaybackController::new();
+    c.begin(target.clone());
+    assert_eq!(c.background(false, Seconds::ZERO), None);
+    c.apply(
+        target,
+        Ok(playback(vec![variant(
+            "1080p60",
+            1080,
+            QualityKind::Source,
+        )])),
+        no_details(),
+        QualityPreference::Source,
+    );
+    let resume = resume_at(300, 3600);
+    assert_eq!(c.open(&resume), Ok(None));
+    assert_eq!(
+        foreground(&mut c, 0, &resume),
+        Some(open("1080p60", 300, false))
+    );
 }

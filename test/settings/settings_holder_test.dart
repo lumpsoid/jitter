@@ -49,13 +49,15 @@ void main() {
       ..chooseStartQuality(StartQuality.p720)
       ..setAnimatedEmotes(on: false)
       ..setAutoLoadChat(on: false)
-      ..setThirdPartyEmotes(on: true);
+      ..setThirdPartyEmotes(on: true)
+      ..setBackgroundAudio(on: false);
     expect(sent, const [
       SettingChangeTheme(theme: AppTheme.light),
       SettingChangeStartQuality(quality: StartQuality.p720),
       SettingChangeAnimatedEmotes(on: false),
       SettingChangeAutoLoadChat(on: false),
       SettingChangeThirdPartyEmotes(on: true),
+      SettingChangeBackgroundAudio(on: false),
     ]);
     expect(holder.settings, isNull);
     expect(notifications, 0);

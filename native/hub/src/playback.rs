@@ -5,7 +5,7 @@ use std::fmt::Display;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use jitter_core::models::{
-    self, Channel, ChannelLogin, FadeLevel, Open, Playback, Quality, QualityKind,
+    self, BackgroundStep, Channel, ChannelLogin, FadeLevel, Open, Playback, Quality, QualityKind,
     QualityPreference, Seconds, SleepStep, SleepTimer, Timestamp, VideoId,
 };
 use jitter_core::playback::{self, PlaybackController, PlaybackState, SLEEP_PRESETS};
@@ -20,9 +20,9 @@ use crate::format::{
 };
 use crate::run::Fetched;
 use crate::signals::{
-    ArmSleepTimer, LeavePlayer, PlaybackChannel, PlaybackDetails, PlaybackLive, PlaybackSleep,
-    PlaybackTarget, PlaybackUpdate, PlayerCommand, PlayerPosition, QualityOption, SelectQuality,
-    SleepPreset,
+    AppBackgrounded, AppForegrounded, ArmSleepTimer, LeavePlayer, PlaybackChannel, PlaybackDetails,
+    PlaybackLive, PlaybackSleep, PlaybackTarget, PlaybackUpdate, PlayerCommand, PlayerPosition,
+    QualityOption, SelectQuality, SleepPreset,
 };
 
 /// `Play`: starts resolving `target` through twitch, and loading what it
@@ -118,6 +118,31 @@ pub fn select_quality(playback: &mut PlaybackController, signal: SelectQuality) 
     send_open(open);
 }
 
+/// `AppBackgrounded`: the player carries on with what core picks for
+/// `audio` (the user's background audio setting), or stops.
+pub fn background(playback: &mut PlaybackController, audio: bool, signal: AppBackgrounded) {
+    match playback.background(audio, Seconds::new(signal.position_s)) {
+        None => {}
+        Some(BackgroundStep::Open(open)) => send_open(Some(open)),
+        Some(BackgroundStep::Stop) => PlayerCommand::Stop.send_signal_to_dart(),
+    }
+}
+
+/// `AppForegrounded`: the player carries on with the selected quality.
+pub fn foreground(
+    playback: &mut PlaybackController,
+    resume: &ResumeController,
+    signal: AppForegrounded,
+) {
+    match playback.foreground(Seconds::new(signal.position_s), resume) {
+        Ok(open) => send_open(open),
+        Err(e) => PlaybackUpdate::Failed {
+            message: format!("Could not read the resume point: {e}"),
+        }
+        .send_signal_to_dart(),
+    }
+}
+
 /// Where a player is, as core's values: what a `PlayerPosition` reports.
 pub struct PlayerAt {
     pub target: playback::PlaybackTarget,
@@ -127,13 +152,17 @@ pub struct PlayerAt {
 
 /// `PlayerPosition`: hands the position to core, which decides whether
 /// it is recorded. Returns the report for the chat replay; `None` when
-/// its target is invalid.
+/// its target is invalid or core says the player is stopped away, where
+/// its position means nothing.
 pub fn position(
     playback: &PlaybackController,
     resume: &mut ResumeController,
     signal: PlayerPosition,
 ) -> Option<PlayerAt> {
     let target = report(playback::PlaybackTarget::try_from(signal.target))?;
+    if playback.stopped_away() {
+        return None;
+    }
     report(record(
         playback,
         resume,

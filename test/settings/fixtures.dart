@@ -13,6 +13,7 @@ SettingsUpdateSnapshot snapshot({
   bool autoLoadChat = true,
   StartQuality startQuality = StartQuality.source,
   bool thirdPartyEmotes = true,
+  bool backgroundAudio = true,
 }) => SettingsUpdateSnapshot(
   theme: theme,
   animatedEmotes: animatedEmotes,
@@ -20,4 +21,5 @@ SettingsUpdateSnapshot snapshot({
   startQuality: startQuality,
   startQualities: qualities,
   thirdPartyEmotes: thirdPartyEmotes,
+  backgroundAudio: backgroundAudio,
 );

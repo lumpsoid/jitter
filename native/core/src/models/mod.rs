@@ -1,5 +1,6 @@
 //! Value objects and data models, one file each.
 
+mod background_step;
 mod badge;
 mod category;
 mod category_id;
@@ -52,6 +53,7 @@ mod variant;
 mod video;
 mod video_id;
 
+pub use background_step::BackgroundStep;
 pub use badge::Badge;
 pub use category::Category;
 pub use category_id::{CategoryId, CategoryIdError};

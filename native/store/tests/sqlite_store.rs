@@ -265,7 +265,7 @@ fn reopening_a_migrated_file_keeps_its_rows() -> TestResult {
     drop(store);
     let store = SqliteStore::open(&path)?;
     assert_eq!(store.load_all()?, [favorite("1", "Alpha", 10)]);
-    assert_eq!(user_version(&path)?, 3);
+    assert_eq!(user_version(&path)?, 4);
     Ok(())
 }
 
@@ -291,7 +291,7 @@ fn a_v1_file_is_migrated_and_its_favorites_load_without_an_avatar() -> TestResul
     )?;
     drop(v1);
     let mut store = SqliteStore::open(&path)?;
-    assert_eq!(user_version(&path)?, 3);
+    assert_eq!(user_version(&path)?, 4);
     assert_eq!(store.load_all()?, [favorite("1", "Alpha", 10)]);
     store.set_avatar(&id("1"), "https://a/1.png")?;
     let expected = Favorite {
@@ -346,7 +346,7 @@ fn two_connections_opening_a_fresh_file_at_once_both_succeed() -> TestResult {
             let opened = handle.join().map_err(|_| "open thread panicked")?;
             assert_eq!(opened, Ok(()));
         }
-        assert_eq!(user_version(&path)?, 3);
+        assert_eq!(user_version(&path)?, 4);
     }
     Ok(())
 }
@@ -397,6 +397,7 @@ fn every_setting_round_trips() -> TestResult {
         Setting::AutoLoadChat(false),
         Setting::StartQuality(QualityPreference::AudioOnly),
         Setting::ThirdPartyEmotes(false),
+        Setting::BackgroundAudio(false),
     ] {
         store.put_setting(setting)?;
     }
@@ -406,6 +407,7 @@ fn every_setting_round_trips() -> TestResult {
         auto_load_chat: false,
         start_quality: QualityPreference::AudioOnly,
         third_party_emotes: false,
+        background_audio: false,
     };
     assert_eq!(store.load_settings()?, expected);
     store.put_setting(Setting::AnimatedEmotes(true))?;

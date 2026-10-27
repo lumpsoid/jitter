@@ -27,6 +27,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 3,
         sql: V3_SETTINGS,
     },
+    Migration {
+        version: 4,
+        sql: V4_BACKGROUND_AUDIO,
+    },
 ];
 
 /// v1: favorite channels (login and display name are display caches; the
@@ -70,6 +74,12 @@ CREATE TABLE settings (
 );
 
 INSERT INTO settings (id) VALUES (1);
+";
+
+/// v4: whether leaving the app keeps the audio playing. `NULL` until
+/// stored, like every setting.
+const V4_BACKGROUND_AUDIO: &str = "
+ALTER TABLE settings ADD COLUMN background_audio INTEGER;
 ";
 
 /// Applies every pending migration in one transaction: the database ends at
@@ -120,10 +130,10 @@ mod tests {
     }
 
     #[test]
-    fn empty_database_ends_at_v3_with_every_table() -> TestResult {
+    fn empty_database_ends_at_v4_with_every_table() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 3);
+        assert_eq!(user_version(&conn)?, 4);
         assert_eq!(tables(&conn)?, ["favorites", "resume_points", "settings"]);
         Ok(())
     }
@@ -135,7 +145,7 @@ mod tests {
         conn.execute_batch(V2_FAVORITE_AVATARS)?;
         conn.pragma_update(None, "user_version", 2)?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 3);
+        assert_eq!(user_version(&conn)?, 4);
         let row: (i64, Option<String>, Option<i64>) = conn.query_row(
             "SELECT COUNT(*), MAX(theme), MAX(animated_emotes) FROM settings WHERE id = 1",
             [],
@@ -146,12 +156,31 @@ mod tests {
     }
 
     #[test]
+    fn a_v3_database_keeps_its_settings_and_gains_a_null_background_audio() -> TestResult {
+        let mut conn = Connection::open_in_memory()?;
+        conn.execute_batch(V1_SCHEMA)?;
+        conn.execute_batch(V2_FAVORITE_AVATARS)?;
+        conn.execute_batch(V3_SETTINGS)?;
+        conn.pragma_update(None, "user_version", 3)?;
+        conn.execute("UPDATE settings SET theme = 'dark' WHERE id = 1", [])?;
+        migrate(&mut conn)?;
+        assert_eq!(user_version(&conn)?, 4);
+        let row: (Option<String>, Option<i64>) = conn.query_row(
+            "SELECT theme, background_audio FROM settings WHERE id = 1",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?;
+        assert_eq!(row, (Some("dark".to_owned()), None));
+        Ok(())
+    }
+
+    #[test]
     fn migrating_a_migrated_database_changes_nothing() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
         migrate(&mut conn)?;
         conn.execute("INSERT INTO favorites VALUES ('1', 'a', 'A', 0, NULL)", [])?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 3);
+        assert_eq!(user_version(&conn)?, 4);
         let rows: i64 = conn.query_row("SELECT COUNT(*) FROM favorites", [], |r| r.get(0))?;
         assert_eq!(rows, 1);
         Ok(())
@@ -164,7 +193,7 @@ mod tests {
         conn.pragma_update(None, "user_version", 1)?;
         conn.execute("INSERT INTO favorites VALUES ('1', 'a', 'A', 7)", [])?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 3);
+        assert_eq!(user_version(&conn)?, 4);
         let row: (String, Option<String>, i64) = conn.query_row(
             "SELECT login, avatar_url, added_at FROM favorites WHERE channel_id = '1'",
             [],
@@ -177,9 +206,9 @@ mod tests {
     #[test]
     fn newer_database_is_refused_and_left_alone() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
-        conn.pragma_update(None, "user_version", 4)?;
+        conn.pragma_update(None, "user_version", 5)?;
         assert!(migrate(&mut conn).is_err());
-        assert_eq!(user_version(&conn)?, 4);
+        assert_eq!(user_version(&conn)?, 5);
         assert!(tables(&conn)?.is_empty());
         Ok(())
     }

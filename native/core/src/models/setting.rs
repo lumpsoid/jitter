@@ -10,4 +10,5 @@ pub enum Setting {
     AutoLoadChat(bool),
     StartQuality(QualityPreference),
     ThirdPartyEmotes(bool),
+    BackgroundAudio(bool),
 }

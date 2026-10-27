@@ -123,6 +123,16 @@ class _SettingsPageState extends State<SettingsPage> {
                 'A stream without it opens at the closest lower quality.',
               ),
             ),
+            const _Header(label: 'Background playback'),
+            SwitchListTile(
+              title: const Text('Play audio in the background'),
+              subtitle: const Text(
+                'Leaving the app keeps the stream going as audio only. '
+                'When off, it stops until you come back.',
+              ),
+              value: settings.backgroundAudio,
+              onChanged: (on) => holder.setBackgroundAudio(on: on),
+            ),
           ],
         );
       },

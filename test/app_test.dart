@@ -35,6 +35,7 @@ SettingsUpdateSnapshot _settings(AppTheme theme) => SettingsUpdateSnapshot(
   startQuality: StartQuality.source,
   startQualities: const [],
   thirdPartyEmotes: true,
+  backgroundAudio: true,
 );
 
 void main() {

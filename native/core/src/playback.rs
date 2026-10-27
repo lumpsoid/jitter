@@ -5,8 +5,8 @@
 use std::time::{Duration, Instant};
 
 use crate::models::{
-    ChannelLogin, Open, Playback, PlaybackDetails, Quality, QualityPreference, Seconds, SleepStep,
-    SleepTimer, Timestamp, VideoId,
+    BackgroundStep, ChannelLogin, Open, Playback, PlaybackDetails, Quality, QualityPreference,
+    Seconds, SleepStep, SleepTimer, Timestamp, VideoId,
 };
 use crate::ports::StoreError;
 use crate::resume::ResumeController;
@@ -60,11 +60,24 @@ pub enum PlaybackState {
     },
 }
 
+/// The app is in the background, as the head reported it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Away {
+    /// The player carries on with the audio-only quality.
+    Listening,
+    /// The player stopped; `at` is where it carries on from, `None` when
+    /// nothing was playing yet.
+    Stopped { at: Option<Seconds> },
+}
+
 #[derive(Debug)]
 pub struct PlaybackController {
     state: PlaybackState,
     /// The latest [`Attempt`] begun.
     attempt: Attempt,
+    /// `None` while the app is in front. Outlives any one target: a page
+    /// that resolves while the app is away opens as the app is away.
+    away: Option<Away>,
 }
 
 impl Default for PlaybackController {
@@ -78,6 +91,7 @@ impl PlaybackController {
         Self {
             state: PlaybackState::Idle,
             attempt: Attempt(0),
+            away: None,
         }
     }
 
@@ -164,7 +178,7 @@ impl PlaybackController {
         }
     }
 
-    /// What to open to start playing the selected quality: a VOD at its
+    /// What to open to start playing ([`Self::playing_quality`]): a VOD at its
     /// resume position, a live stream at the live edge. `None` until ready.
     pub fn open(&self, resume: &ResumeController) -> Result<Option<Open>, StoreError> {
         let start = match &self.state {
@@ -188,15 +202,83 @@ impl PlaybackController {
         }
     }
 
-    /// The selected quality opened at `vod_start`; live always opens at the
-    /// live edge.
+    /// The app went to the background with the player at `position`.
+    /// With `audio` (the user's [`crate::models::Settings::background_audio`])
+    /// the player carries on with the audio-only quality, or with the
+    /// selected one when the stream has none; without, it stops until
+    /// [`Self::foreground`]. The selection stays the user's. `None` when
+    /// the player has nothing to change: nothing playing, already audio
+    /// only, or already away.
+    pub fn background(&mut self, audio: bool, position: Seconds) -> Option<BackgroundStep> {
+        if self.away.is_some() {
+            return None;
+        }
+        let before = self.playing_url();
+        self.away = Some(match audio {
+            true => Away::Listening,
+            false => Away::Stopped {
+                at: before.is_some().then_some(position),
+            },
+        });
+        match (before, self.open_at(position)) {
+            (Some(_), None) => Some(BackgroundStep::Stop),
+            (Some(before), Some(open)) if open.url != before => Some(BackgroundStep::Open(open)),
+            _ => None,
+        }
+    }
+
+    /// The app is back in front with the player at `position`: what to
+    /// open to carry on with the selected quality. A stopped player
+    /// carries on from where it stopped, or, for a page that resolved
+    /// while away, from where [`Self::open`] starts it. `None` when the
+    /// player has nothing to change.
+    pub fn foreground(
+        &mut self,
+        position: Seconds,
+        resume: &ResumeController,
+    ) -> Result<Option<Open>, StoreError> {
+        let before = self.playing_url();
+        let open = match self.away.take() {
+            None => return Ok(None),
+            Some(Away::Listening) => self.open_at(position),
+            Some(Away::Stopped { at: Some(at) }) => self.open_at(at),
+            Some(Away::Stopped { at: None }) => self.open(resume)?,
+        };
+        Ok(open.filter(|open| Some(&open.url) != before.as_ref()))
+    }
+
+    /// The player is stopped until the app is back in front, so where it
+    /// reports to be means nothing.
+    pub fn stopped_away(&self) -> bool {
+        matches!(self.away, Some(Away::Stopped { .. }))
+    }
+
+    /// The quality the player plays: the selected one, the audio-only one
+    /// while listening away, none while stopped away.
+    fn playing_quality(&self) -> Option<&Quality> {
+        let PlaybackState::Ready { playback, .. } = &self.state else {
+            return None;
+        };
+        match self.away {
+            None => self.selected_quality(),
+            Some(Away::Listening) => playback.audio_only().or_else(|| self.selected_quality()),
+            Some(Away::Stopped { .. }) => None,
+        }
+    }
+
+    fn playing_url(&self) -> Option<String> {
+        self.playing_quality().map(|q| q.url.clone())
+    }
+
+    /// The playing quality ([`Self::playing_quality`]) opened at
+    /// `vod_start`; live always opens at the live edge.
     fn open_at(&self, vod_start: Seconds) -> Option<Open> {
         let PlaybackState::Ready { target, .. } = &self.state else {
             return None;
         };
         let live = matches!(target, PlaybackTarget::Live(_));
         Some(Open {
-            url: self.selected_quality()?.url.clone(),
+            url: self.playing_quality()?.url.clone(),
             start: if live { Seconds::ZERO } else { vod_start },
             live,
         })
@@ -206,8 +288,9 @@ impl PlaybackController {
     /// `duration`. Recorded only while `target` is the VOD being played: a
     /// live stream has no resume point, and a report from a player left
     /// behind by a later [`Self::begin`] must not land on the new VOD. A
-    /// zero `duration` is a player that has not loaded yet, whose position
-    /// means nothing. `None` when nothing was recorded.
+    /// zero `duration` is a player that has not loaded yet, and a player
+    /// stopped away ([`Self::stopped_away`]) is not playing; neither
+    /// position means anything. `None` when nothing was recorded.
     pub fn record(
         &self,
         resume: &mut ResumeController,
@@ -223,7 +306,7 @@ impl PlaybackController {
         else {
             return Ok(None);
         };
-        if current != target || duration == Seconds::ZERO {
+        if current != target || duration == Seconds::ZERO || self.stopped_away() {
             return Ok(None);
         }
         resume.record(id.clone(), position, duration, now).map(Some)

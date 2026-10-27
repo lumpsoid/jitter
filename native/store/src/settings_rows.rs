@@ -5,12 +5,14 @@ use rusqlite::types::Value;
 use crate::sqlite_store::{SqliteStore, bad_row, db_error};
 
 /// The `settings` row as read: theme, animated emotes, auto-load chat,
-/// start quality, third-party emotes. `NULL` is a setting never stored.
+/// start quality, third-party emotes, background audio. `NULL` is a
+/// setting never stored.
 type Row = (
     Option<String>,
     Option<i64>,
     Option<i64>,
     Option<String>,
+    Option<i64>,
     Option<i64>,
 );
 
@@ -19,13 +21,30 @@ type Row = (
 /// meanwhile; the migration inserted the row, so nothing here inserts.
 impl SettingsStore for SqliteStore {
     fn load_settings(&self) -> Result<Settings, StoreError> {
-        let (theme, animated_emotes, auto_load_chat, start_quality, third_party_emotes): Row = self
+        let (
+            theme,
+            animated_emotes,
+            auto_load_chat,
+            start_quality,
+            third_party_emotes,
+            background_audio,
+        ): Row = self
             .conn()?
             .query_row(
-                "SELECT theme, animated_emotes, auto_load_chat, start_quality, third_party_emotes
+                "SELECT theme, animated_emotes, auto_load_chat, start_quality, third_party_emotes,
+                        background_audio
                  FROM settings WHERE id = 1",
                 [],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+                |r| {
+                    Ok((
+                        r.get(0)?,
+                        r.get(1)?,
+                        r.get(2)?,
+                        r.get(3)?,
+                        r.get(4)?,
+                        r.get(5)?,
+                    ))
+                },
             )
             .map_err(db_error)?;
         let defaults = Settings::default();
@@ -39,6 +58,8 @@ impl SettingsStore for SqliteStore {
                 .unwrap_or(defaults.start_quality),
             third_party_emotes: flag("third_party_emotes", third_party_emotes)?
                 .unwrap_or(defaults.third_party_emotes),
+            background_audio: flag("background_audio", background_audio)?
+                .unwrap_or(defaults.background_audio),
         })
     }
 
@@ -52,6 +73,7 @@ impl SettingsStore for SqliteStore {
                 ("start_quality", Value::from(quality.name().to_owned()))
             }
             Setting::ThirdPartyEmotes(on) => ("third_party_emotes", Value::from(on)),
+            Setting::BackgroundAudio(on) => ("background_audio", Value::from(on)),
         };
         self.conn()?
             .execute(

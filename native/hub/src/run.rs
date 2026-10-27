@@ -42,7 +42,8 @@ use crate::signals::{AddFavorite, FavoritesReady, RefreshFavorites, RemoveFavori
 // Playback
 use crate::playback;
 use crate::signals::{
-    ArmSleepTimer, LeavePlayer, Play, PlayerPosition, SelectQuality, TurnOffSleepTimer,
+    AppBackgrounded, AppForegrounded, ArmSleepTimer, LeavePlayer, Play, PlayerPosition,
+    SelectQuality, TurnOffSleepTimer,
 };
 // Channel
 use crate::channel::{self, ChannelFetched, ChannelPage};
@@ -189,6 +190,8 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
     let leave_player = LeavePlayer::get_dart_signal_receiver();
     let arm_sleep_timer = ArmSleepTimer::get_dart_signal_receiver();
     let turn_off_sleep_timer = TurnOffSleepTimer::get_dart_signal_receiver();
+    let app_backgrounded = AppBackgrounded::get_dart_signal_receiver();
+    let app_foregrounded = AppForegrounded::get_dart_signal_receiver();
     // Channel
     let open_channel = OpenChannel::get_dart_signal_receiver();
     let refresh_channel = RefreshChannel::get_dart_signal_receiver();
@@ -282,6 +285,13 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
             }
             Some(pack) = arm_sleep_timer.recv() => playback::arm_sleep(&mut c.playback, pack.message),
             Some(_) = turn_off_sleep_timer.recv() => playback::turn_off_sleep(&mut c.playback),
+            Some(pack) = app_backgrounded.recv() => {
+                let audio = c.settings.state().background_audio;
+                playback::background(&mut c.playback, audio, pack.message);
+            }
+            Some(pack) = app_foregrounded.recv() => {
+                playback::foreground(&mut c.playback, &c.resume, pack.message);
+            }
             // The same sleep as the chat batch's: pending while no timer is armed.
             () = chat::until(sleep_wake) => {
                 // Chat: closes when the sleep timer stops the player.
