@@ -36,7 +36,8 @@ Future<void> returnToTheatreScreen() async {
 /// [on]: it puts the screen into theatre while on and takes it out when
 /// turned off or disposed (the page left). While on, an exit button shows
 /// over the top-left corner for a moment after the pointer moves or taps,
-/// and Escape and Back call [onExit].
+/// and Escape and Back call [onExit]. The button comes first on Tab, and
+/// stays while it has the focus.
 class Theatre extends StatefulWidget {
   const new({
     required this.on,
@@ -56,6 +57,9 @@ class Theatre extends StatefulWidget {
 class _TheatreState extends State<Theatre> {
   Timer? _hideExitButton;
   bool _exitButtonShown = false;
+
+  /// Whether the exit button has the focus, which keeps it shown.
+  bool _exitButtonFocused = false;
 
   @override
   void initState() {
@@ -92,18 +96,27 @@ class _TheatreState extends State<Theatre> {
     unawaited(exitTheatreScreen());
     _hideExitButton?.cancel();
     _exitButtonShown = false;
+    _exitButtonFocused = false;
   }
 
   void _showExitButton() {
     _hideExitButton?.cancel();
     _hideExitButton = Timer(_exitButtonFor, () {
-      if (mounted) setState(() => _exitButtonShown = false);
+      if (mounted && !_exitButtonFocused) {
+        setState(() => _exitButtonShown = false);
+      }
     });
     if (!_exitButtonShown) setState(() => _exitButtonShown = true);
   }
 
   void _onPointer(PointerEvent _) {
     if (widget.on) _showExitButton();
+  }
+
+  /// Leaving the exit button gives it its moment again before it hides.
+  void _onExitButtonFocus(bool focused) {
+    _exitButtonFocused = focused;
+    if (!focused && widget.on) _showExitButton();
   }
 
   /// Escape, ahead of the focused widget: media_kit's video takes Escape
@@ -138,20 +151,37 @@ class _TheatreState extends State<Theatre> {
             top: on,
             right: on,
             bottom: on,
-            child: Stack(
-              children: [
-                Positioned.fill(child: widget.child),
-                if (on && _exitButtonShown)
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: IconButton.filledTonal(
-                      tooltip: 'Exit theatre mode',
-                      icon: const Icon(Icons.fullscreen_exit),
-                      onPressed: widget.onExit,
+            child: FocusTraversalGroup(
+              policy: OrderedTraversalPolicy(),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: FocusTraversalOrder(
+                      order: const NumericFocusOrder(2),
+                      child: FocusTraversalGroup(child: widget.child),
                     ),
                   ),
-              ],
+                  if (on && _exitButtonShown)
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: FocusTraversalOrder(
+                        order: const NumericFocusOrder(1),
+                        child: Focus(
+                          canRequestFocus: false,
+                          skipTraversal: true,
+                          includeSemantics: false,
+                          onFocusChange: _onExitButtonFocus,
+                          child: IconButton.filledTonal(
+                            tooltip: 'Exit theatre mode',
+                            icon: const Icon(Icons.fullscreen_exit),
+                            onPressed: widget.onExit,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),

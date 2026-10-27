@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/chat/chat_panel.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:jitter/widgets/focus_ring.dart';
 
 void main() {
   testWidgets('shows the status lines and the messages', (tester) async {
@@ -182,6 +183,8 @@ void main() {
       ),
     );
 
+    // The messages first, then the link in them.
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
@@ -326,6 +329,120 @@ void main() {
     expect(find.bySemanticsLabel(RegExp('Hat|Rain')), findsNothing);
     semantics.dispose();
   });
+
+  testWidgets('the messages are a ringed Tab stop the keys scroll, pausing', (
+    tester,
+  ) async {
+    final chat = ChatHolder(sendTheme: (_) {})
+      ..apply(
+        ChatUpdateSnapshot(
+          messages: [for (var i = 0; i < 60; i++) _line('$i', 'message $i')],
+          status: const ChatStatus(modes: []),
+        ),
+      );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: ChatPanel(chat: chat)),
+      ),
+    );
+    double offset() =>
+        tester.state<ScrollableState>(find.byType(Scrollable)).position.pixels;
+    bool ringShown() => tester.widget<FocusRing>(find.byType(FocusRing)).shown;
+    Future<void> press(LogicalKeyboardKey key) async {
+      await tester.sendKeyEvent(key);
+      await tester.pumpAndSettle();
+    }
+
+    expect(ringShown(), isFalse);
+    await press(LogicalKeyboardKey.tab);
+    expect(primaryFocus?.debugLabel, 'Chat messages');
+    expect(ringShown(), isTrue);
+
+    await press(LogicalKeyboardKey.arrowUp);
+    expect(offset(), greaterThan(0));
+    expect(find.text('Latest messages'), findsOneWidget);
+
+    // Paused: a new message waits until the list is back at the bottom.
+    chat.apply(ChatUpdateAppended(messages: [_line('new', 'newest')]));
+    await tester.pump();
+    expect(find.textContaining('newest'), findsNothing);
+
+    final lineDown = offset();
+    await press(LogicalKeyboardKey.pageUp);
+    expect(offset(), greaterThan(lineDown));
+    await press(LogicalKeyboardKey.home);
+    final top = tester
+        .state<ScrollableState>(find.byType(Scrollable))
+        .position
+        .maxScrollExtent;
+    expect(offset(), top);
+
+    await press(LogicalKeyboardKey.end);
+    expect(offset(), 0);
+    expect(find.text('Latest messages'), findsNothing);
+    expect(find.textContaining('newest'), findsOneWidget);
+
+    await press(LogicalKeyboardKey.arrowUp);
+    await press(LogicalKeyboardKey.arrowDown);
+    expect(offset(), 0);
+    expect(find.text('Latest messages'), findsNothing);
+  });
+
+  testWidgets('Tab reaches "Latest messages" after the messages', (
+    tester,
+  ) async {
+    final chat = ChatHolder(sendTheme: (_) {})
+      ..apply(
+        ChatUpdateSnapshot(
+          messages: [for (var i = 0; i < 60; i++) _line('$i', 'message $i')],
+          status: const ChatStatus(modes: []),
+        ),
+      );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: ChatPanel(chat: chat)),
+      ),
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pumpAndSettle();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(
+      primaryFocus?.context?.findAncestorWidgetOfExactType<ActionChip>(),
+      isNotNull,
+    );
+    expect(tester.widget<FocusRing>(find.byType(FocusRing)).shown, isFalse);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.text('Latest messages'), findsNothing);
+  });
+
+  testWidgets('a focused link rings itself, not the messages', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatPanel(
+            chat: _chatWith(const [
+              ChatFragmentLink(text: 'www.a.b', url: 'https://www.a.b'),
+            ]),
+          ),
+        ),
+      ),
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+
+    expect(
+      primaryFocus?.context?.findAncestorWidgetOfExactType<InkWell>(),
+      isNotNull,
+    );
+    expect(tester.widget<FocusRing>(find.byType(FocusRing)).shown, isFalse);
+  });
 }
 
 ChatHolder _chatWith(List<ChatFragment> fragments) {
@@ -345,3 +462,12 @@ ChatHolder _chatWith(List<ChatFragment> fragments) {
     ),
   );
 }
+
+ChatLine _line(String id, String text) => ChatLine(
+  id: id,
+  name: 'alice',
+  color: 0xFFFF0000,
+  action: false,
+  deleted: false,
+  fragments: [ChatFragmentText(text: text)],
+);

@@ -39,8 +39,9 @@ class PlayerShortcuts extends StatelessWidget {
       child: Actions(
         actions: {_Press: _PressAction()},
         // Holds the focus until something on the page takes it, so the
-        // keys work as soon as the page opens.
-        child: Focus(autofocus: true, child: child),
+        // keys work as soon as the page opens. Not a Tab stop itself: the
+        // first Tab goes to the page's first control.
+        child: Focus(autofocus: true, skipTraversal: true, child: child),
       ),
     );
   }

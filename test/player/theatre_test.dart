@@ -144,6 +144,31 @@ void main() {
     expect(_exitButton, findsOneWidget);
   });
 
+  testWidgets('the exit button comes first on Tab and stays while focused', (
+    tester,
+  ) async {
+    recordSystemUi(tester);
+    await pumpTheatre(tester);
+    bool exitFocused() =>
+        primaryFocus?.context?.findAncestorWidgetOfExactType<IconButton>() !=
+        null;
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(exitFocused(), isTrue);
+
+    await tester.pump(const Duration(seconds: 4));
+    expect(_exitButton, findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(exitFocused(), isFalse);
+    expect(primaryFocus?.context, isNotNull);
+    expect(_exitButton, findsOneWidget);
+    await tester.pump(const Duration(seconds: 4));
+    expect(_exitButton, findsNothing);
+  });
+
   testWidgets('the exit button leaves theatre', (tester) async {
     recordSystemUi(tester);
     final exits = await pumpTheatre(tester);

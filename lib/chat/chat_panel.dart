@@ -1,13 +1,24 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:jitter/chat/chat_entry.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:jitter/widgets/focus_ring.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 /// Scrolled further up than this, the list stops following new messages.
 const double _pauseOffset = 24;
+
+/// How far an arrow key scrolls the messages.
+const double _lineStep = 48;
+
+/// How much of the visible messages Page Up and Page Down scroll by.
+const double _pageFraction = 0.8;
+
+/// How long a key's scroll takes.
+const _keyScrollFor = Duration(milliseconds: 100);
 
 /// Emotes are laid out this tall, about two lines of text. The message's
 /// text scale then applies on top, as to everything in a [WidgetSpan].
@@ -17,7 +28,9 @@ const double _emoteHeight = 28;
 /// newest at the bottom, then the connection bar while not connected (or
 /// while a replay loads), where new messages would arrive. Follows new
 /// messages until the user scrolls up; the list then holds still until they
-/// scroll back down or tap "Latest messages".
+/// scroll back down or tap "Latest messages". The messages are a Tab stop,
+/// ringed while focused, that the arrow keys, Page Up/Down, Home and End
+/// scroll; the links in them are stops of their own.
 class ChatPanel extends StatefulWidget {
   const new({required this.chat, super.key});
 
@@ -29,6 +42,7 @@ class ChatPanel extends StatefulWidget {
 
 class _ChatPanelState extends State<ChatPanel> {
   final _scroll = ScrollController();
+  final _focus = FocusNode(debugLabel: 'Chat messages');
 
   /// The messages as they were when the user scrolled up; null while the
   /// list follows new ones.
@@ -38,6 +52,9 @@ class _ChatPanelState extends State<ChatPanel> {
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
+    // Rings the messages only while they hold the focus themselves, not
+    // while one of their links does: a link shows its own.
+    _focus.addListener(() => setState(() {}));
   }
 
   @override
@@ -54,9 +71,37 @@ class _ChatPanelState extends State<ChatPanel> {
 
   void _toLatest() => _scroll.jumpTo(0);
 
+  /// Scrolls for a key while the messages (or a link in them) have the
+  /// focus. The list is reversed: up is older, a larger offset; scrolling
+  /// up past [_pauseOffset] pauses it as a drag would.
+  KeyEventResult _onKey(FocusNode _, KeyEvent event) {
+    if (event is KeyUpEvent || !_scroll.hasClients) {
+      return KeyEventResult.ignored;
+    }
+    final position = _scroll.position;
+    final page = position.viewportDimension * _pageFraction;
+    final to = switch (event.logicalKey) {
+      LogicalKeyboardKey.arrowUp => position.pixels + _lineStep,
+      LogicalKeyboardKey.arrowDown => position.pixels - _lineStep,
+      LogicalKeyboardKey.pageUp => position.pixels + page,
+      LogicalKeyboardKey.pageDown => position.pixels - page,
+      LogicalKeyboardKey.home => position.maxScrollExtent,
+      LogicalKeyboardKey.end => position.minScrollExtent,
+      _ => null,
+    };
+    if (to == null) return KeyEventResult.ignored;
+    _scroll.animateTo(
+      to.clamp(position.minScrollExtent, position.maxScrollExtent),
+      duration: _keyScrollFor,
+      curve: Curves.easeInOut,
+    );
+    return KeyEventResult.handled;
+  }
+
   @override
   void dispose() {
     _scroll.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
@@ -79,13 +124,25 @@ class _ChatPanelState extends State<ChatPanel> {
             Expanded(
               child: Stack(
                 children: [
-                  ListView.builder(
-                    controller: _scroll,
-                    reverse: true,
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    itemCount: messages.length,
-                    itemBuilder: (context, i) =>
-                        _Message(entry: messages[messages.length - 1 - i]),
+                  Semantics(
+                    container: true,
+                    label: 'Chat messages',
+                    child: Focus(
+                      focusNode: _focus,
+                      onKeyEvent: _onKey,
+                      child: FocusRing(
+                        shown: _focus.hasPrimaryFocus,
+                        child: ListView.builder(
+                          controller: _scroll,
+                          reverse: true,
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          itemCount: messages.length,
+                          itemBuilder: (context, i) => _Message(
+                            entry: messages[messages.length - 1 - i],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                   if (_paused != null)
                     Positioned(

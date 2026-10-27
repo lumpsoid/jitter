@@ -10,19 +10,15 @@ import 'package:jitter/player/playback_failure.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/player/playback_loading.dart';
 import 'package:jitter/player/playback_title.dart';
+import 'package:jitter/player/player_layout.dart';
 import 'package:jitter/player/player_shortcuts.dart';
 import 'package:jitter/player/theatre.dart';
+import 'package:jitter/player/video_frame.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 /// How often the page reports the player's position; Rust throttles saves.
 const _reportEvery = Duration(seconds: 1);
-
-/// From this width the chat sits beside the video, below it otherwise.
-const double _chatBesideMinWidth = 840;
-
-/// The chat's width beside the video.
-const double _chatWidth = 340;
 
 /// Plays [target]: sends `Play` when it opens and `LeavePlayer` when it
 /// closes; Rust opens and stops the player. Push it with `Navigator.push`.
@@ -151,43 +147,23 @@ class _PlayerPageState extends State<PlayerPage> {
             body: Theatre(
               on: _theatre,
               onExit: _exitTheatre,
-              child: _layout(
-                AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: ColoredBox(color: Colors.black, child: _video(state)),
+              child: PlayerLayout(
+                video: VideoFrame(
+                  // The video, or the failure's Retry; not the spinner.
+                  childTakesFocus: switch (state) {
+                    PlaybackUpdateReady() || PlaybackUpdateFailed() => true,
+                    _ => false,
+                  },
+                  child: _video(state),
                 ),
+                chat: widget.chat.mode == ChatMode.shown
+                    ? ChatPanel(chat: widget.chat)
+                    : null,
               ),
             ),
           );
         },
       ),
-    );
-  }
-
-  /// The video alone (no chat, or hidden), or with the chat beside it
-  /// (wide) or below it (narrow).
-  Widget _layout(Widget video) {
-    if (widget.chat.mode != ChatMode.shown) return Center(child: video);
-    final chat = ChatPanel(chat: widget.chat);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth >= _chatBesideMinWidth) {
-          return Row(
-            children: [
-              Expanded(child: Center(child: video)),
-              const VerticalDivider(width: 1),
-              SizedBox(width: _chatWidth, child: chat),
-            ],
-          );
-        }
-        return Column(
-          children: [
-            video,
-            const Divider(height: 1),
-            Expanded(child: chat),
-          ],
-        );
-      },
     );
   }
 
