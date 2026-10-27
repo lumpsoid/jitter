@@ -1,8 +1,8 @@
 //! Favorites controller ↔ favorites signals, and the calls the favorites
 //! need: a channel lookup to add one, and the live check. The list is sent
 //! whole after every action; a failure goes out first as a one-shot
-//! `Failed`. Live status is checked when the holder connects and on a
-//! manual refresh only, never on a timer.
+//! `Failed`. Live status is checked when the holder connects, after a
+//! favorite is added and on a manual refresh, never on a timer.
 
 use std::fmt::Display;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -79,13 +79,21 @@ pub fn remove(favorites: &mut FavoritesController, channel_id: &str) {
 }
 
 /// Hands a favorites call's result to the controller, then sends the list.
-pub fn on_fetched(favorites: &mut FavoritesController, fetched: FavoritesFetched) {
+/// A favorite that was added starts a live check, so it does not sit
+/// unchecked until the next refresh.
+pub fn on_fetched(
+    favorites: &mut FavoritesController,
+    fetched: FavoritesFetched,
+    twitch: &Twitch,
+    fetch: &UnboundedSender<Fetched>,
+) {
     match fetched {
         FavoritesFetched::Channel { login, result } => {
-            report(
-                add_found(favorites, result),
-                &format!("Couldn't add {login}"),
-            );
+            let added = add_found(favorites, result);
+            if added.is_ok() {
+                check_live(favorites, twitch, fetch);
+            }
+            report(added, &format!("Couldn't add {login}"));
         }
         FavoritesFetched::Live(Ok(streams)) => {
             report(favorites.apply_live(streams), "Couldn't rename a favorite");

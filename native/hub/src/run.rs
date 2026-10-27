@@ -314,7 +314,7 @@ fn on_fetched(
         }
         // Favorites
         Fetched::Favorites(fetched) => {
-            favorites::on_fetched(&mut c.favorites, fetched);
+            favorites::on_fetched(&mut c.favorites, fetched, twitch, fetch);
             favorites_changed(c);
         }
         // Playback
