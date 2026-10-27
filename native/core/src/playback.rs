@@ -2,9 +2,10 @@
 //! quality, then deciding what the player opens. Pure state; heads resolve
 //! through twitch and hand the result in.
 
-use crate::models::{ChannelLogin, Open, Playback, Quality, Seconds, VideoId};
+use crate::models::{ChannelLogin, Open, Playback, Quality, Seconds, Timestamp, VideoId};
 use crate::ports::StoreError;
 use crate::resume::ResumeController;
+use crate::resume_policy::ResumeDecision;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlaybackTarget {
@@ -58,13 +59,14 @@ impl PlaybackController {
 
     /// Applies a resolve result. Ignored unless `target` is the one being
     /// resolved, so a slow resolve for channel A cannot replace a later pick
-    /// of channel B.
-    pub fn apply(&mut self, target: PlaybackTarget, result: Result<Playback, String>) {
+    /// of channel B. Returns whether it applied, i.e. whether the result is
+    /// the one now shown.
+    pub fn apply(&mut self, target: PlaybackTarget, result: Result<Playback, String>) -> bool {
         let PlaybackState::Resolving { target: current } = &self.state else {
-            return;
+            return false;
         };
         if *current != target {
-            return;
+            return false;
         }
         self.state = match result {
             Err(message) => PlaybackState::Failed { message },
@@ -79,6 +81,7 @@ impl PlaybackController {
                 },
             },
         };
+        true
     }
 
     /// Selects a quality by name or by [`Playback::DEFAULT_QUALITY`].
@@ -135,6 +138,49 @@ impl PlaybackController {
             start: if live { Seconds::ZERO } else { vod_start },
             live,
         })
+    }
+
+    /// Reports that the player showing `target` is at `position` of
+    /// `duration`. Recorded only while `target` is the VOD being played: a
+    /// live stream has no resume point, and a report from a player left
+    /// behind by a later [`Self::begin`] must not land on the new VOD. A
+    /// zero `duration` is a player that has not loaded yet, whose position
+    /// means nothing. `None` when nothing was recorded.
+    pub fn record(
+        &self,
+        resume: &mut ResumeController,
+        target: &PlaybackTarget,
+        position: Seconds,
+        duration: Seconds,
+        now: Timestamp,
+    ) -> Result<Option<ResumeDecision>, StoreError> {
+        let PlaybackState::Ready {
+            target: current @ PlaybackTarget::Vod(id),
+            ..
+        } = &self.state
+        else {
+            return Ok(None);
+        };
+        if current != target || duration == Seconds::ZERO {
+            return Ok(None);
+        }
+        resume.record(id.clone(), position, duration, now).map(Some)
+    }
+
+    /// The player showing `target` was left: back to idle, unless a later
+    /// [`Self::begin`] replaced `target` (its page opened before this one
+    /// closed). Returns whether it left, i.e. whether the player stops.
+    pub fn leave(&mut self, target: &PlaybackTarget) -> bool {
+        match &self.state {
+            PlaybackState::Resolving { target: current }
+            | PlaybackState::Ready {
+                target: current, ..
+            } if current != target => false,
+            _ => {
+                self.state = PlaybackState::Idle;
+                true
+            }
+        }
     }
 
     pub fn selected_quality(&self) -> Option<&Quality> {

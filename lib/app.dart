@@ -3,6 +3,8 @@ import 'dart:ui' show AppExitResponse;
 import 'package:flutter/material.dart';
 import 'package:jitter/boot/boot_failure_page.dart';
 import 'package:jitter/boot/boot_holder.dart';
+import 'package:jitter/player/media_kit_engine.dart';
+import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/shell/app_shell.dart';
 import 'package:rinf/rinf.dart';
 
@@ -10,9 +12,17 @@ import 'package:rinf/rinf.dart';
 /// the navigation shell. Feature holders are created in `main` and passed
 /// down from here.
 class JitterApp extends StatefulWidget {
-  const new({required this.boot, super.key});
+  const new({
+    required this.boot,
+    required this.playback,
+    required this.player,
+    super.key,
+  });
 
   final BootHolder boot;
+  // Playback
+  final PlaybackHolder playback;
+  final MediaKitEngine player;
 
   @override
   State<JitterApp> createState() => _JitterAppState();
@@ -58,7 +68,10 @@ class _JitterAppState extends State<JitterApp> {
             message: message,
             onRetry: widget.boot.boot,
           ),
-          BootReady() => const AppShell(),
+          BootReady() => AppShell(
+            playback: widget.playback,
+            player: widget.player,
+          ),
         },
       ),
     );

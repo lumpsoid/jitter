@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:jitter/favorites/favorites_page.dart';
+import 'package:jitter/player/media_kit_engine.dart';
+import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/top/top_page.dart';
 
 /// Below this width the destinations sit in a bottom bar, from it in a
@@ -18,7 +20,11 @@ typedef _Destination = ({
 /// rail (wide). A feature with its own top-level page adds a destination
 /// here; its holder comes in through the constructor.
 class AppShell extends StatefulWidget {
-  const new({super.key});
+  const new({required this.playback, required this.player, super.key});
+
+  // Playback: what a page needs to push a `PlayerPage`.
+  final PlaybackHolder playback;
+  final MediaKitEngine player;
 
   @override
   State<AppShell> createState() => _AppShellState();

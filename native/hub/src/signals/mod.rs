@@ -5,5 +5,12 @@
 //! so names are unique across files and avoid Flutter's own.
 
 mod boot;
+// Playback
+mod playback;
 
 pub use boot::{Boot, BootFailed, Booted};
+// Playback
+pub use playback::{
+    LeavePlayer, Play, PlaybackTarget, PlaybackUpdate, PlayerCommand, PlayerPosition,
+    QualityOption, SelectQuality,
+};
