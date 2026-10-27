@@ -216,6 +216,13 @@ So every feature has a ready signal:
 This also covers Flutter hot restart, where Dart state resets but Rust keeps
 running.
 
+**jitter: only features that hold state before any page asks have one.**
+`BrowseReady`, `FavoritesReady` and `ChatReady` exist: the top streams load
+at start, the favorites at boot, and a chat session runs while the player
+does. Playback and the channel page have none: they show nothing until a
+page opens, and that page's own intent (`Play`, `OpenChannel`) is answered
+with the whole state, so it is the ready signal.
+
 ### Startup
 
 Rust cannot find the app's documents directory on every platform by itself.
@@ -233,6 +240,105 @@ ignores any directory in `Boot`; `path_provider` would give a different,
 app-id-named directory, and copying its per-platform rule into the CLI would
 put the path in two languages. On Android/iOS there is no CLI and the
 sandbox requires Dart's directory, so `Boot`'s directory is used there.
+
+## jitter's hub
+
+What jitter added on top of the shape above, and kept. `native/hub/src` is
+the spec; this is the map.
+
+### Network calls: the fetch-result channel
+
+No `select!` arm awaits the network. The arm asks the controller what to
+load, spawns the twitch call with a clone of the `fetch` sender, sends the
+state the action left (`Loading`, `Resolving`), and returns. The result comes back on one
+`mpsc` channel as a `Fetched`, handled by its own arm:
+
+```rust
+// native/hub/src/run.rs
+pub enum Fetched {
+    TopStreams { request: PageRequest, result: Result<Page<Stream>, String> },
+    Favorites(FavoritesFetched),
+    Playback { target: PlaybackTarget, result: Result<Playback, TwitchError> },
+    Channel(ChannelFetched),
+    Chat(ChatFetched),
+}
+```
+
+One variant per feature; a feature with several calls nests its own enum
+(`FavoritesFetched::{Channel, Live}`, `ChannelFetched::{Channel, Live,
+Vods}`) in its module, so `run.rs` routes and the feature matches. The arm
+hands the result to the controller and sends that feature's state; a
+result may start the call after it (a found channel's live check).
+
+### Late results are dropped by tag
+
+The loop stays free while a call is in flight, so the user may move on
+before it returns. Every result carries what it was for, and only the
+current one applies:
+
+- Paged lists (top streams, VODs): core's `PageRequest` carries a
+  generation; a refresh or another VOD kind bumps it, and `apply_page`
+  ignores an older one.
+- Playback: `apply` ignores a result for any target but the one resolving.
+  Dart tags `PlayerPosition` and `LeavePlayer` with its page's target, so a
+  closing page cannot stop the player a newer page took over.
+- Channel header: a lookup for another login, or a live check for another
+  id, is ignored.
+- Chat: each `Play` of a live channel starts a session with a number. Its
+  connection and emote tasks are held as `JoinHandle`s and aborted when the
+  session is replaced or stopped; a result already queued from them is
+  dropped because its session tag is no longer the current one.
+
+### Chat batching
+
+Chat changes come from core in order: `Appended`, `Evicted`, `Marked`,
+`Cleared`, `Rerender`, status changes. The hub holds appends and evictions
+for 100 ms (`BATCH_WINDOW`) and sends them as one `ChatUpdate::Appended`
+plus one summed `Evicted`, so a busy channel costs Dart a rebuild per
+window, not per message. This is transport batching only; core decides
+nothing about it.
+
+Order survives because:
+
+- evicting from the oldest end commutes with appending at the newest, so
+  all appends, then the summed eviction, end in the same list;
+- any other change sends the waiting batch first, then itself;
+- a snapshot (`Rerender`, `ChatReady`, `SetTheme`, a new session) already
+  contains what waited, so the batch is dropped.
+
+The deadline is a `select!` arm like the brew timer: `chat::until(due)`
+sleeps until the batch is due, and is pending forever while it is empty.
+
+### The player is a platform effect
+
+The video player lives in Flutter (media_kit), but what it plays is
+decided in Rust. The hub sends `PlayerCommand::{Open { url, start_s },
+Stop}`; Dart performs each in order and keeps nothing. Core picks the
+quality and the start position (resume point, `MIN_RESUME`, finished
+VODs).
+
+Dart reports where the player is with `PlayerPosition` about every second,
+and once more in `LeavePlayer`. It does not decide whether that is worth
+saving: core records only the VOD now playing and only once the player
+has a duration (`PlaybackController::record`), and `ResumePolicy`
+throttles (`SAVE_STEP`) and clears a finished VOD.
+
+### Favorites reload on boot and refresh only
+
+The favorites controller reads the store at boot and on
+`RefreshFavorites` (pull to refresh), nothing else. The database is shared
+with the CLI, so a favorite added there shows up in the GUI after a
+restart or a refresh; there is no file watch or polling. `FavoritesReady`
+sends the list in memory. Live status is checked on `FavoritesReady` and
+on refresh, never on a timer.
+
+### Error messages
+
+A `TwitchError` reaches the user only through `format::twitch_error`: one
+sentence per variant, no wire detail. twitch's `Display` stays the
+diagnostic text the CLI prints and the hub logs. A feature may prefix the
+operation (`Couldn't add xqc: No such channel or video.`). `StoreError`
+already reads `Storage failed: …` and is shown as is.
 
 ## Flutter
 
