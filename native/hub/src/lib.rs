@@ -5,6 +5,8 @@
 mod browse;
 mod favorites;
 mod format;
+// Playback
+mod playback;
 mod run;
 mod signals;
 

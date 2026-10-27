@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/favorites/favorites_page.dart';
+import 'package:jitter/player/media_kit_engine.dart';
+import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:jitter/top/top_page.dart';
 
@@ -25,6 +27,9 @@ class AppShell extends StatefulWidget {
     required this.browse,
     // Favorites
     required this.favorites,
+    // Playback
+    required this.playback,
+    required this.player,
     super.key,
   });
 
@@ -32,6 +37,9 @@ class AppShell extends StatefulWidget {
   final BrowseHolder browse;
   // Favorites
   final FavoritesHolder favorites;
+  // Playback: what a page needs to push a `PlayerPage`.
+  final PlaybackHolder playback;
+  final MediaKitEngine player;
 
   @override
   State<AppShell> createState() => _AppShellState();

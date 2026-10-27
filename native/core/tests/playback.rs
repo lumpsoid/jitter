@@ -5,6 +5,7 @@ use jitter_core::models::{
 };
 use jitter_core::playback::{PlaybackController, PlaybackState, PlaybackTarget};
 use jitter_core::resume::ResumeController;
+use jitter_core::resume_policy::ResumeDecision;
 
 fn live(login: &str) -> PlaybackTarget {
     let Ok(l) = ChannelLogin::parse(login) else {
@@ -40,12 +41,12 @@ fn result_for_another_target_is_ignored() {
     let mut c = PlaybackController::new();
     c.begin(live("a"));
     c.begin(live("b"));
-    c.apply(
+    assert!(!c.apply(
         live("a"),
         Ok(playback(vec![variant("720p", 720, QualityKind::Transcode)])),
-    );
+    ));
     assert_eq!(c.state(), &PlaybackState::Resolving { target: live("b") });
-    c.apply(live("a"), Err("late".to_owned()));
+    assert!(!c.apply(live("a"), Err("late".to_owned())));
     assert_eq!(c.state(), &PlaybackState::Resolving { target: live("b") });
 }
 
@@ -108,7 +109,7 @@ fn select_unknown_name_keeps_selection_and_known_name_changes_it() {
 fn error_and_empty_playback_fail() {
     let mut c = PlaybackController::new();
     c.begin(live("a"));
-    c.apply(live("a"), Err("offline".to_owned()));
+    assert!(c.apply(live("a"), Err("offline".to_owned())));
     assert_eq!(
         c.state(),
         &PlaybackState::Failed {
@@ -256,4 +257,92 @@ fn switch_to_unknown_quality_changes_nothing() {
     let mut c = ready(PlaybackTarget::Vod(vod()));
     assert_eq!(c.switch_quality("nope", Seconds::new(1234)), None);
     assert_eq!(selected(&c), Some("1080p60"));
+}
+
+fn now() -> Timestamp {
+    Timestamp::from_unix(1_000)
+}
+
+fn record(
+    c: &PlaybackController,
+    resume: &mut ResumeController,
+    target: &PlaybackTarget,
+    position: u32,
+    duration: u32,
+) -> Option<ResumeDecision> {
+    let Ok(decision) = c.record(
+        resume,
+        target,
+        Seconds::new(position),
+        Seconds::new(duration),
+        now(),
+    ) else {
+        unreachable!("fake store does not fail");
+    };
+    decision
+}
+
+#[test]
+fn the_playing_vod_records_its_position() {
+    let store = FakeResumeStore::default();
+    let mut resume = ResumeController::new(Box::new(store.clone()));
+    let target = PlaybackTarget::Vod(vod());
+    let c = ready(target.clone());
+    assert_eq!(
+        record(&c, &mut resume, &target, 600, 3600),
+        Some(ResumeDecision::Save)
+    );
+    assert_eq!(
+        store.points(),
+        vec![ResumePoint {
+            video_id: vod(),
+            position: Seconds::new(600),
+            duration: Seconds::new(3600),
+            saved_at: now(),
+        }]
+    );
+}
+
+#[test]
+fn live_another_target_or_an_unloaded_player_records_nothing() {
+    let store = FakeResumeStore::default();
+    let mut resume = ResumeController::new(Box::new(store.clone()));
+    let target = PlaybackTarget::Vod(vod());
+    let c = ready(live("a"));
+    assert_eq!(record(&c, &mut resume, &live("a"), 600, 3600), None);
+    let c = ready(target.clone());
+    let Ok(other) = VideoId::parse("456") else {
+        unreachable!("valid id");
+    };
+    assert_eq!(
+        record(&c, &mut resume, &PlaybackTarget::Vod(other), 600, 3600),
+        None
+    );
+    assert_eq!(record(&c, &mut resume, &target, 0, 0), None);
+    let mut c = PlaybackController::new();
+    c.begin(target.clone());
+    assert_eq!(record(&c, &mut resume, &target, 600, 3600), None);
+    assert_eq!(store.points(), vec![]);
+}
+
+#[test]
+fn leaving_goes_idle() {
+    let mut c = ready(live("a"));
+    assert!(c.leave(&live("a")));
+    assert_eq!(c.state(), &PlaybackState::Idle);
+    c.begin(live("a"));
+    c.apply(live("a"), Err("offline".to_owned()));
+    assert!(c.leave(&live("a")));
+    assert_eq!(c.state(), &PlaybackState::Idle);
+}
+
+#[test]
+fn leaving_a_replaced_target_keeps_the_new_one() {
+    let mut c = ready(live("a"));
+    c.begin(live("b"));
+    assert!(!c.leave(&live("a")));
+    assert_eq!(c.state(), &PlaybackState::Resolving { target: live("b") });
+    let mut c = ready(live("b"));
+    assert!(!c.leave(&live("a")));
+    assert!(matches!(c.state(), PlaybackState::Ready { .. }));
 }

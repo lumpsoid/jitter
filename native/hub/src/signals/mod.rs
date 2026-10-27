@@ -9,6 +9,8 @@ mod boot;
 mod browse;
 // Favorites
 mod favorites;
+// Playback
+mod playback;
 
 pub use boot::{Boot, BootFailed, Booted};
 // Browse
@@ -19,4 +21,9 @@ pub use browse::{
 pub use favorites::{
     AddFavorite, FavoriteRow, FavoriteStatus, FavoritesReady, FavoritesUpdate, RefreshFavorites,
     RemoveFavorite,
+};
+// Playback
+pub use playback::{
+    LeavePlayer, Play, PlaybackTarget, PlaybackUpdate, PlayerCommand, PlayerPosition,
+    QualityOption, SelectQuality,
 };

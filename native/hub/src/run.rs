@@ -10,29 +10,34 @@
 
 use jitter_core::browse::BrowseController;
 use jitter_core::favorites::FavoritesController;
-use jitter_core::models::{Page, PageRequest, Stream};
+use jitter_core::models::{Page, PageRequest, Playback, Stream};
+use jitter_core::playback::{PlaybackController, PlaybackTarget};
 use jitter_core::ports::StoreError;
 use jitter_core::resume::ResumeController;
 use jitter_store::SqliteStore;
-use jitter_twitch::Twitch;
+use jitter_twitch::{Twitch, TwitchError};
 use rinf::{DartSignal, DartSignalPack, RustSignal, SignalReceiver};
 use tokio::sync::mpsc;
 
-use crate::favorites::{self, FavoritesFetched};
 use crate::signals::{Boot, Booted};
 // Browse
 use crate::browse;
 use crate::signals::{BrowseReady, NextBrowsePage, RefreshBrowse};
 // Favorites
+use crate::favorites::{self, FavoritesFetched};
 use crate::signals::{AddFavorite, FavoritesReady, RefreshFavorites, RemoveFavorite};
+// Playback
+use crate::playback;
+use crate::signals::{LeavePlayer, Play, PlayerPosition, SelectQuality};
 
 /// Every controller, built and loaded from one store.
 pub struct Controllers {
     favorites: FavoritesController,
-    #[expect(dead_code, reason = "read by the player (G7) arms when they land")]
-    resume: ResumeController,
     // Browse
     browse: BrowseController,
+    // Playback
+    resume: ResumeController,
+    playback: PlaybackController,
 }
 
 impl Controllers {
@@ -46,6 +51,8 @@ impl Controllers {
             resume: ResumeController::new(Box::new(store.clone())),
             // Browse
             browse: BrowseController::new(),
+            // Playback
+            playback: PlaybackController::new(),
         })
     }
 }
@@ -74,6 +81,11 @@ pub enum Fetched {
     },
     // Favorites
     Favorites(FavoritesFetched),
+    // Playback
+    Playback {
+        target: PlaybackTarget,
+        result: Result<Playback, TwitchError>,
+    },
 }
 
 /// Runs until the runtime shuts down. Holds the only receiver of every Dart
@@ -96,6 +108,12 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
     let remove_favorite = RemoveFavorite::get_dart_signal_receiver();
     let refresh_favorites = RefreshFavorites::get_dart_signal_receiver();
 
+    // Playback
+    let play = Play::get_dart_signal_receiver();
+    let select_quality = SelectQuality::get_dart_signal_receiver();
+    let player_position = PlayerPosition::get_dart_signal_receiver();
+    let leave_player = LeavePlayer::get_dart_signal_receiver();
+
     loop {
         tokio::select! {
             // Boot: already booted; a hot-restarted Dart side asks again.
@@ -116,6 +134,20 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
                 favorites::refresh(&mut c.favorites, &twitch, &fetch);
             }
 
+            // Playback
+            Some(pack) = play.recv() => {
+                playback::play(&mut c.playback, &twitch, &fetch, pack.message.target);
+            }
+            Some(pack) = select_quality.recv() => {
+                playback::select_quality(&mut c.playback, pack.message);
+            }
+            Some(pack) = player_position.recv() => {
+                playback::position(&c.playback, &mut c.resume, pack.message);
+            }
+            Some(pack) = leave_player.recv() => {
+                playback::leave(&mut c.playback, &mut c.resume, pack.message);
+            }
+
             // Network results
             Some(result) = fetched.recv() => on_fetched(&mut c, result),
 
@@ -132,5 +164,9 @@ fn on_fetched(c: &mut Controllers, result: Fetched) {
         Fetched::TopStreams { request, result } => browse::on_page(&mut c.browse, request, result),
         // Favorites
         Fetched::Favorites(fetched) => favorites::on_fetched(&mut c.favorites, fetched),
+        // Playback
+        Fetched::Playback { target, result } => {
+            playback::resolved(&mut c.playback, &c.resume, target, result);
+        }
     }
 }
