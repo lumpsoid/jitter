@@ -13,6 +13,7 @@ use jitter_twitch::{Twitch, TwitchError};
 use rinf::RustSignal;
 use tokio::sync::mpsc::UnboundedSender;
 
+use crate::format::viewers_label;
 use crate::run::Fetched;
 use crate::signals::{FavoriteRow, FavoriteStatus, FavoritesUpdate};
 
@@ -149,7 +150,7 @@ impl From<&FavoriteEntry> for FavoriteRow {
             Liveness::Live(stream) => (
                 Some(stream.channel.avatar_url.clone()),
                 FavoriteStatus::Live {
-                    viewers_label: format!("{} viewers", stream.viewers),
+                    viewers_label: viewers_label(stream.viewers),
                     title: stream.title.clone(),
                 },
             ),
