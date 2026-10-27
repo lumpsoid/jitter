@@ -1,4 +1,5 @@
-use jitter_core::browse::{BrowseController, FirstPage, ListState, MorePages, PageRequest};
+use jitter_core::browse::BrowseController;
+use jitter_core::models::{FirstPage, ListState, MorePages, PageRequest};
 use jitter_twitch::Twitch;
 
 use super::{Result, twitch};
