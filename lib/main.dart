@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:jitter/app.dart';
 import 'package:jitter/boot/boot_holder.dart';
+import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:rinf/rinf.dart';
 
@@ -13,8 +14,11 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeRust(assignRustSignal);
 
+  // Favorites
+  final favorites = FavoritesHolder()..connect();
+
   final boot = BootHolder();
   unawaited(boot.connect());
 
-  runApp(JitterApp(boot: boot));
+  runApp(JitterApp(boot: boot, favorites: favorites));
 }

@@ -3,6 +3,7 @@ import 'dart:ui' show AppExitResponse;
 import 'package:flutter/material.dart';
 import 'package:jitter/boot/boot_failure_page.dart';
 import 'package:jitter/boot/boot_holder.dart';
+import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/shell/app_shell.dart';
 import 'package:rinf/rinf.dart';
 
@@ -10,9 +11,16 @@ import 'package:rinf/rinf.dart';
 /// the navigation shell. Feature holders are created in `main` and passed
 /// down from here.
 class JitterApp extends StatefulWidget {
-  const new({required this.boot, super.key});
+  const new({
+    required this.boot,
+    // Favorites
+    required this.favorites,
+    super.key,
+  });
 
   final BootHolder boot;
+  // Favorites
+  final FavoritesHolder favorites;
 
   @override
   State<JitterApp> createState() => _JitterAppState();
@@ -58,7 +66,10 @@ class _JitterAppState extends State<JitterApp> {
             message: message,
             onRetry: widget.boot.boot,
           ),
-          BootReady() => const AppShell(),
+          BootReady() => AppShell(
+            // Favorites
+            favorites: widget.favorites,
+          ),
         },
       ),
     );

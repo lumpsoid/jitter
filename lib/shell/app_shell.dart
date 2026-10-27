@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/favorites/favorites_page.dart';
 import 'package:jitter/top/top_page.dart';
 
@@ -18,7 +19,14 @@ typedef _Destination = ({
 /// rail (wide). A feature with its own top-level page adds a destination
 /// here; its holder comes in through the constructor.
 class AppShell extends StatefulWidget {
-  const new({super.key});
+  const new({
+    // Favorites
+    required this.favorites,
+    super.key,
+  });
+
+  // Favorites
+  final FavoritesHolder favorites;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -27,8 +35,8 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _selected = 0;
 
-  List<_Destination> get _destinations => const [
-    (
+  List<_Destination> get _destinations => [
+    const (
       label: 'Top',
       icon: Icons.trending_up_outlined,
       selectedIcon: Icons.trending_up,
@@ -38,7 +46,11 @@ class _AppShellState extends State<AppShell> {
       label: 'Favorites',
       icon: Icons.favorite_outline,
       selectedIcon: Icons.favorite,
-      page: FavoritesPage(),
+      page: FavoritesPage(
+        favorites: widget.favorites,
+        // Opening a channel lands with the channel page (G5).
+        onOpenChannel: (_) {},
+      ),
     ),
   ];
 

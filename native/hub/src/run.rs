@@ -13,18 +13,18 @@ use jitter_core::ports::StoreError;
 use jitter_core::resume::ResumeController;
 use jitter_store::SqliteStore;
 use jitter_twitch::Twitch;
-use rinf::{DartSignalPack, RustSignal, SignalReceiver};
+use rinf::{DartSignal, DartSignalPack, RustSignal, SignalReceiver};
 use tokio::sync::mpsc;
 
+use crate::favorites::{self, FavoritesFetched};
 use crate::signals::{Boot, Booted};
+// Favorites
+use crate::signals::{AddFavorite, FavoritesReady, RefreshFavorites, RemoveFavorite};
 
 /// Every controller, built and loaded from one store.
-#[expect(
-    dead_code,
-    reason = "read by the Favorites (G4) and player (G7) arms when they land"
-)]
 pub struct Controllers {
     favorites: FavoritesController,
+    #[expect(dead_code, reason = "read by the player (G7) arms when they land")]
     resume: ResumeController,
 }
 
@@ -57,21 +57,37 @@ impl Controllers {
 /// ```
 ///
 /// then hand the variant to its controller in the `fetched` arm's `match`.
-/// Uninhabited until the first feature fetches.
-pub enum Fetched {}
+pub enum Fetched {
+    Favorites(FavoritesFetched),
+}
 
 /// Runs until the runtime shuts down. Holds the only receiver of every Dart
 /// signal: `boot` is handed over from boot, the rest are taken here.
 /// Signals sent before it starts are queued, not lost. `twitch` is cloned
 /// into each spawned call; clones share one connection pool.
-pub async fn run(mut c: Controllers, _twitch: Twitch, boot: SignalReceiver<DartSignalPack<Boot>>) {
+pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSignalPack<Boot>>) {
     // Kept alive for the loop's lifetime: arms clone it into spawned calls.
-    let (_fetch, mut fetched) = mpsc::unbounded_channel::<Fetched>();
+    let (fetch, mut fetched) = mpsc::unbounded_channel::<Fetched>();
+    // Favorites
+    let favorites_ready = FavoritesReady::get_dart_signal_receiver();
+    let add_favorite = AddFavorite::get_dart_signal_receiver();
+    let remove_favorite = RemoveFavorite::get_dart_signal_receiver();
+    let refresh_favorites = RefreshFavorites::get_dart_signal_receiver();
 
     loop {
         tokio::select! {
             // Boot: already booted; a hot-restarted Dart side asks again.
             Some(_) = boot.recv() => Booted.send_signal_to_dart(),
+
+            // Favorites
+            Some(_) = favorites_ready.recv() => favorites::on_ready(&c.favorites, &twitch, &fetch),
+            Some(pack) = add_favorite.recv() => favorites::add(&pack.message.login, &twitch, &fetch),
+            Some(pack) = remove_favorite.recv() => {
+                favorites::remove(&mut c.favorites, &pack.message.channel_id);
+            }
+            Some(_) = refresh_favorites.recv() => {
+                favorites::refresh(&mut c.favorites, &twitch, &fetch);
+            }
 
             // Network results
             Some(result) = fetched.recv() => on_fetched(&mut c, result),
@@ -83,6 +99,8 @@ pub async fn run(mut c: Controllers, _twitch: Twitch, boot: SignalReceiver<DartS
 
 /// Hands a network result to the controller that asked for it, then sends
 /// that feature's state.
-fn on_fetched(_c: &mut Controllers, result: Fetched) {
-    match result {}
+fn on_fetched(c: &mut Controllers, result: Fetched) {
+    match result {
+        Fetched::Favorites(fetched) => favorites::on_fetched(&mut c.favorites, fetched),
+    }
 }

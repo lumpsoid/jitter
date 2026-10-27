@@ -5,5 +5,12 @@
 //! so names are unique across files and avoid Flutter's own.
 
 mod boot;
+// Favorites
+mod favorites;
 
 pub use boot::{Boot, BootFailed, Booted};
+// Favorites
+pub use favorites::{
+    AddFavorite, FavoriteRow, FavoriteStatus, FavoritesReady, FavoritesUpdate, RefreshFavorites,
+    RemoveFavorite,
+};
