@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Jitter
+Comment=Watch Twitch streams
+Exec=jitter
+Icon=jitter
+Categories=AudioVideo;Video;Player;
+Terminal=false

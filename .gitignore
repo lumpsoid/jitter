@@ -58,3 +58,6 @@ app.*.map.json
 
 # Claude Code agent worktrees
 .claude/worktrees/
+
+# Packaged builds
+/dist/
