@@ -4,15 +4,23 @@ import 'package:flutter/material.dart';
 import 'package:jitter/boot/boot_failure_page.dart';
 import 'package:jitter/boot/boot_holder.dart';
 import 'package:jitter/shell/app_shell.dart';
+import 'package:jitter/top/browse_holder.dart';
 import 'package:rinf/rinf.dart';
 
 /// The app: a spinner until Rust has booted, its failure with a Retry, or
 /// the navigation shell. Feature holders are created in `main` and passed
 /// down from here.
 class JitterApp extends StatefulWidget {
-  const new({required this.boot, super.key});
+  const new({
+    required this.boot,
+    // Browse
+    required this.browse,
+    super.key,
+  });
 
   final BootHolder boot;
+  // Browse
+  final BrowseHolder browse;
 
   @override
   State<JitterApp> createState() => _JitterAppState();
@@ -58,7 +66,10 @@ class _JitterAppState extends State<JitterApp> {
             message: message,
             onRetry: widget.boot.boot,
           ),
-          BootReady() => const AppShell(),
+          BootReady() => AppShell(
+            // Browse
+            browse: widget.browse,
+          ),
         },
       ),
     );

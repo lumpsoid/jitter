@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:jitter/app.dart';
 import 'package:jitter/boot/boot_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:jitter/top/browse_holder.dart';
 import 'package:rinf/rinf.dart';
 
 /// Starts Rust, subscribes every holder (each then sends its ready signal,
@@ -13,8 +14,17 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeRust(assignRustSignal);
 
+  // Browse
+  final browse = BrowseHolder()..connect();
+
   final boot = BootHolder();
   unawaited(boot.connect());
 
-  runApp(JitterApp(boot: boot));
+  runApp(
+    JitterApp(
+      boot: boot,
+      // Browse
+      browse: browse,
+    ),
+  );
 }
