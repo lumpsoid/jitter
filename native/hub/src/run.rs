@@ -23,6 +23,9 @@ use crate::signals::{Boot, Booted};
 // Browse
 use crate::browse;
 use crate::signals::{BrowseReady, NextBrowsePage, RefreshBrowse};
+// Chat
+use crate::chat::{self, ChatFetched, ChatPanel};
+use crate::signals::{ChatReady, SetTheme};
 // Favorites
 use crate::favorites::{self, FavoritesFetched};
 use crate::signals::{AddFavorite, FavoritesReady, RefreshFavorites, RemoveFavorite};
@@ -38,6 +41,8 @@ pub struct Controllers {
     // Playback
     resume: ResumeController,
     playback: PlaybackController,
+    // Chat
+    chat: ChatPanel,
 }
 
 impl Controllers {
@@ -53,6 +58,8 @@ impl Controllers {
             browse: BrowseController::new(),
             // Playback
             playback: PlaybackController::new(),
+            // Chat
+            chat: ChatPanel::new(),
         })
     }
 }
@@ -86,6 +93,8 @@ pub enum Fetched {
         target: PlaybackTarget,
         result: Result<Playback, TwitchError>,
     },
+    // Chat
+    Chat(ChatFetched),
 }
 
 /// Runs until the runtime shuts down. Holds the only receiver of every Dart
@@ -114,7 +123,13 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
     let player_position = PlayerPosition::get_dart_signal_receiver();
     let leave_player = LeavePlayer::get_dart_signal_receiver();
 
+    // Chat
+    let chat_ready = ChatReady::get_dart_signal_receiver();
+    let set_theme = SetTheme::get_dart_signal_receiver();
+
     loop {
+        // Chat: the batch deadline, copied out so its timer arm borrows nothing.
+        let chat_flush_at = chat::flush_at(&c.chat);
         tokio::select! {
             // Boot: already booted; a hot-restarted Dart side asks again.
             Some(_) = boot.recv() => Booted.send_signal_to_dart(),
@@ -136,7 +151,9 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
 
             // Playback
             Some(pack) = play.recv() => {
-                playback::play(&mut c.playback, &twitch, &fetch, pack.message.target);
+                let target = playback::play(&mut c.playback, &twitch, &fetch, pack.message.target);
+                // Chat: follows the player.
+                chat::play(&mut c.chat, &twitch, &fetch, target.as_ref());
             }
             Some(pack) = select_quality.recv() => {
                 playback::select_quality(&mut c.playback, pack.message);
@@ -145,8 +162,16 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
                 playback::position(&c.playback, &mut c.resume, pack.message);
             }
             Some(pack) = leave_player.recv() => {
-                playback::leave(&mut c.playback, &mut c.resume, pack.message);
+                // Chat: closes when the player stops.
+                if playback::leave(&mut c.playback, &mut c.resume, pack.message) {
+                    chat::stop(&mut c.chat);
+                }
             }
+
+            // Chat
+            Some(_) = chat_ready.recv() => chat::ready(&mut c.chat),
+            Some(pack) = set_theme.recv() => chat::set_theme(&mut c.chat, pack.message.dark),
+            () = chat::until(chat_flush_at) => chat::flush(&mut c.chat),
 
             // Network results
             Some(result) = fetched.recv() => on_fetched(&mut c, result),
@@ -168,5 +193,7 @@ fn on_fetched(c: &mut Controllers, result: Fetched) {
         Fetched::Playback { target, result } => {
             playback::resolved(&mut c.playback, &c.resume, target, result);
         }
+        // Chat
+        Fetched::Chat(fetched) => chat::on_fetched(&mut c.chat, fetched),
     }
 }

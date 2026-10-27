@@ -7,6 +7,8 @@
 mod boot;
 // Browse
 mod browse;
+// Chat
+mod chat;
 // Favorites
 mod favorites;
 // Playback
@@ -17,6 +19,8 @@ pub use boot::{Boot, BootFailed, Booted};
 pub use browse::{
     BrowseMore, BrowseReady, BrowseState, BrowseUpdate, NextBrowsePage, RefreshBrowse, StreamCard,
 };
+// Chat
+pub use chat::{ChatFragment, ChatLine, ChatReady, ChatStatus, ChatUpdate, EmoteImage, SetTheme};
 // Favorites
 pub use favorites::{
     AddFavorite, FavoriteRow, FavoriteStatus, FavoritesReady, FavoritesUpdate, RefreshFavorites,

@@ -3,6 +3,8 @@
 
 // Browse
 mod browse;
+// Chat
+mod chat;
 mod favorites;
 mod format;
 // Playback
