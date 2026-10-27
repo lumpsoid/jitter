@@ -59,3 +59,9 @@ flutter run
 
 For detailed instructions on writing Rust and Flutter together,
 please refer to Rinf's [documentation](https://rinf.cunarist.org).
+
+## Portable Linux build
+
+`make appimage` builds a self-contained AppImage in `dist/`. Building it and
+running it elsewhere, SteamOS Game Mode included, is covered in
+[Linux AppImage](./docs/linux-appimage.md).
