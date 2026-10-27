@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 use jitter_core::ports::StoreError;
 use jitter_store::SqliteStore;
+use jitter_twitch::Twitch;
 use rinf::{DartSignal, RustSignal, dart_shutdown, write_interface};
 
 use crate::run::Controllers;
@@ -30,20 +31,22 @@ async fn boot_then_run() {
     let boot = Boot::get_dart_signal_receiver();
     while let Some(pack) = boot.recv().await {
         match boot_at(&pack.message.dir) {
-            Ok(controllers) => {
+            Ok((controllers, twitch)) => {
                 Booted.send_signal_to_dart();
-                return run::run(controllers, boot).await;
+                return run::run(controllers, twitch, boot).await;
             }
-            Err(error) => BootFailed {
-                message: error.to_string(),
-            }
-            .send_signal_to_dart(),
+            Err(message) => BootFailed { message }.send_signal_to_dart(),
         }
     }
 }
 
-fn boot_at(dir: &str) -> Result<Controllers, StoreError> {
-    Controllers::boot(&SqliteStore::open(db_path(dir)?)?)
+/// Opens the store and builds the Twitch client; either failing is shown
+/// to the user as the boot failure's message.
+fn boot_at(dir: &str) -> Result<(Controllers, Twitch), String> {
+    let open = || Controllers::boot(&SqliteStore::open(db_path(dir)?)?);
+    let controllers = open().map_err(|e: StoreError| e.to_string())?;
+    let twitch = Twitch::new().map_err(|e| e.to_string())?;
+    Ok((controllers, twitch))
 }
 
 /// Desktop: the database every head on this machine shares, so the GUI and

@@ -12,6 +12,7 @@ use jitter_core::favorites::FavoritesController;
 use jitter_core::ports::StoreError;
 use jitter_core::resume::ResumeController;
 use jitter_store::SqliteStore;
+use jitter_twitch::Twitch;
 use rinf::{DartSignalPack, RustSignal, SignalReceiver};
 use tokio::sync::mpsc;
 
@@ -61,8 +62,9 @@ pub enum Fetched {}
 
 /// Runs until the runtime shuts down. Holds the only receiver of every Dart
 /// signal: `boot` is handed over from boot, the rest are taken here.
-/// Signals sent before it starts are queued, not lost.
-pub async fn run(mut c: Controllers, boot: SignalReceiver<DartSignalPack<Boot>>) {
+/// Signals sent before it starts are queued, not lost. `twitch` is cloned
+/// into each spawned call; clones share one connection pool.
+pub async fn run(mut c: Controllers, _twitch: Twitch, boot: SignalReceiver<DartSignalPack<Boot>>) {
     // Kept alive for the loop's lifetime: arms clone it into spawned calls.
     let (_fetch, mut fetched) = mpsc::unbounded_channel::<Fetched>();
 
