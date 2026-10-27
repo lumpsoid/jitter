@@ -4,7 +4,8 @@
 use std::collections::VecDeque;
 
 use crate::models::{
-    ChatEvent, ChatMessage, Emote, EmoteProvider, EmoteScope, EmoteSet, Fragment, RoomState,
+    ChatChange, ChatEvent, ChatMessage, Emote, EmoteProvider, EmoteScope, EmoteSet, Fragment,
+    RoomState,
 };
 use crate::tokenize::tokenize;
 
@@ -67,41 +68,75 @@ impl ChatController {
         &self.failed_providers
     }
 
-    pub fn apply(&mut self, event: ChatEvent) {
+    /// Applies one event and returns what changed, in order; empty when
+    /// nothing did (e.g. clearing a message no longer in the buffer).
+    pub fn apply(&mut self, event: ChatEvent) -> Vec<ChatChange> {
         match event {
             ChatEvent::Message(message) => {
-                self.messages.push_back(message);
-                while self.messages.len() > MESSAGE_LIMIT {
-                    self.messages.pop_front();
+                self.messages.push_back(message.clone());
+                let mut changes = vec![ChatChange::Appended { message }];
+                let count = self.messages.len().saturating_sub(MESSAGE_LIMIT);
+                if count > 0 {
+                    self.messages.drain(..count);
+                    changes.push(ChatChange::Evicted { count });
                 }
+                changes
             }
-            ChatEvent::ClearMessage { id } => {
-                for message in self.messages.iter_mut().filter(|m| m.id == id) {
-                    message.deleted = true;
-                }
+            ChatEvent::ClearMessage { id } => self.mark(|m| m.id == id),
+            ChatEvent::ClearUser { user_id } => self.mark(|m| m.sender.user_id == user_id),
+            ChatEvent::ClearAll => {
+                self.messages.clear();
+                vec![ChatChange::Cleared]
             }
-            ChatEvent::ClearUser { user_id } => {
-                for message in self
-                    .messages
-                    .iter_mut()
-                    .filter(|m| m.sender.user_id == user_id)
-                {
-                    message.deleted = true;
-                }
+            ChatEvent::RoomState(update) => {
+                self.room.apply(update);
+                vec![ChatChange::RoomChanged]
             }
-            ChatEvent::ClearAll => self.messages.clear(),
-            ChatEvent::RoomState(update) => self.room.apply(update),
-            ChatEvent::Notice(text) => self.notice = Some(text),
-            ChatEvent::Connected => self.connection = Connection::Connected,
-            ChatEvent::Disconnected => self.connection = Connection::Disconnected,
+            ChatEvent::Notice(text) => {
+                self.notice = Some(text);
+                vec![ChatChange::NoticeChanged]
+            }
+            ChatEvent::Connected => {
+                self.connection = Connection::Connected;
+                vec![ChatChange::ConnectionChanged]
+            }
+            ChatEvent::Disconnected => {
+                self.connection = Connection::Disconnected;
+                vec![ChatChange::ConnectionChanged]
+            }
+        }
+    }
+
+    /// Marks the matching messages not yet deleted; their ids, if any.
+    fn mark(&mut self, matches: impl Fn(&ChatMessage) -> bool) -> Vec<ChatChange> {
+        let ids: Vec<String> = self
+            .messages
+            .iter_mut()
+            .filter(|m| !m.deleted && matches(m))
+            .map(|m| {
+                m.deleted = true;
+                m.id.clone()
+            })
+            .collect();
+        if ids.is_empty() {
+            Vec::new()
+        } else {
+            vec![ChatChange::Marked { ids }]
         }
     }
 
     /// Replaces one provider's emotes for a scope. May arrive at any time;
-    /// a successful load clears that provider's failure mark.
-    pub fn set_emotes(&mut self, scope: EmoteScope, provider: EmoteProvider, emotes: Vec<Emote>) {
+    /// a successful load clears that provider's failure mark. Messages are
+    /// tokenized at read time, so every one may now render differently.
+    pub fn set_emotes(
+        &mut self,
+        scope: EmoteScope,
+        provider: EmoteProvider,
+        emotes: Vec<Emote>,
+    ) -> ChatChange {
         self.emotes.set(scope, provider, emotes);
         self.failed_providers.retain(|p| *p != provider);
+        ChatChange::Rerender
     }
 
     pub fn provider_failed(&mut self, provider: EmoteProvider) {

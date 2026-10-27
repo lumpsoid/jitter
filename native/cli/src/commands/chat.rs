@@ -31,6 +31,7 @@ pub async fn run(input: &str, verbose: bool) -> Result<()> {
     let mut events = std::pin::pin!(events);
     while let Some(event) = events.next().await {
         print_event(&chat, &event, &login.to_string());
+        // A terminal is append-only: the CLI prints events, not diffs.
         chat.apply(event);
     }
     Ok(())
@@ -39,7 +40,10 @@ pub async fn run(input: &str, verbose: bool) -> Result<()> {
 fn load_emotes(chat: &mut ChatController, scope: EmoteScope, results: [ProviderEmotes; 3]) {
     for (provider, result) in results {
         match result {
-            Ok(emotes) => chat.set_emotes(scope, provider, emotes),
+            // The CLI renders each message once, on arrival; nothing to redraw.
+            Ok(emotes) => {
+                chat.set_emotes(scope, provider, emotes);
+            }
             Err(e) => {
                 eprintln!("-- {provider:?} {scope:?} emotes unavailable: {e}");
                 chat.provider_failed(provider);
