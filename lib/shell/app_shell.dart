@@ -3,6 +3,8 @@ import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/favorites/favorites_page.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
+import 'package:jitter/player/player_page.dart';
+import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:jitter/top/top_page.dart';
 
@@ -49,13 +51,15 @@ class _AppShellState extends State<AppShell> {
   int _selected = 0;
 
   List<_Destination> get _destinations => [
-    // Browse; no `onOpenStream` until the player lands, so cards are
-    // not tappable yet.
     (
       label: 'Top',
       icon: Icons.trending_up_outlined,
       selectedIcon: Icons.trending_up,
-      page: TopPage(browse: widget.browse),
+      page: TopPage(
+        browse: widget.browse,
+        onOpenStream: (login) =>
+            _openPlayer(PlaybackTargetLive(login: login), login),
+      ),
     ),
     (
       label: 'Favorites',
@@ -70,6 +74,20 @@ class _AppShellState extends State<AppShell> {
   ];
 
   void _select(int index) => setState(() => _selected = index);
+
+  /// Pushes the player for `target`; leaving the page stops it.
+  void _openPlayer(PlaybackTarget target, String title) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PlayerPage(
+          target: target,
+          title: title,
+          playback: widget.playback,
+          player: widget.player,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
