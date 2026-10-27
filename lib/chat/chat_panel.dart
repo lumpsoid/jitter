@@ -203,16 +203,41 @@ class _Message extends StatelessWidget {
       ChatFragmentLink(:final text, :final url) => WidgetSpan(
         alignment: PlaceholderAlignment.baseline,
         baseline: TextBaseline.alphabetic,
-        child: GestureDetector(
-          onTap: () => unawaited(_open(url)),
-          child: MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: Text(text, style: link),
-          ),
-        ),
+        child: _Link(text: text, url: url, style: link),
       ),
       _ => const TextSpan(),
     };
+  }
+}
+
+/// A link in a message: opens on a click, a tap, or Enter/Space once
+/// focused with Tab, and is announced as a link. Focus tints it.
+class _Link extends StatelessWidget {
+  const new({required this.text, required this.url, required this.style});
+
+  final String text;
+  final String url;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      // Its own node, or the whole message would read as the link.
+      container: true,
+      link: true,
+      linkUrl: Uri.tryParse(url),
+      // Its own ink layer, so the tint stays under a deleted message's
+      // opacity.
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: () => unawaited(_open(url)),
+          focusColor: Theme.of(context).colorScheme.primary
+              .withValues(alpha: 0.24),
+          child: Text(text, style: style),
+        ),
+      ),
+    );
   }
 }
 
