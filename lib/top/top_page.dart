@@ -13,6 +13,7 @@ class TopPage extends StatelessWidget {
     required this.browse,
     required this.favorites,
     this.onOpenStream,
+    this.onOpenChannel,
     super.key,
   });
 
@@ -21,9 +22,12 @@ class TopPage extends StatelessWidget {
   /// Read by each card's favorite star.
   final FavoritesHolder favorites;
 
-  /// Opens the tapped stream's channel by login. Cards are not tappable
-  /// without it.
+  /// Plays the tapped stream by login. Cards are not tappable without it.
   final ValueChanged<String>? onOpenStream;
+
+  /// Opens the channel of the stream whose channel name was tapped, by
+  /// login.
+  final ValueChanged<String>? onOpenChannel;
 
   @override
   Widget build(BuildContext context) {
@@ -48,6 +52,7 @@ class TopPage extends StatelessWidget {
           onRefresh: browse.refresh,
           onNextPage: browse.next,
           onOpenStream: onOpenStream,
+          onOpenChannel: onOpenChannel,
         ),
         _ => const Center(child: CircularProgressIndicator()),
       },

@@ -15,6 +15,7 @@ class CategoryPage extends StatelessWidget {
     required this.category,
     required this.favorites,
     this.onOpenStream,
+    this.onOpenChannel,
     super.key,
   });
 
@@ -28,6 +29,10 @@ class CategoryPage extends StatelessWidget {
   /// Plays the tapped stream by login. Cards are not tappable without it.
   final ValueChanged<String>? onOpenStream;
 
+  /// Opens the channel of the stream whose channel name was tapped, by
+  /// login.
+  final ValueChanged<String>? onOpenChannel;
+
   /// Opens category [id] in [category], then pushes its page.
   static Future<void> push(
     BuildContext context, {
@@ -36,6 +41,7 @@ class CategoryPage extends StatelessWidget {
     required CategoryHolder category,
     required FavoritesHolder favorites,
     ValueChanged<String>? onOpenStream,
+    ValueChanged<String>? onOpenChannel,
   }) {
     category.open(id);
     return Navigator.of(context).push(
@@ -45,6 +51,7 @@ class CategoryPage extends StatelessWidget {
           category: category,
           favorites: favorites,
           onOpenStream: onOpenStream,
+          onOpenChannel: onOpenChannel,
         ),
       ),
     );
@@ -80,6 +87,7 @@ class CategoryPage extends StatelessWidget {
               onRefresh: category.refresh,
               onNextPage: category.next,
               onOpenStream: onOpenStream,
+              onOpenChannel: onOpenChannel,
             ),
           _ => const Center(child: CircularProgressIndicator()),
         },

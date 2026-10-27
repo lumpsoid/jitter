@@ -12,6 +12,7 @@ Future<void> pumpPage(
   WidgetTester tester,
   BrowseHolder browse, {
   ValueChanged<String>? onOpenStream,
+  ValueChanged<String>? onOpenChannel,
   FavoritesHolder? favorites,
 }) async {
   tester.view.physicalSize = const Size(400, 2000);
@@ -24,6 +25,7 @@ Future<void> pumpPage(
           browse: browse,
           favorites: favorites ?? FavoritesHolder(),
           onOpenStream: onOpenStream,
+          onOpenChannel: onOpenChannel,
         ),
       ),
     ),
@@ -86,6 +88,53 @@ void main() {
     await tester.tap(find.text('Title a'));
 
     expect(opened, ['login_a']);
+  });
+
+  testWidgets("tapping a card's channel name opens the channel", (
+    tester,
+  ) async {
+    final played = <String>[];
+    final opened = <String>[];
+    await pumpPage(
+      tester,
+      BrowseHolder()..apply(loaded(['a'])),
+      onOpenStream: played.add,
+      onOpenChannel: opened.add,
+    );
+    await tester.tap(find.text('Name a'));
+
+    expect(opened, ['login_a']);
+    expect(played, isEmpty);
+  });
+
+  testWidgets("a long press offers to open the card's channel", (tester) async {
+    final played = <String>[];
+    final opened = <String>[];
+    await pumpPage(
+      tester,
+      BrowseHolder()..apply(loaded(['a'])),
+      onOpenStream: played.add,
+      onOpenChannel: opened.add,
+    );
+    await tester.longPress(find.text('Title a'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open channel'));
+    await tester.pumpAndSettle();
+
+    expect(opened, ['login_a']);
+    expect(played, isEmpty);
+    expect(find.text('Open channel'), findsNothing);
+  });
+
+  testWidgets('without onOpenChannel the long press only offers copies', (
+    tester,
+  ) async {
+    await pumpPage(tester, BrowseHolder()..apply(loaded(['a'])));
+    await tester.longPress(find.text('Title a'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Open channel'), findsNothing);
+    expect(find.text('Copy stream title'), findsOneWidget);
   });
 
   testWidgets("a card's star is filled while its channel is a favorite", (

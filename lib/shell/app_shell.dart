@@ -88,6 +88,7 @@ class _AppShellState extends State<AppShell> {
         browse: widget.browse,
         favorites: widget.favorites,
         onOpenStream: _openLive,
+        onOpenChannel: _openChannel,
       ),
     ),
     (
@@ -130,6 +131,7 @@ class _AppShellState extends State<AppShell> {
       category: widget.category,
       favorites: widget.favorites,
       onOpenStream: _openLive,
+      onOpenChannel: _openChannel,
     ),
   );
 

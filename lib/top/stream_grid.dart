@@ -33,6 +33,7 @@ class PagedStreamGrid extends StatelessWidget {
     required this.onRefresh,
     required this.onNextPage,
     required this.onOpenStream,
+    this.onOpenChannel,
     super.key,
   });
 
@@ -51,6 +52,11 @@ class PagedStreamGrid extends StatelessWidget {
   /// it.
   final ValueChanged<String>? onOpenStream;
 
+  /// Called with the login of the stream whose channel name was tapped.
+  /// Without it, tapping the name plays the stream like the rest of the
+  /// card.
+  final ValueChanged<String>? onOpenChannel;
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -66,10 +72,14 @@ class PagedStreamGrid extends StatelessWidget {
               itemBuilder: (context, index) {
                 final card = streams[index];
                 final open = onOpenStream;
+                final openChannel = onOpenChannel;
                 return StreamCardTile(
                   card: card,
                   favorites: favorites,
                   onTap: open == null ? null : () => open(card.login),
+                  onOpenChannel: openChannel == null
+                      ? null
+                      : () => openChannel(card.login),
                 );
               },
             ),

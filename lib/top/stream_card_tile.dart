@@ -11,7 +11,8 @@ import 'package:jitter/src/bindings/bindings.dart';
 /// channel's favorite star. Given an [avatarUrl], the channel's avatar
 /// leads the text; given [onOpenChannel], tapping the avatar or the
 /// channel name opens the channel instead of [onTap]. A long press offers
-/// to copy the title, the channel name or the game.
+/// to open the channel (given [onOpenChannel]), or to copy the title, the
+/// channel name or the game.
 class StreamCardTile extends StatelessWidget {
   const new({
     required this.card,
@@ -40,7 +41,7 @@ class StreamCardTile extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        onLongPress: () => _showCopyMenu(context),
+        onLongPress: () => _showActions(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -135,13 +136,27 @@ class StreamCardTile extends StatelessWidget {
     );
   }
 
-  void _showCopyMenu(BuildContext context) => unawaited(
+  void _showActions(BuildContext context) => unawaited(
     showModalBottomSheet<void>(
       context: context,
-      builder: (_) => SafeArea(
+      builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (onOpenChannel case final open?)
+              ListTile(
+                leading: const Icon(Icons.person),
+                title: const Text('Open channel'),
+                subtitle: Text(
+                  card.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  open();
+                },
+              ),
             _CopyTile(label: 'Copy stream title', text: card.title),
             _CopyTile(label: 'Copy channel name', text: card.displayName),
             if (card.gameName case final game?)
