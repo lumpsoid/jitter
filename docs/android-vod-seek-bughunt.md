@@ -302,14 +302,16 @@ The four ABIs built in about 7 minutes on 24 cores. Each jar holds
 
   | Jar                       | MD5                                |
   |---------------------------|------------------------------------|
-  | `default-arm64-v8a.jar`   | `cd8076eb7e0d928459bbcc4b9353c84e` |
-  | `default-armeabi-v7a.jar` | `702296997e691828f83c951d196179e6` |
-  | `default-x86_64.jar`      | `177143dd0ae2717fcf52f336e65fa9c5` |
-  | `default-x86.jar`         | `41f5fd96c3d81d80789801f3bb7de178` |
+  | `default-arm64-v8a.jar`   | `6c12e38dfa56756c310e37f92b414a11` |
+  | `default-armeabi-v7a.jar` | `3fafc94e47ee3a018b0f7e185915ece7` |
+  | `default-x86_64.jar`      | `3ea724c13852964537b8e82129a861f4` |
+  | `default-x86.jar`         | `ff6eb6c7f9d15ba4a35da3f3adaab9e3` |
 
 - `third_party/media_kit_libs_android_video/libmpv/` holds
-  `mov_reset_fragments.patch`, a short `README.md`, and `build.sh`, which
-  reproduces the build above and prints the MD5s to pin.
+  `03-mov_reset_fragments.patch`, `04-hls_seek_event_playlists.patch` (a
+  later fix for VODs that are still recording; see that folder's
+  `README.md`), and `build.sh`, which reproduces the build above and prints
+  the MD5s to pin.
 - `pubspec.yaml` points `dependency_overrides` at the vendored plugin.
 - `analysis_options.yaml` excludes `third_party/**`: the analyzer linted
   the vendored `pubspec.yaml` (`sort_pub_dependencies`).
@@ -331,8 +333,9 @@ fragmented-MP4 VOD.
 - **Upgrading media_kit:** if `media_kit_libs_android_video` moves past
   1.3.8, re-vendor it and redo the `build.gradle` change. If it pins a new
   libmpv-android-video-build release, rebuild from that tag with the patch.
-- **Retiring this:** once the upstream Android build ships FFmpeg 8.0 or
-  later, or carries this patch, delete `third_party/`, the override and the
+- **Retiring this:** once the upstream Android build ships FFmpeg 9.0 or
+  later (8.0 has the mov fix but not the EVENT-playlist one), or carries
+  both patches, delete `third_party/`, the override and the
   analyzer exclude. Check with the desktop seek test above against the new
   jar's FFmpeg version before trusting it.
 - **If seeks break again:** capture an mpv verbose log as in step 3, filter
