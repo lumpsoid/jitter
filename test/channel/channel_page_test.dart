@@ -34,7 +34,7 @@ void main() {
   testWidgets('spins until Rust answers', (tester) async {
     await pumpPage(tester, ChannelHolder());
 
-    expect(find.text('xqc'), findsNWidgets(2));
+    expect(find.text('xqc'), findsOneWidget);
     expect(find.text('Looking up the channel…'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
@@ -70,13 +70,17 @@ void main() {
     expect(find.byType(TabBar), findsNothing);
   });
 
-  testWidgets('a failed lookup shows its message with Retry', (tester) async {
+  testWidgets('a failed lookup names the channel, its message and Retry', (
+    tester,
+  ) async {
     final channel = ChannelHolder()
       ..applyHeader(
         const ChannelUpdateFailed(login: 'xqc', message: 'offline'),
       );
     await pumpPage(tester, channel);
 
+    expect(find.text('xqc'), findsOneWidget);
+    expect(find.text('Looking up the channel…'), findsNothing);
     expect(find.text('offline'), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
   });
@@ -96,7 +100,7 @@ void main() {
       );
     await pumpPage(tester, channel);
 
-    expect(find.text('xQc'), findsNWidgets(2));
+    expect(find.text('xQc'), findsOneWidget);
     expect(find.text('Offline'), findsOneWidget);
     expect(find.byIcon(Icons.favorite_outline), findsOneWidget);
     expect(find.text('Archive'), findsOneWidget);
