@@ -69,6 +69,10 @@ pub enum ChatItem {
 pub struct ChatLine {
     /// Twitch's message id: unique, never changes; `Marked` refers to it.
     pub id: String,
+    /// Who wrote it: Twitch's user id, the same on each of their lines
+    /// (a display name can change mid-session), so the GUI can gather a
+    /// user's lines by it.
+    pub sender: String,
     pub name: String,
     /// The name's colour, `0xAARRGGBB`, readable on the theme last set.
     pub color: u32,

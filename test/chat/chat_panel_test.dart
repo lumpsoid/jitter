@@ -16,6 +16,7 @@ void main() {
             ChatItemMessage(
               line: ChatLine(
                 id: 'a',
+                sender: '1',
                 name: 'alice',
                 color: 0xFFFF0000,
                 action: false,
@@ -57,6 +58,7 @@ void main() {
             ChatItemMessage(
               line: ChatLine(
                 id: 'a',
+                sender: '1',
                 name: 'alice',
                 color: 0xFFFF0000,
                 action: false,
@@ -97,6 +99,7 @@ void main() {
             ChatItemMessage(
               line: ChatLine(
                 id: 'a',
+                sender: '1',
                 name: 'alice',
                 color: 0xFFFF0000,
                 action: false,
@@ -160,6 +163,7 @@ void main() {
             ChatItemMessage(
               line: ChatLine(
                 id: 'a',
+                sender: '1',
                 name: 'alice',
                 color: 0xFFFF0000,
                 action: false,
@@ -219,6 +223,7 @@ void main() {
               system: resub,
               line: ChatLine(
                 id: 'b',
+                sender: '1',
                 name: 'riamot',
                 color: 0xFF0000FF,
                 action: false,
@@ -308,6 +313,7 @@ void main() {
             ChatItemMessage(
               line: ChatLine(
                 id: 'a',
+                sender: '1',
                 name: 'alice',
                 color: 0xFFFF0000,
                 action: false,
@@ -318,6 +324,7 @@ void main() {
             ChatItemMessage(
               line: ChatLine(
                 id: 'b',
+                sender: '1',
                 name: 'bob',
                 color: 0xFF0000FF,
                 action: false,
@@ -550,6 +557,70 @@ void main() {
     );
     expect(tester.widget<FocusRing>(find.byType(FocusRing)).shown, isFalse);
   });
+
+  testWidgets("tapping a message opens its sender's lines, kept current", (
+    tester,
+  ) async {
+    final chat = ChatHolder(sendTheme: (_) {})
+      ..apply(
+        ChatUpdateSnapshot(
+          messages: [
+            _line('a', 'first', sender: '7', name: 'bob'),
+            _line('b', 'from alice'),
+            _line('c', 'second', sender: '7', name: 'bob'),
+          ],
+          status: const ChatStatus(modes: []),
+        ),
+      );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: ChatPanel(chat: chat)),
+      ),
+    );
+
+    await tester.tap(find.textContaining('second'));
+    await tester.pumpAndSettle();
+
+    final sheet = find.byType(BottomSheet);
+    expect(sheet, findsOneWidget);
+    expect(
+      find.descendant(of: sheet, matching: find.textContaining('first')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: sheet, matching: find.textContaining('from alice')),
+      findsNothing,
+    );
+
+    chat
+      ..apply(
+        ChatUpdateAppended(
+          messages: [_line('d', 'third', sender: '7', name: 'bob')],
+        ),
+      )
+      ..apply(const ChatUpdateMarked(ids: ['a']));
+    await tester.pump();
+
+    expect(
+      find.descendant(of: sheet, matching: find.textContaining('third')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: sheet, matching: find.textContaining('(deleted)')),
+      findsOneWidget,
+    );
+
+    chat.apply(const ChatUpdateCleared());
+    await tester.pump();
+
+    expect(
+      find.descendant(
+        of: sheet,
+        matching: find.text('No messages from bob in the chat now.'),
+      ),
+      findsOneWidget,
+    );
+  });
 }
 
 ChatHolder _chatWith(List<ChatFragment> fragments) {
@@ -559,6 +630,7 @@ ChatHolder _chatWith(List<ChatFragment> fragments) {
         ChatItemMessage(
           line: ChatLine(
             id: 'a',
+            sender: '1',
             name: 'alice',
             color: 0xFFFF0000,
             action: false,
@@ -572,10 +644,16 @@ ChatHolder _chatWith(List<ChatFragment> fragments) {
   );
 }
 
-ChatItem _line(String id, String text) => ChatItemMessage(
+ChatItem _line(
+  String id,
+  String text, {
+  String sender = '1',
+  String name = 'alice',
+}) => ChatItemMessage(
   line: ChatLine(
     id: id,
-    name: 'alice',
+    sender: sender,
+    name: name,
     color: 0xFFFF0000,
     action: false,
     deleted: false,

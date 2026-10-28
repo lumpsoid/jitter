@@ -610,6 +610,7 @@ fn line(chat: &ChatController, message: &ChatMessage, look: Look) -> ChatLine {
     let color = name_color(sender.color, &sender.user_id, look.theme);
     ChatLine {
         id: message.id.clone(),
+        sender: sender.user_id.as_str().to_owned(),
         name: sender.display_name.clone(),
         color: 0xFF00_0000
             | u32::from(color.r) << 16
@@ -783,6 +784,7 @@ mod tests {
         };
         assert_eq!(system, "Riamot subscribed for 11 months!");
         assert_eq!(line.id, "a");
+        assert_eq!(line.sender, "1");
         assert_eq!(line.name, "Riamot");
         assert!(
             matches!(line.fragments.as_slice(), [ChatFragment::Text { text }] if text == "still here")

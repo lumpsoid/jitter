@@ -71,6 +71,15 @@ class _ChatPanelState extends State<ChatPanel> {
 
   void _toLatest() => _scroll.jumpTo(0);
 
+  /// Opens the sheet of what [line]'s sender wrote in the chat.
+  void _showChatter(ChatLine line) => unawaited(
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => _ChatterSheet(chat: widget.chat, tapped: line),
+    ),
+  );
+
   /// Scrolls for a key while the messages (or a link in them) have the
   /// focus. The list is reversed: up is older, a larger offset; scrolling
   /// up past [_pauseOffset] pauses it as a drag would.
@@ -137,9 +146,16 @@ class _ChatPanelState extends State<ChatPanel> {
                           reverse: true,
                           padding: const EdgeInsets.symmetric(vertical: 4),
                           itemCount: messages.length,
-                          itemBuilder: (context, i) => _Message(
-                            entry: messages[messages.length - 1 - i],
-                          ),
+                          itemBuilder: (context, i) {
+                            final entry = messages[messages.length - 1 - i];
+                            return _Message(
+                              entry: entry,
+                              onTap: switch (entry.line) {
+                                final line? => () => _showChatter(line),
+                                null => null,
+                              },
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -218,10 +234,14 @@ class _StatusLine extends StatelessWidget {
 /// the theme's primary colour: Twitch's line in muted italics, then the
 /// user's message, if any, beneath it like any other. Both are one text, so
 /// a screen reader reads them as one item, the system line first.
+///
+/// With [onTap] the message is tappable (its links still open on their
+/// own). It is not a Tab stop: there would be one per message.
 class _Message extends StatelessWidget {
-  const new({required this.entry});
+  const new({required this.entry, this.onTap});
 
   final ChatEntry entry;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -246,17 +266,22 @@ class _Message extends StatelessWidget {
       style: style,
     );
     const padding = EdgeInsets.symmetric(horizontal: 8, vertical: 2);
-    if (system == null) return Padding(padding: padding, child: text);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colors.primary.withValues(alpha: 0.06),
-          border: Border(left: BorderSide(color: colors.primary, width: 3)),
-        ),
-        child: Padding(padding: padding, child: text),
-      ),
-    );
+    final message = system == null
+        ? Padding(padding: padding, child: text)
+        : Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: colors.primary.withValues(alpha: 0.06),
+                border: Border(
+                  left: BorderSide(color: colors.primary, width: 3),
+                ),
+              ),
+              child: Padding(padding: padding, child: text),
+            ),
+          );
+    if (onTap == null) return message;
+    return InkWell(onTap: onTap, canRequestFocus: false, child: message);
   }
 
   /// The message, under its body style as the base for the whole of it.
@@ -318,6 +343,73 @@ class _Message extends StatelessWidget {
       ),
       _ => const TextSpan(),
     };
+  }
+}
+
+/// What one user wrote in the chat as it stands, oldest at the top: their
+/// name, then their messages (user notices with their text among them),
+/// drawn as in the panel. Follows the chat while open: new lines of theirs
+/// join, deleted ones show as such, and those the chat drops leave.
+class _ChatterSheet extends StatelessWidget {
+  const new({required this.chat, required this.tapped});
+
+  final ChatHolder chat;
+
+  /// The line the user tapped: whose sheet this is, and their name until
+  /// a line of theirs is in the chat.
+  final ChatLine tapped;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListenableBuilder(
+      listenable: chat,
+      builder: (context, _) {
+        final messages = chat.messagesFrom(tapped.sender);
+        // The latest line has the name as it now reads, in the colour for
+        // the theme last set.
+        final latest = messages.lastOrNull?.line ?? tapped;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Semantics(
+                header: true,
+                child: Text(
+                  latest.name,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: Color(latest.color),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            Flexible(
+              child: messages.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        'No messages from ${latest.name} in the chat now.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      // Newest at the bottom and in view, as in the panel.
+                      reverse: true,
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.only(bottom: 16),
+                      itemCount: messages.length,
+                      itemBuilder: (context, i) =>
+                          _Message(entry: messages[messages.length - 1 - i]),
+                    ),
+            ),
+          ],
+        );
+      },
+    );
   }
 }
 
