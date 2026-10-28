@@ -102,7 +102,8 @@ exec > "$HOME/jitter-steam.log" 2>&1
 echo "== $(date)"
 env | sort
 echo "== running"
-"$HOME/Applications/jitter/AppRun" "$@"
+# Line-buffered: Steam kills the app on exit, losing buffered output.
+stdbuf -oL -eL "$HOME/Applications/jitter/AppRun" "$@"
 echo "== exit code $?"
 ```
 

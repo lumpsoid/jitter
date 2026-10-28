@@ -45,9 +45,13 @@ dependencies:
 
 # Android's libmpv with an FFmpeg fix for seeking in fragmented-MP4 VODs;
 # see third_party/media_kit_libs_android_video/libmpv/README.md.
+# media_kit_video with H/W video rendering on X11; see
+# third_party/media_kit_video/PATCHED.md.
 dependency_overrides:
   media_kit_libs_android_video:
     path: third_party/media_kit_libs_android_video
+  media_kit_video:
+    path: third_party/media_kit_video
 
 dev_dependencies:
   flutter_test:
