@@ -139,11 +139,8 @@ class _ChannelPageState extends State<ChannelPage>
       builder: (context, _) {
         final header = channel.header;
         return Scaffold(
+          // The header in the body names the channel.
           appBar: AppBar(
-            title: Text(switch (header) {
-              ChannelUpdateFound(:final displayName) => displayName,
-              _ => widget.login,
-            }),
             actions: [
               if (header case ChannelUpdateFound(
                 :final channelId,
@@ -160,9 +157,17 @@ class _ChannelPageState extends State<ChannelPage>
             ChannelUpdateNotFound(:final login) => _Message(
               text: 'No channel is called $login.',
             ),
-            ChannelUpdateFailed(:final message) => _Failure(
-              message: message,
-              onRetry: channel.refresh,
+            ChannelUpdateFailed(:final message) => Column(
+              children: [
+                _Header(
+                  login: widget.login,
+                  header: header,
+                  onOpenLive: widget.onOpenLive,
+                ),
+                Expanded(
+                  child: _Failure(message: message, onRetry: channel.refresh),
+                ),
+              ],
             ),
             _ => Column(
               children: [
@@ -209,7 +214,8 @@ class _ChannelPageState extends State<ChannelPage>
 
 /// The channel's avatar and name, then whether it is live. While it is
 /// looked up, the same tile with [login] and no avatar, so the tabs below
-/// do not move when it arrives.
+/// do not move when it arrives; a failed lookup keeps that tile, without
+/// the progress line.
 class _Header extends StatelessWidget {
   const new({
     required this.login,
@@ -228,7 +234,9 @@ class _Header extends StatelessWidget {
       return ListTile(
         leading: const CircleAvatar(child: Icon(Icons.person)),
         title: Text(login),
-        subtitle: const Text('Looking up the channel…'),
+        subtitle: header is ChannelUpdateFailed
+            ? null
+            : const Text('Looking up the channel…'),
       );
     }
     return ListTile(
