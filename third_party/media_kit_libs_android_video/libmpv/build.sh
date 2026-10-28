@@ -1,7 +1,8 @@
 #!/bin/bash
 # Rebuilds android/libs/default-*.jar: media-kit's libmpv-android-video-build
 # at v1.1.7 (the release media_kit_libs_android_video 1.3.8 pins) plus
-# mov_reset_fragments.patch. Prints the MD5s to pin in android/build.gradle.
+# our numbered FFmpeg patches (03-*.patch, 04-*.patch). Prints the MD5s to
+# pin in android/build.gradle.
 #
 # Needs: JDK 17, nasm, meson, ninja, autotools, wget, unzip, and an Android
 # SDK at $ANDROID_HOME with cmdline-tools; the scripts install NDK
@@ -18,7 +19,19 @@ if [ ! -d "$work" ]; then
 fi
 cd "$work/buildscripts"
 
-cp "$here/mov_reset_fragments.patch" patches/ffmpeg/
+# patch.sh applies patches/ffmpeg/* in name order. Number upstream's two
+# patches 01 and 02 so the whole order is spelled out next to ours (03, 04):
+# 04 uses lines 02 adds as context. Reset first so a reused $work starts
+# from upstream's names.
+git checkout -q -- patches/ffmpeg
+git clean -fdq -- patches/ffmpeg
+mv patches/ffmpeg/dash_base_url_escape.patch patches/ffmpeg/01-dash_base_url_escape.patch
+mv patches/ffmpeg/hls_mp4_seek.patch patches/ffmpeg/02-hls_mp4_seek.patch
+cp "$here"/[0-9][0-9]-*.patch patches/ffmpeg/
+if ls patches/ffmpeg | grep -qv '^[0-9][0-9]-'; then
+  echo "unnumbered FFmpeg patch in patches/ffmpeg; place it in the order" >&2
+  exit 1
+fi
 # Upstream's scripts assume a CI runner: drop sudo, and strip with the NDK
 # the build uses rather than the one the runner happened to have.
 sed -i 's/sudo //' bundle_default.sh build.sh
