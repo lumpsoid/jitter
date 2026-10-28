@@ -10,9 +10,11 @@ import 'package:jitter/src/bindings/bindings.dart';
 /// when given) over it, then the title, the channel and the game, with the
 /// channel's favorite star. Given an [avatarUrl], the channel's avatar
 /// leads the text; given [onOpenChannel], tapping the avatar or the
-/// channel name opens the channel instead of [onTap]. A long press offers
-/// to open the channel (given [onOpenChannel]), or to copy the title, the
-/// channel name or the game.
+/// channel name opens the channel instead of [onTap]. A long press, or the
+/// menu key (Shift+F10), offers to open the channel (given
+/// [onOpenChannel]), or to copy the title, the channel name or the game.
+/// The card is one focus stop: the arrow keys go card to card, not through
+/// its avatar, name and star, which the pointer alone takes.
 class StreamCardTile extends StatelessWidget {
   const new({
     required this.card,
@@ -37,100 +39,112 @@ class StreamCardTile extends StatelessWidget {
     final muted = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: () => _showActions(context),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.network(
-                    card.thumbnailUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stack) => ColoredBox(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                    ),
-                  ),
-                  Positioned(
-                    left: 6,
-                    bottom: 6,
-                    child: _ThumbnailBadge(label: card.viewersLabel),
-                  ),
-                  if (uptimeLabel case final uptime?)
-                    Positioned(
-                      right: 6,
-                      bottom: 6,
-                      child: _ThumbnailBadge(label: uptime),
-                    ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 6, 0, 4),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.contextMenu): () =>
+            _showActions(context),
+        const SingleActivator(LogicalKeyboardKey.f10, shift: true): () =>
+            _showActions(context),
+      },
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          onLongPress: () => _showActions(context),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    if (avatarUrl case final avatar?)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8, top: 2),
-                        child: InkWell(
-                          onTap: onOpenChannel,
-                          customBorder: const CircleBorder(),
-                          child: CircleAvatar(
-                            radius: 16,
-                            foregroundImage: NetworkImage(avatar),
-                            // A failed avatar falls back to the icon.
-                            onForegroundImageError: (_, _) {},
-                            child: const Icon(Icons.person, size: 18),
-                          ),
-                        ),
-                      ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            card.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleSmall,
-                          ),
-                          InkWell(
-                            onTap: onOpenChannel,
-                            child: Text(
-                              card.displayName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: muted,
-                            ),
-                          ),
-                          if (card.gameName case final game?)
-                            Text(
-                              game,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: muted,
-                            ),
-                        ],
+                    Image.network(
+                      card.thumbnailUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stack) => ColoredBox(
+                        color: theme.colorScheme.surfaceContainerHighest,
                       ),
                     ),
-                    FavoriteStar(
-                      favorites: favorites,
-                      channelId: card.channelId,
-                      login: card.login,
+                    Positioned(
+                      left: 6,
+                      bottom: 6,
+                      child: _ThumbnailBadge(label: card.viewersLabel),
                     ),
+                    if (uptimeLabel case final uptime?)
+                      Positioned(
+                        right: 6,
+                        bottom: 6,
+                        child: _ThumbnailBadge(label: uptime),
+                      ),
                   ],
                 ),
               ),
-            ),
-          ],
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 6, 0, 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (avatarUrl case final avatar?)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8, top: 2),
+                          child: InkWell(
+                            onTap: onOpenChannel,
+                            canRequestFocus: false,
+                            customBorder: const CircleBorder(),
+                            child: CircleAvatar(
+                              radius: 16,
+                              foregroundImage: NetworkImage(avatar),
+                              // A failed avatar falls back to the icon.
+                              onForegroundImageError: (_, _) {},
+                              child: const Icon(Icons.person, size: 18),
+                            ),
+                          ),
+                        ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              card.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            InkWell(
+                              onTap: onOpenChannel,
+                              canRequestFocus: false,
+                              child: Text(
+                                card.displayName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: muted,
+                              ),
+                            ),
+                            if (card.gameName case final game?)
+                              Text(
+                                game,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: muted,
+                              ),
+                          ],
+                        ),
+                      ),
+                      ExcludeFocus(
+                        child: FavoriteStar(
+                          favorites: favorites,
+                          channelId: card.channelId,
+                          login: card.login,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

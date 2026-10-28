@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:jitter/history/history_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 
@@ -216,8 +217,9 @@ class _Header extends StatelessWidget {
 
 /// One visit: the channel's avatar, the title, what it was (live or the
 /// VOD's day, the channel, the game), when it started and how long it was
-/// watched, and a menu to remove it.
-class _EntryTile extends StatelessWidget {
+/// watched, and a menu to remove it. The row is one focus stop, so the
+/// arrow keys go row to row; the menu key (Shift+F10) opens its menu.
+class _EntryTile extends StatefulWidget {
   const new({
     required this.entry,
     required this.removeLabel,
@@ -233,7 +235,18 @@ class _EntryTile extends StatelessWidget {
   final VoidCallback onRemove;
 
   @override
+  State<_EntryTile> createState() => _EntryTileState();
+}
+
+class _EntryTileState extends State<_EntryTile> {
+  final _menu = GlobalKey<PopupMenuButtonState<VoidCallback>>();
+
+  void _showMenu() => _menu.currentState?.showButtonMenu();
+
+  @override
   Widget build(BuildContext context) {
+    final entry = widget.entry;
+    final onOpenChannel = widget.onOpenChannel;
     final channel = entry.channel;
     final streamed = entry.streamed;
     final what = [
@@ -246,25 +259,37 @@ class _EntryTile extends StatelessWidget {
       ?channel?.displayName,
       ?entry.game,
     ].join(' · ');
-    return ListTile(
-      onTap: onTap,
-      leading: _Avatar(
-        channel: channel,
-        onTap: channel == null ? null : () => onOpenChannel(channel.login),
-      ),
-      title: Text(entry.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-      subtitle: Text(
-        '$what\n${entry.when} · watched ${entry.watched}',
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-      ),
-      isThreeLine: true,
-      trailing: PopupMenuButton<VoidCallback>(
-        tooltip: 'More',
-        onSelected: (action) => action(),
-        itemBuilder: (context) => [
-          PopupMenuItem(value: onRemove, child: Text(removeLabel)),
-        ],
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.contextMenu): _showMenu,
+        const SingleActivator(LogicalKeyboardKey.f10, shift: true): _showMenu,
+      },
+      child: ListTile(
+        onTap: widget.onTap,
+        leading: _Avatar(
+          channel: channel,
+          onTap: channel == null ? null : () => onOpenChannel(channel.login),
+        ),
+        title: Text(entry.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+        subtitle: Text(
+          '$what\n${entry.when} · watched ${entry.watched}',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        isThreeLine: true,
+        trailing: ExcludeFocus(
+          child: PopupMenuButton<VoidCallback>(
+            key: _menu,
+            tooltip: 'More',
+            onSelected: (action) => action(),
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: widget.onRemove,
+                child: Text(widget.removeLabel),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -286,6 +311,9 @@ class _Avatar extends StatelessWidget {
     return InkWell(
       customBorder: const CircleBorder(),
       onTap: onTap,
+      // The pointer's shortcut: the arrow keys go row to row, not through
+      // the avatars.
+      canRequestFocus: false,
       child: CircleAvatar(
         backgroundColor: theme.colorScheme.surfaceContainerHighest,
         foregroundColor: theme.colorScheme.onSurfaceVariant,
