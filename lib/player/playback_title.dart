@@ -3,10 +3,10 @@ import 'package:jitter/src/bindings/bindings.dart';
 
 /// The player page's app bar title: the channel's or the VOD's name, with
 /// a line under it once Rust has sent the [details]: for a live stream a
-/// LIVE badge, its viewers and uptime; the game being played; and, for a
-/// VOD, the day it was streamed. Once the channel is known, its
-/// avatar leads and its display name replaces [title]; tapping either
-/// calls [onOpenChannel] with its login.
+/// LIVE badge, its viewers and uptime; for a VOD, the day it was streamed.
+/// The stream's title and game sit over the video, with room for them.
+/// Once the channel is known, its avatar leads and its display name
+/// replaces [title]; tapping either calls [onOpenChannel] with its login.
 class PlaybackTitle extends StatelessWidget {
   const new({
     required this.title,
@@ -29,12 +29,7 @@ class PlaybackTitle extends StatelessWidget {
     final channel = details?.channel;
     final name = channel?.displayName ?? title;
     final live = details?.live;
-    final subtitle = [
-      live?.viewers,
-      live?.uptime,
-      details?.game,
-      details?.streamed,
-    ].nonNulls;
+    final subtitle = [live?.viewers, live?.uptime, details?.streamed].nonNulls;
     final style = Theme.of(context).textTheme.bodySmall;
     final line = Text(
       subtitle.join(' · '),

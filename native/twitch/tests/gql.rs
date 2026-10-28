@@ -318,6 +318,32 @@ fn live_details_and_undated_vods_have_no_streamed_date() {
 }
 
 #[test]
+fn live_and_vod_details_carry_their_title() {
+    assert_eq!(
+        ok(playback_details::parse_live(DETAILS_LIVE))
+            .title
+            .as_deref(),
+        Some("JUICED EVENT TODAY !! GTA RP NOPIXEL 4.0 | #ad")
+    );
+    assert_eq!(
+        ok(playback_details::parse_vod(DETAILS_VOD))
+            .title
+            .as_deref(),
+        Some("WATCH PARTY + REACT")
+    );
+}
+
+#[test]
+fn offline_channel_and_empty_titles_have_no_title() {
+    let offline = br#"{"data":{"user":{"stream":null}}}"#;
+    assert_eq!(ok(playback_details::parse_live(offline)).title, None);
+    let blank = br#"{"data":{"user":{"stream":{"title":" "}}}}"#;
+    assert_eq!(ok(playback_details::parse_live(blank)).title, None);
+    let untitled = br#"{"data":{"video":{"title":""}}}"#;
+    assert_eq!(ok(playback_details::parse_vod(untitled)).title, None);
+}
+
+#[test]
 fn offline_channel_and_gameless_vod_have_no_game() {
     let offline = br#"{"data":{"user":{"stream":null}}}"#;
     assert_eq!(ok(playback_details::parse_live(offline)).game, None);

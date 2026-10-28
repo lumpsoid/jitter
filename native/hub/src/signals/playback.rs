@@ -134,6 +134,8 @@ pub struct PlaybackDetails {
     /// The channel being watched (a VOD's owner); `None` when it is not
     /// known.
     pub channel: Option<PlaybackChannel>,
+    /// The stream's or the VOD's title; `None` when there is none to show.
+    pub title: Option<String>,
     /// The game or category's name; `None` when there is none to show.
     pub game: Option<String>,
     /// The day a VOD was streamed, ready to show (`Oct 24`); `None` for a

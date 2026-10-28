@@ -213,6 +213,7 @@ fn gta() -> PlaybackDetails {
     };
     PlaybackDetails {
         channel: None,
+        title: Some("GTA RP".to_owned()),
         game: Some(GameRef {
             id,
             name: "Grand Theft Auto V".to_owned(),
@@ -306,6 +307,7 @@ fn vod() -> VideoId {
 fn a_vod_carries_when_it_was_streamed() {
     let streamed = PlaybackDetails {
         channel: None,
+        title: None,
         game: None,
         streamed_at: Some(Timestamp::from_unix(1_792_875_046)),
         live: None,

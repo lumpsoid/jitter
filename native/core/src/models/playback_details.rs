@@ -7,6 +7,9 @@ pub struct PlaybackDetails {
     /// The channel being watched: a live stream's broadcaster, a VOD's
     /// owner. `None` when it is not known.
     pub channel: Option<Channel>,
+    /// The title its broadcaster gave it: a live stream's current one, a
+    /// VOD's own. `None` when none is set or it is not known.
+    pub title: Option<String>,
     /// The category being played: a live stream's current one, a VOD's
     /// recorded one. `None` when none is set or it is not known.
     pub game: Option<GameRef>,

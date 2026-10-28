@@ -66,7 +66,7 @@ pub enum Event {
     Resolved {
         target: PlaybackTarget,
         result: Result<Playback, TwitchError>,
-        details: Result<PlaybackDetails, TwitchError>,
+        details: Box<Result<PlaybackDetails, TwitchError>>,
     },
     ResolveTimedOut(Attempt),
 }
@@ -131,13 +131,13 @@ pub async fn run(
                 result,
                 details,
             } => {
-                if let Err(e) = &details {
+                if let Err(e) = &*details {
                     eprintln!("jitter: playback details unavailable: {e}");
                 }
                 let applied = c.playback.apply(
                     target,
                     result.map_err(|e| e.to_string()),
-                    details.map_err(|e| e.to_string()),
+                    (*details).map_err(|e| e.to_string()),
                     c.settings.state().start_quality,
                 );
                 if applied {
@@ -198,7 +198,7 @@ fn resolve(context: &Context, target: PlaybackTarget, attempt: Attempt) {
             Ok((result, details)) => Event::Resolved {
                 target,
                 result,
-                details,
+                details: Box::new(details),
             },
             Err(_) => Event::ResolveTimedOut(attempt),
         }
