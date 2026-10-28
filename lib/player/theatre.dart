@@ -36,8 +36,9 @@ Future<void> returnToTheatreScreen() async {
 /// [on]: it puts the screen into theatre while on and takes it out when
 /// turned off or disposed (the page left). While on, an exit button shows
 /// over the top-left corner for a moment after the pointer moves or taps,
-/// and Escape and Back call [onExit]. The button comes first on Tab, and
-/// stays while it has the focus.
+/// and Back calls [onExit] (Escape too, through the page's
+/// `EscapeGoesBack`). The button comes first on Tab, and stays while it has
+/// the focus.
 class Theatre extends StatefulWidget {
   const new({
     required this.on,
@@ -64,7 +65,6 @@ class _TheatreState extends State<Theatre> {
   @override
   void initState() {
     super.initState();
-    HardwareKeyboard.instance.addHandler(_onKey);
     if (widget.on) _enter();
   }
 
@@ -81,7 +81,6 @@ class _TheatreState extends State<Theatre> {
 
   @override
   void dispose() {
-    HardwareKeyboard.instance.removeHandler(_onKey);
     _hideExitButton?.cancel();
     if (widget.on) unawaited(exitTheatreScreen());
     super.dispose();
@@ -117,20 +116,6 @@ class _TheatreState extends State<Theatre> {
   void _onExitButtonFocus(bool focused) {
     _exitButtonFocused = focused;
     if (!focused && widget.on) _showExitButton();
-  }
-
-  /// Escape, ahead of the focused widget: media_kit's video takes Escape
-  /// for its own fullscreen even when not in it. Only while this page is
-  /// on top, so Escape on media_kit's fullscreen route leaves that.
-  bool _onKey(KeyEvent event) {
-    if (!widget.on ||
-        event is! KeyDownEvent ||
-        event.logicalKey != LogicalKeyboardKey.escape ||
-        !(ModalRoute.of(context)?.isCurrent ?? true)) {
-      return false;
-    }
-    widget.onExit();
-    return true;
   }
 
   @override

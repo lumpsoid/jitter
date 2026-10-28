@@ -13,6 +13,7 @@ Future<void> pumpControls(
   WidgetTester tester, {
   List<Duration>? seeks,
   Stream<bool>? bufferings,
+  Widget? mode,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -33,6 +34,7 @@ Future<void> pumpControls(
               ),
               bufferings: () => bufferings ?? Stream.value(false),
               onSeekBy: (by) => seeks?.add(by),
+              mode: mode,
             ),
           ),
         ),
@@ -142,5 +144,31 @@ void main() {
     await tester.pump();
     expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(find.text('play'), findsOneWidget);
+  });
+
+  testWidgets('without a mode the readout row is readout, then fullscreen', (
+    tester,
+  ) async {
+    await pumpControls(tester);
+    await tapVideo(tester);
+    expect(find.text('readout'), findsOneWidget);
+    expect(find.text('fullscreen'), findsOneWidget);
+    expect(find.text('mode'), findsNothing);
+  });
+
+  testWidgets('a mode sits after the readout, away from fullscreen', (
+    tester,
+  ) async {
+    await pumpControls(tester, mode: const Text('mode'));
+    expect(find.text('mode'), findsNothing);
+
+    await tapVideo(tester);
+    final readout = tester.getRect(find.text('readout'));
+    final mode = tester.getRect(find.text('mode'));
+    final fullscreen = tester.getRect(find.text('fullscreen'));
+    expect(mode.left, greaterThanOrEqualTo(readout.right));
+    expect(mode.center.dy, readout.center.dy);
+    // Away from fullscreen: the row's free space lies between them.
+    expect(fullscreen.left - mode.right, greaterThan(200));
   });
 }

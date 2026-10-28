@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:jitter/widgets/steam_keyboard.dart';
 
 /// Asks for a time to go to in the VOD, typed as `1:23:45` or `1h23m` and
 /// sent with Enter or Go. Rust reads it: the dialog closes once [answers]
@@ -23,6 +24,7 @@ class GoToTimeDialog extends StatefulWidget {
 
 class _GoToTimeDialogState extends State<GoToTimeDialog> {
   final _text = TextEditingController();
+  final _focus = FocusNode();
   late final StreamSubscription<GoToTimeAnswer> _answers;
 
   /// Why the last time sent is not one to go to; null until one is not.
@@ -38,6 +40,7 @@ class _GoToTimeDialogState extends State<GoToTimeDialog> {
   void dispose() {
     unawaited(_answers.cancel());
     _text.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
@@ -59,11 +62,15 @@ class _GoToTimeDialogState extends State<GoToTimeDialog> {
       title: const Text('Go to time'),
       content: TextField(
         controller: _text,
+        focusNode: _focus,
         autofocus: true,
         keyboardType: TextInputType.datetime,
         decoration: InputDecoration(
           hintText: '1:23:45 or 1h23m',
           errorText: _rejected,
+          suffixIcon: SteamKeyboardButton.shown
+              ? SteamKeyboardButton(field: _focus)
+              : null,
         ),
         onChanged: (_) => setState(() => _rejected = null),
         onSubmitted: (_) => _submit(),

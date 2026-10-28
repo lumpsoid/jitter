@@ -55,6 +55,16 @@ for f in squashfs-root/usr/bin/jitter squashfs-root/usr/lib/*.so*; do
 done | sort -u
 ```
 
+### Seeking in a VOD that is still recording
+
+Known limitation. The ffmpeg inside the AppImage is Ubuntu 24.04's 6.1, which
+lacks the fix for seeking in HLS EVENT playlists (FFmpeg `6d98a9a2e8`, first
+released in 9.0). So when "Rewind stream" opens the live broadcast's
+recording, or you open a VOD that is still recording from a channel's archive,
+playback starts at the recording's live edge and every seek snaps back there.
+Fixing it is a packaging change: build FFmpeg 9.0 or newer, or the backport
+patch Android carries, in the container.
+
 ## SteamOS
 
 Don't install anything with `pacman`: the system partition is read-only and

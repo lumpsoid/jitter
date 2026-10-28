@@ -22,6 +22,7 @@ void main() {
       sleep: PlaybackSleep(
         presets: [SleepPreset(minutes: 15, label: '15 minutes')],
       ),
+      rewind: PlaybackRewindNone(),
     );
 
     holder

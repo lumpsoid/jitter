@@ -1,14 +1,17 @@
 use std::time::{Duration, Instant};
 
+use jitter_core::chat_replay::ChatReplay;
 use jitter_core::fakes::FakeResumeStore;
 use jitter_core::models::{
-    BackgroundStep, CategoryId, ChannelLogin, Chapter, Chapters, FadeLevel, GameRef, Open,
-    Playback, PlaybackDetails, QualityKind, QualityPreference, Resolution, ResumePoint, SLEEP_FADE,
-    Seconds, SleepStep, Timestamp, Variant, VideoId,
+    BackgroundStep, CategoryId, ChannelLogin, Chapter, Chapters, FadeLevel, GameRef, LiveDetails,
+    NoRewind, Open, Playback, PlaybackDetails, QualityKind, QualityPreference, Resolution,
+    ResumePoint, ReturnOutcome, Rewind, RewindFailure, RewindOutcome, SLEEP_FADE, Seconds,
+    SleepStep, Timestamp, Variant, VideoId,
 };
 use jitter_core::playback::{PlaybackController, PlaybackState, PlaybackTarget, TIMED_OUT};
 use jitter_core::resume::ResumeController;
 use jitter_core::resume_policy::ResumeDecision;
+use jitter_core::rewind_policy::{REWIND_BEHIND, RewindPolicy};
 
 fn live(login: &str) -> PlaybackTarget {
     let Ok(l) = ChannelLogin::parse(login) else {
@@ -1120,5 +1123,725 @@ fn a_page_resolved_while_stopped_opens_nothing_until_back_then_at_its_resume_poi
     assert_eq!(
         foreground(&mut c, 0, &resume),
         Some(open("1080p60", 300, false))
+    );
+}
+
+// Rewinding a live page into its recording VOD, and back.
+
+const STARTED: i64 = 1_800_000_000;
+
+/// The moment the user rewinds: an hour into the stream.
+fn an_hour_in() -> Timestamp {
+    Timestamp::from_unix(STARTED + 3_600)
+}
+
+fn video_id(raw: &str) -> VideoId {
+    let Ok(id) = VideoId::parse(raw) else {
+        unreachable!("valid id");
+    };
+    id
+}
+
+/// The recording VOD of the stream on `live("a")`.
+fn archive() -> VideoId {
+    video_id("2001")
+}
+
+fn live_details(archive: Option<VideoId>, started_at: Option<Timestamp>) -> PlaybackDetails {
+    PlaybackDetails {
+        title: Some("live title".to_owned()),
+        live: Some(LiveDetails {
+            viewers: 10,
+            started_at,
+            archive,
+        }),
+        ..PlaybackDetails::default()
+    }
+}
+
+/// Live details of a stream started at [`STARTED`], recording into `archive`.
+fn recording(archive: VideoId) -> Result<PlaybackDetails, String> {
+    Ok(live_details(
+        Some(archive),
+        Some(Timestamp::from_unix(STARTED)),
+    ))
+}
+
+/// The live stream's qualities: source, 720p60 and audio only.
+fn live_playback() -> Playback {
+    playback(vec![
+        variant("1080p60", 1080, QualityKind::Source),
+        variant("720p60", 720, QualityKind::Transcode),
+        variant("audio_only", 0, QualityKind::AudioOnly),
+    ])
+}
+
+/// A VOD quality: its URL tells it from the live one of the same name.
+fn vod_variant(name: &str, height: u32, kind: QualityKind) -> Variant {
+    Variant {
+        url: format!("https://example.test/vod/{name}.m3u8"),
+        ..variant(name, height, kind)
+    }
+}
+
+fn vod_playback(variants: Vec<Variant>) -> Playback {
+    Playback::from_variants("https://example.test/vod/master.m3u8".to_owned(), variants)
+}
+
+/// The recording VOD's qualities, the same names as live.
+fn vod_ladder() -> Playback {
+    vod_playback(vec![
+        vod_variant("1080p60", 1080, QualityKind::Source),
+        vod_variant("720p60", 720, QualityKind::Transcode),
+        vod_variant("audio_only", 0, QualityKind::AudioOnly),
+    ])
+}
+
+fn vod_open(name: &str, start: u32) -> Open {
+    Open {
+        url: format!("https://example.test/vod/{name}.m3u8"),
+        start: Seconds::new(start),
+        live: false,
+    }
+}
+
+/// Where a rewind an hour in starts: [`REWIND_BEHIND`] before it.
+const START: u32 = 3_580;
+
+fn live_page_with(details: Result<PlaybackDetails, String>) -> PlaybackController {
+    let mut c = PlaybackController::new();
+    c.begin(live("a"));
+    c.apply(
+        live("a"),
+        Ok(live_playback()),
+        details,
+        QualityPreference::Source,
+    );
+    c
+}
+
+/// Live page `a`, its recording offered.
+fn live_page() -> PlaybackController {
+    live_page_with(recording(archive()))
+}
+
+/// Live page `a` loading its recording an hour in.
+fn loading() -> PlaybackController {
+    let mut c = live_page();
+    assert_eq!(c.rewind(&live("a"), an_hour_in()), Some(archive()));
+    c
+}
+
+fn apply_rewind(
+    c: &mut PlaybackController,
+    result: Result<Playback, RewindFailure>,
+) -> Option<RewindOutcome> {
+    c.apply_rewind(
+        &live("a"),
+        &archive(),
+        result,
+        Ok(chaptered()),
+        QualityPreference::Source,
+    )
+}
+
+/// Live page `a` playing its recording from [`START`].
+fn rewound() -> PlaybackController {
+    let mut c = loading();
+    assert_eq!(
+        apply_rewind(&mut c, Ok(vod_ladder())),
+        Some(RewindOutcome::Rewound)
+    );
+    c
+}
+
+/// Live page `a` playing its recording while going back to live.
+fn returning() -> PlaybackController {
+    let mut c = rewound();
+    assert!(c.back_to_live(&live("a")));
+    c
+}
+
+fn rewind_of(c: &PlaybackController) -> Option<&Rewind> {
+    match c.state() {
+        PlaybackState::Ready { rewind, .. } => rewind.as_ref(),
+        _ => None,
+    }
+}
+
+fn opened(c: &PlaybackController) -> Option<Open> {
+    let Ok(open) = c.open(&no_resume()) else {
+        unreachable!("fake store does not fail");
+    };
+    open
+}
+
+fn at_of(c: &PlaybackController) -> Option<Seconds> {
+    match c.state() {
+        PlaybackState::Ready { at, .. } => *at,
+        _ => None,
+    }
+}
+
+fn apply_return(
+    c: &mut PlaybackController,
+    result: Result<Playback, String>,
+    details: Result<PlaybackDetails, String>,
+) -> Option<ReturnOutcome> {
+    c.apply_return(
+        &live("a"),
+        &archive(),
+        result,
+        details,
+        QualityPreference::Source,
+    )
+}
+
+#[test]
+fn a_live_page_offers_the_recording_twitch_shows() {
+    assert_eq!(
+        rewind_of(&live_page()),
+        Some(&Rewind::Available { video: archive() })
+    );
+}
+
+#[test]
+fn a_live_page_without_a_recording_a_start_or_details_offers_no_rewind_saying_why() {
+    let started = Some(Timestamp::from_unix(STARTED));
+    let cases = [
+        (Ok(live_details(None, started)), NoRewind::NoRecording),
+        (Ok(live_details(Some(archive()), None)), NoRewind::NoStart),
+        (Err("timed out".to_owned()), NoRewind::NoDetails),
+        (Ok(PlaybackDetails::default()), NoRewind::NoDetails),
+    ];
+    for (details, why) in cases {
+        let c = live_page_with(details);
+        assert_eq!(rewind_of(&c), Some(&Rewind::Unavailable(why)));
+    }
+}
+
+#[test]
+fn the_recording_twitch_refused_is_not_offered() {
+    assert_eq!(
+        RewindPolicy::offer(&recording(archive()), Some(&archive())),
+        Rewind::Unavailable(NoRewind::Forbidden)
+    );
+    assert_eq!(
+        RewindPolicy::offer(&recording(archive()), Some(&vod())),
+        Rewind::Available { video: archive() }
+    );
+}
+
+#[test]
+fn a_vod_page_has_no_rewind() {
+    let mut c = PlaybackController::new();
+    c.begin(PlaybackTarget::Vod(vod()));
+    c.apply(
+        PlaybackTarget::Vod(vod()),
+        one_quality(),
+        recording(archive()),
+        QualityPreference::Source,
+    );
+    assert!(matches!(
+        c.state(),
+        PlaybackState::Ready { rewind: None, .. }
+    ));
+}
+
+#[test]
+fn a_rewind_starts_twenty_seconds_behind_the_uptime_and_never_before_the_start() {
+    assert_eq!(REWIND_BEHIND, Seconds::new(20));
+    assert_eq!(
+        RewindPolicy::start(Seconds::new(3_600)),
+        Seconds::new(3_580)
+    );
+    assert_eq!(RewindPolicy::start(Seconds::new(5)), Seconds::ZERO);
+    assert_eq!(RewindPolicy::start(Seconds::new(20)), Seconds::ZERO);
+}
+
+#[test]
+fn rewinding_loads_the_recording_where_the_stream_was_while_live_plays_on() {
+    let c = loading();
+    assert_eq!(
+        rewind_of(&c),
+        Some(&Rewind::Loading {
+            video: archive(),
+            start: Seconds::new(START)
+        })
+    );
+    assert_eq!(opened(&c), Some(open("1080p60", 0, true)));
+}
+
+#[test]
+fn rewinding_is_refused_unless_the_page_is_ready_and_offers_it() {
+    let unavailable = live_page_with(Ok(live_details(None, Some(Timestamp::from_unix(STARTED)))));
+    let mut resolving = live_page();
+    resolving.begin(live("a"));
+    for (mut c, target) in [
+        (live_page(), live("b")),
+        (resolving, live("a")),
+        (loading(), live("a")),
+        (rewound(), live("a")),
+        (returning(), live("a")),
+        (unavailable, live("a")),
+    ] {
+        let before = c.state().clone();
+        assert_eq!(c.rewind(&target, an_hour_in()), None);
+        assert_eq!(c.state(), &before);
+    }
+}
+
+#[test]
+fn a_failed_rewind_can_be_tried_again() {
+    let mut c = loading();
+    assert_eq!(
+        apply_rewind(&mut c, Err(RewindFailure::Other("network".to_owned()))),
+        Some(RewindOutcome::Failed("network".to_owned()))
+    );
+    assert_eq!(
+        rewind_of(&c),
+        Some(&Rewind::Failed {
+            video: archive(),
+            message: "network".to_owned()
+        })
+    );
+    assert_eq!(opened(&c), Some(open("1080p60", 0, true)));
+    assert_eq!(c.rewind(&live("a"), an_hour_in()), Some(archive()));
+    assert!(matches!(rewind_of(&c), Some(Rewind::Loading { .. })));
+}
+
+#[test]
+fn a_rewound_page_plays_the_recording_from_the_start_with_its_details() {
+    let t0 = Instant::now();
+    let mut c = loading();
+    c.arm_sleep(15, t0);
+    c.follow(&live("a"), Seconds::new(42), Seconds::new(100));
+    assert_eq!(at_of(&c), Some(Seconds::new(42)));
+    assert_eq!(
+        apply_rewind(&mut c, Ok(vod_ladder())),
+        Some(RewindOutcome::Rewound)
+    );
+    assert_eq!(
+        rewind_of(&c),
+        Some(&Rewind::Rewound {
+            video: archive(),
+            start: Seconds::new(START)
+        })
+    );
+    assert_eq!(opened(&c), Some(vod_open("1080p60", START)));
+    assert_eq!(details(&c), Some(&chaptered()));
+    assert_eq!(c.chapter_start(1), Some(Seconds::new(3_600)));
+    assert_eq!(at_of(&c), None);
+    assert!(c.sleep_timer().is_some());
+    assert!(matches!(c.state(), PlaybackState::Ready { target, .. } if *target == live("a")));
+}
+
+#[test]
+fn a_rewind_keeps_the_quality_the_recording_has_else_takes_the_preferred() {
+    let mut c = loading();
+    c.select("720p60");
+    c.apply_rewind(
+        &live("a"),
+        &archive(),
+        Ok(vod_ladder()),
+        no_details(),
+        QualityPreference::Source,
+    );
+    assert_eq!(selected(&c), Some("720p60"));
+
+    let mut c = loading();
+    c.select("720p60");
+    c.apply_rewind(
+        &live("a"),
+        &archive(),
+        Ok(vod_playback(vec![
+            vod_variant("chunked", 1080, QualityKind::Source),
+            vod_variant("480p30", 480, QualityKind::Transcode),
+        ])),
+        no_details(),
+        QualityPreference::P480,
+    );
+    assert_eq!(selected(&c), Some("480p30"));
+}
+
+#[test]
+fn a_recording_without_qualities_fails_the_rewind_and_live_plays_on() {
+    let mut c = loading();
+    assert_eq!(
+        apply_rewind(&mut c, Ok(vod_playback(vec![]))),
+        Some(RewindOutcome::Failed("no playable qualities".to_owned()))
+    );
+    assert!(matches!(rewind_of(&c), Some(Rewind::Failed { .. })));
+    assert_eq!(opened(&c), Some(open("1080p60", 0, true)));
+}
+
+#[test]
+fn a_rewound_page_saves_no_resume_point() {
+    let store = FakeResumeStore::default();
+    let mut resume = ResumeController::new(Box::new(store.clone()));
+    let c = rewound();
+    assert_eq!(record(&c, &mut resume, &live("a"), 600, 3_600), None);
+    assert_eq!(
+        record(&c, &mut resume, &PlaybackTarget::Vod(archive()), 600, 3_600),
+        None
+    );
+    assert!(store.points().is_empty());
+    // Control: a VOD page does save.
+    let c = ready(PlaybackTarget::Vod(vod()));
+    assert_eq!(
+        record(&c, &mut resume, &PlaybackTarget::Vod(vod()), 600, 3_600),
+        Some(ResumeDecision::Save)
+    );
+    assert_eq!(store.points().len(), 1);
+}
+
+#[test]
+fn a_refused_recording_turns_the_rewind_off_for_good_while_live_plays_on() {
+    let mut c = loading();
+    assert_eq!(
+        apply_rewind(&mut c, Err(RewindFailure::Forbidden)),
+        Some(RewindOutcome::Refused(NoRewind::Forbidden))
+    );
+    assert_eq!(
+        rewind_of(&c),
+        Some(&Rewind::Unavailable(NoRewind::Forbidden))
+    );
+    assert_eq!(opened(&c), Some(open("1080p60", 0, true)));
+    assert!(!c.back_to_live(&live("a")));
+    assert_eq!(c.rewind(&live("a"), an_hour_in()), None);
+
+    // Reopening the page remembers it.
+    c.begin(live("a"));
+    c.apply(
+        live("a"),
+        Ok(live_playback()),
+        recording(archive()),
+        QualityPreference::Source,
+    );
+    assert_eq!(
+        rewind_of(&c),
+        Some(&Rewind::Unavailable(NoRewind::Forbidden))
+    );
+
+    // So does going back to live from another recording.
+    let other = video_id("2002");
+    c.begin(live("a"));
+    c.apply(
+        live("a"),
+        Ok(live_playback()),
+        recording(other.clone()),
+        QualityPreference::Source,
+    );
+    assert_eq!(c.rewind(&live("a"), an_hour_in()), Some(other.clone()));
+    c.apply_rewind(
+        &live("a"),
+        &other,
+        Ok(vod_ladder()),
+        no_details(),
+        QualityPreference::Source,
+    );
+    assert!(c.back_to_live(&live("a")));
+    assert_eq!(
+        c.apply_return(
+            &live("a"),
+            &other,
+            Ok(live_playback()),
+            recording(archive()),
+            QualityPreference::Source,
+        ),
+        Some(ReturnOutcome::Live)
+    );
+    assert_eq!(
+        rewind_of(&c),
+        Some(&Rewind::Unavailable(NoRewind::Forbidden))
+    );
+}
+
+#[test]
+fn a_recording_resolved_while_stopped_away_opens_at_the_rewind_start_not_the_live_position() {
+    let mut c = loading();
+    assert_eq!(
+        c.background(false, Seconds::new(600)),
+        Some(BackgroundStep::Stop)
+    );
+    apply_rewind(&mut c, Ok(vod_ladder()));
+    assert_eq!(opened(&c), None);
+    assert_eq!(
+        foreground(&mut c, 0, &no_resume()),
+        Some(vod_open("1080p60", START))
+    );
+}
+
+#[test]
+fn a_late_rewind_result_after_leaving_a_retry_or_for_another_video_is_ignored() {
+    let mut c = loading();
+    c.leave(&live("a"));
+    assert_eq!(apply_rewind(&mut c, Ok(vod_ladder())), None);
+    assert_eq!(c.state(), &PlaybackState::Idle);
+
+    let mut c = loading();
+    c.begin(live("a"));
+    assert_eq!(apply_rewind(&mut c, Ok(vod_ladder())), None);
+    assert_eq!(c.state(), &PlaybackState::Resolving { target: live("a") });
+
+    let mut c = loading();
+    let before = c.state().clone();
+    assert_eq!(
+        c.apply_rewind(
+            &live("a"),
+            &video_id("2002"),
+            Ok(vod_ladder()),
+            no_details(),
+            QualityPreference::Source,
+        ),
+        None
+    );
+    assert_eq!(
+        c.apply_rewind(
+            &live("b"),
+            &archive(),
+            Ok(vod_ladder()),
+            no_details(),
+            QualityPreference::Source,
+        ),
+        None
+    );
+    assert_eq!(c.state(), &before);
+}
+
+#[test]
+fn going_back_to_live_keeps_the_recording_playing_while_live_resolves() {
+    let c = returning();
+    assert_eq!(
+        rewind_of(&c),
+        Some(&Rewind::Returning {
+            video: archive(),
+            start: Seconds::new(START)
+        })
+    );
+    assert_eq!(opened(&c), Some(vod_open("1080p60", START)));
+}
+
+#[test]
+fn only_a_rewound_page_goes_back_to_live() {
+    let mut stale = rewound();
+    stale.begin(live("b"));
+    for (mut c, target) in [
+        (live_page(), live("a")),
+        (loading(), live("a")),
+        (returning(), live("a")),
+        (rewound(), live("b")),
+        (stale, live("a")),
+    ] {
+        let before = c.state().clone();
+        assert!(!c.back_to_live(&target));
+        assert_eq!(c.state(), &before);
+    }
+}
+
+#[test]
+fn back_at_live_the_page_plays_at_the_edge_and_offers_the_fresh_recording() {
+    let t0 = Instant::now();
+    let mut c = returning();
+    c.arm_sleep(15, t0);
+    c.follow(&live("a"), Seconds::new(4_000), Seconds::new(7_200));
+    let restarted = video_id("2002");
+    assert_eq!(
+        apply_return(&mut c, Ok(live_playback()), recording(restarted.clone())),
+        Some(ReturnOutcome::Live)
+    );
+    assert_eq!(opened(&c), Some(open("1080p60", 0, true)));
+    assert_eq!(rewind_of(&c), Some(&Rewind::Available { video: restarted }));
+    assert_eq!(
+        details(&c).map(|d| d.title.as_deref()),
+        Some(Some("live title"))
+    );
+    assert_eq!(at_of(&c), None);
+    assert!(c.sleep_timer().is_some());
+}
+
+#[test]
+fn back_at_live_the_page_keeps_the_quality_live_has_else_takes_the_preferred() {
+    let mut c = returning();
+    c.select("720p60");
+    apply_return(&mut c, Ok(live_playback()), recording(archive()));
+    assert_eq!(selected(&c), Some("720p60"));
+
+    let mut c = loading();
+    c.apply_rewind(
+        &live("a"),
+        &archive(),
+        Ok(vod_playback(vec![vod_variant(
+            "chunked",
+            1080,
+            QualityKind::Source,
+        )])),
+        no_details(),
+        QualityPreference::Source,
+    );
+    c.back_to_live(&live("a"));
+    assert_eq!(selected(&c), Some("chunked"));
+    c.apply_return(
+        &live("a"),
+        &archive(),
+        Ok(live_playback()),
+        recording(archive()),
+        QualityPreference::P720,
+    );
+    assert_eq!(selected(&c), Some("720p60"));
+}
+
+#[test]
+fn a_failed_return_keeps_the_recording_playing_and_can_be_tried_again() {
+    let t0 = Instant::now();
+    let mut c = returning();
+    c.arm_sleep(15, t0);
+    assert_eq!(
+        apply_return(
+            &mut c,
+            Err("This channel is offline.".to_owned()),
+            recording(archive())
+        ),
+        Some(ReturnOutcome::Failed("This channel is offline.".to_owned()))
+    );
+    assert_eq!(
+        rewind_of(&c),
+        Some(&Rewind::Rewound {
+            video: archive(),
+            start: Seconds::new(START)
+        })
+    );
+    assert_eq!(opened(&c), Some(vod_open("1080p60", START)));
+    assert_eq!(details(&c), Some(&chaptered()));
+    assert!(c.sleep_timer().is_some());
+    assert!(c.back_to_live(&live("a")));
+
+    assert_eq!(
+        apply_return(&mut c, Ok(playback(vec![])), recording(archive())),
+        Some(ReturnOutcome::Failed("no playable qualities".to_owned()))
+    );
+    assert!(matches!(rewind_of(&c), Some(Rewind::Rewound { .. })));
+    assert_eq!(opened(&c), Some(vod_open("1080p60", START)));
+}
+
+#[test]
+fn a_late_return_result_after_leaving_a_retry_the_sleep_timer_or_for_another_video_is_ignored() {
+    let mut c = returning();
+    c.leave(&live("a"));
+    assert_eq!(
+        apply_return(&mut c, Ok(live_playback()), recording(archive())),
+        None
+    );
+    assert_eq!(c.state(), &PlaybackState::Idle);
+
+    let mut c = returning();
+    c.begin(live("a"));
+    assert_eq!(
+        apply_return(&mut c, Ok(live_playback()), recording(archive())),
+        None
+    );
+    assert_eq!(c.state(), &PlaybackState::Resolving { target: live("a") });
+
+    let t0 = Instant::now();
+    let mut c = returning();
+    c.arm_sleep(15, t0);
+    assert_eq!(
+        c.sleep_tick(t0 + Duration::from_secs(16 * 60)),
+        Some(SleepStep::Expired)
+    );
+    assert_eq!(
+        apply_return(&mut c, Ok(live_playback()), recording(archive())),
+        None
+    );
+    assert_eq!(c.state(), &PlaybackState::Slept { target: live("a") });
+
+    let mut c = returning();
+    let before = c.state().clone();
+    assert_eq!(
+        c.apply_return(
+            &live("a"),
+            &video_id("2002"),
+            Ok(live_playback()),
+            recording(archive()),
+            QualityPreference::Source,
+        ),
+        None
+    );
+    assert_eq!(
+        c.apply_return(
+            &live("b"),
+            &archive(),
+            Ok(live_playback()),
+            recording(archive()),
+            QualityPreference::Source,
+        ),
+        None
+    );
+    assert_eq!(c.state(), &before);
+}
+
+#[test]
+fn back_at_live_without_details_plays_and_offers_no_rewind() {
+    let mut c = returning();
+    assert_eq!(
+        apply_return(&mut c, Ok(live_playback()), Err("timed out".to_owned())),
+        Some(ReturnOutcome::Live)
+    );
+    assert_eq!(opened(&c), Some(open("1080p60", 0, true)));
+    assert_eq!(
+        rewind_of(&c),
+        Some(&Rewind::Unavailable(NoRewind::NoDetails))
+    );
+    assert_eq!(details(&c), Some(&PlaybackDetails::default()));
+}
+
+#[test]
+fn a_rewound_page_carries_on_mid_recording_in_the_background_and_back() {
+    for mut c in [rewound(), returning()] {
+        assert_eq!(
+            c.background(true, Seconds::new(4_000)),
+            Some(BackgroundStep::Open(vod_open("audio_only", 4_000)))
+        );
+        assert_eq!(
+            foreground(&mut c, 4_100, &no_resume()),
+            Some(vod_open("1080p60", 4_100))
+        );
+        assert_eq!(
+            c.switch_quality("720p60", Seconds::new(4_200)),
+            Some(vod_open("720p60", 4_200))
+        );
+    }
+}
+
+#[test]
+fn the_page_streams_the_recording_while_rewound_or_returning_and_live_otherwise() {
+    let recording_stream = Some(PlaybackTarget::Vod(archive()));
+    assert_eq!(rewound().streaming(&live("a")), recording_stream);
+    assert_eq!(returning().streaming(&live("a")), recording_stream);
+    assert_eq!(live_page().streaming(&live("a")), Some(live("a")));
+    assert_eq!(loading().streaming(&live("a")), Some(live("a")));
+    assert_eq!(rewound().streaming(&live("b")), None);
+    let mut c = returning();
+    apply_return(&mut c, Ok(live_playback()), recording(archive()));
+    assert_eq!(c.streaming(&live("a")), Some(live("a")));
+}
+
+#[test]
+fn chat_replay_follows_the_recording_by_what_the_page_streams() {
+    let c = rewound();
+    let mut replay = ChatReplay::new(archive());
+    assert_eq!(
+        replay.position(&live("a"), Seconds::new(START), Seconds::new(7_200)),
+        Default::default()
+    );
+    assert!(replay.waiting());
+    let Some(stream) = c.streaming(&live("a")) else {
+        unreachable!("the page is ready");
+    };
+    assert!(
+        replay
+            .position(&stream, Seconds::new(START), Seconds::new(7_200))
+            .fetch
+            .is_some()
     );
 }

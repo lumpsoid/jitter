@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/chat/chat_mode.dart';
 import 'package:jitter/chat/chat_panel.dart';
+import 'package:jitter/player/live_mode_slot.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/now_playing.dart';
 import 'package:jitter/player/playback_failure.dart';
@@ -14,8 +16,10 @@ import 'package:jitter/player/player_layout.dart';
 import 'package:jitter/player/player_options.dart';
 import 'package:jitter/player/player_shortcuts.dart';
 import 'package:jitter/player/position_readout.dart';
+import 'package:jitter/player/rewind_messages.dart';
 import 'package:jitter/player/seek_bar.dart';
 import 'package:jitter/player/sleep_stopped.dart';
+import 'package:jitter/player/swipe_down.dart';
 import 'package:jitter/player/theatre.dart';
 import 'package:jitter/player/video_frame.dart';
 import 'package:jitter/player/video_zoom.dart';
@@ -24,6 +28,8 @@ import 'package:jitter/player/vod_phone_controls.dart';
 import 'package:jitter/player/zoom_gestures.dart';
 import 'package:jitter/player/zoom_reset.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:jitter/widgets/escape_goes_back.dart';
+import 'package:jitter/widgets/last_pointer.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 /// How often the page reports the player's position; Rust throttles saves.
@@ -118,6 +124,20 @@ class _PlayerPageState extends State<PlayerPage> {
   /// Asks Rust to seek to the start of a VOD's chapter.
   void _goToChapter(int index) => GoToChapter(index: index).sendSignalToRust();
 
+  /// Asks Rust to rewind the live stream into its recording; Rust answers
+  /// with `PlaybackUpdate`, or with a `RewindAnswer` when it can't.
+  void _rewind() => RewindStream(target: widget.target).sendSignalToRust();
+
+  /// Asks Rust to go from the rewound recording back to the live edge.
+  void _backToLive() => BackToLive(target: widget.target).sendSignalToRust();
+
+  /// A live stream's mode, for either controls; nothing for a VOD.
+  LiveModeSlot _mode(PlaybackRewind rewind) => LiveModeSlot(
+    rewind: rewind,
+    onRewind: _rewind,
+    onBackToLive: _backToLive,
+  );
+
   /// A VOD's seek bar, for either controls.
   SeekBar _seekBar() => SeekBar(
     positions: widget.player.positions,
@@ -135,37 +155,48 @@ class _PlayerPageState extends State<PlayerPage> {
     fontSize: fontSize,
   );
 
-  /// [controls] under the zoom's gestures and reset: within media_kit's
-  /// controls, so its fullscreen route, which builds only the controls
-  /// anew, has them too.
-  Widget _zoomable(Widget controls) => Stack(
-    fit: StackFit.expand,
-    children: [
-      ZoomGestures(
-        zoom: _zoom,
-        onWheel: (notches) =>
-            unawaited(widget.player.nudgeVolume(notches * _wheelVolumeStep)),
-        child: controls,
-      ),
-      Positioned(top: 8, right: 8, child: ZoomReset(zoom: _zoom)),
-    ],
+  /// [controls] under the zoom's gestures and reset, and the rewind's
+  /// messages over them: within media_kit's controls, so its fullscreen
+  /// route, which builds only the controls anew, has them too.
+  Widget _zoomable(Widget controls) => RewindMessages(
+    answers: () => RewindAnswer.rustSignalStream.map((pack) => pack.message),
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        ZoomGestures(
+          zoom: _zoom,
+          onWheel: (notches) =>
+              unawaited(widget.player.nudgeVolume(notches * _wheelVolumeStep)),
+          child: controls,
+        ),
+        Positioned(top: 8, right: 8, child: ZoomReset(zoom: _zoom)),
+      ],
+    ),
   );
 
-  /// A VOD's controls: the page's own on a phone ([VodPhoneControls]),
-  /// media_kit's desktop ones themed by [_Controls] elsewhere. Chosen as
-  /// media_kit's adaptive ones choose.
-  Widget _vodControls(VideoState video) =>
-      switch (Theme.of(video.context).platform) {
-        TargetPlatform.android || TargetPlatform.iOS => VodPhoneControls(
-          playPause: const MaterialPlayOrPauseButton(iconSize: 48),
-          readout: _readout(fontSize: 14),
-          fullscreen: const MaterialFullscreenButton(),
-          bar: _seekBar(),
-          bufferings: () => widget.player.bufferings,
-          onSeekBy: (by) => unawaited(widget.player.seekBy(by)),
-        ),
-        _ => AdaptiveVideoControls(video),
-      };
+  /// A VOD's controls: the page's own after a touch ([VodPhoneControls]),
+  /// media_kit's desktop ones themed by [_Controls] after a mouse.
+  Widget _vodControls(VideoState video, Widget mode) => _ByLastPointer(
+    touch: VodPhoneControls(
+      playPause: const MaterialPlayOrPauseButton(iconSize: 48),
+      readout: _readout(fontSize: 14),
+      fullscreen: const MaterialFullscreenButton(),
+      bar: _seekBar(),
+      mode: mode,
+      bufferings: () => widget.player.bufferings,
+      onSeekBy: (by) => unawaited(widget.player.seekBy(by)),
+    ),
+    mouse: MaterialDesktopVideoControls(video),
+    zoom: _zoom,
+  );
+
+  /// A live stream's controls: media_kit's mobile ones after a touch, its
+  /// desktop ones after a mouse, both themed by [_Controls].
+  Widget _liveControls(VideoState video) => _ByLastPointer(
+    touch: MaterialVideoControls(video),
+    mouse: MaterialDesktopVideoControls(video),
+    zoom: _zoom,
+  );
 
   void _armSleep(int minutes) =>
       ArmSleepTimer(minutes: minutes).sendSignalToRust();
@@ -273,26 +304,33 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Widget _video(PlaybackUpdate state) => switch (state) {
-    PlaybackUpdateReady(:final live) => _Controls(
-      live: live,
-      player: widget.player,
-      bar: _seekBar(),
-      readout: _readout(fontSize: 12),
-      onToggleFullscreen: _toggleFullscreen,
-      onExitFullscreen: () =>
-          unawaited(_videoKey.currentState?.exitFullscreen()),
-      child: Video(
-        key: _videoKey,
-        controller: widget.player.controller,
-        controls: (video) => _zoomable(
-          live ? AdaptiveVideoControls(video) : _vodControls(video),
+    PlaybackUpdateReady(:final live, :final rewind) => Video(
+      key: _videoKey,
+      controller: widget.player.controller,
+      // The theme sits inside the controls, not around the video:
+      // media_kit's fullscreen route copies the theme around the video
+      // once, on entering, but builds the controls anew at each change,
+      // and a rewind turns a live stream's controls into a VOD's.
+      controls: (video) => _zoomable(
+        _Controls(
+          live: live,
+          player: widget.player,
+          mode: _mode(rewind),
+          bar: _seekBar(),
+          readout: _readout(fontSize: 12),
+          onToggleFullscreen: _toggleFullscreen,
+          onExitFullscreen: () =>
+              unawaited(_videoKey.currentState?.exitFullscreen()),
+          child: live
+              ? _liveControls(video)
+              : _vodControls(video, _mode(rewind)),
         ),
-        // Leaving media_kit's fullscreen from theatre goes back to
-        // theatre's screen, not out of fullscreen.
-        onExitFullscreen: _theatre
-            ? returnToTheatreScreen
-            : defaultExitNativeFullscreen,
       ),
+      // Leaving media_kit's fullscreen from theatre goes back to
+      // theatre's screen, not out of fullscreen.
+      onExitFullscreen: _theatre
+          ? returnToTheatreScreen
+          : defaultExitNativeFullscreen,
     ),
     PlaybackUpdateFailed(:final message) => PlaybackFailure(
       message: message,
@@ -305,9 +343,11 @@ class _PlayerPageState extends State<PlayerPage> {
 
 /// media_kit's controls, themed (play/pause, volume, fullscreen; on desktop
 /// space, `f` and the arrow keys, a VOD's as [vodKeys] has them). A live
-/// stream has no seek bar and no position. A VOD on desktop has the page's
-/// [SeekBar] and [PositionReadout] among media_kit's buttons; on a phone
-/// it has the page's own controls instead ([VodPhoneControls]).
+/// stream has no seek bar and no position. A VOD after a mouse has the
+/// page's [SeekBar] and [PositionReadout] among media_kit's buttons; after
+/// a touch it has the page's own controls instead ([VodPhoneControls]). A live
+/// stream's [LiveModeSlot] sits left, after volume, or after the readout
+/// once rewound (`live` is false then, so it has a VOD's controls).
 /// On desktop media_kit's wheel and drag for the volume over the video are
 /// off: the page's own wheel sets the volume, through the sleep timer's
 /// fade, and the drag moves the zoomed picture. The wheel over the volume
@@ -316,6 +356,7 @@ class _Controls extends StatelessWidget {
   const new({
     required this.live,
     required this.player,
+    required this.mode,
     required this.bar,
     required this.readout,
     required this.onToggleFullscreen,
@@ -325,6 +366,9 @@ class _Controls extends StatelessWidget {
 
   final bool live;
   final MediaKitEngine player;
+
+  /// A live stream's [LiveModeSlot]; renders nothing for a VOD.
+  final Widget mode;
 
   /// A VOD's seek bar and readout, for desktop.
   final Widget bar;
@@ -370,6 +414,7 @@ class _Controls extends StatelessWidget {
                       const MaterialDesktopSkipNextButton(),
                       const KeepsWheel(child: MaterialDesktopVolumeButton()),
                       readout,
+                      mode,
                       const Spacer(),
                       const MaterialDesktopFullscreenButton(),
                     ],
@@ -386,18 +431,19 @@ class _Controls extends StatelessWidget {
         child: child,
       );
     }
-    const mobile = MaterialVideoControlsThemeData(
+    final mobile = MaterialVideoControlsThemeData(
       displaySeekBar: false,
-      bottomButtonBar: [Spacer(), MaterialFullscreenButton()],
+      bottomButtonBar: [mode, const Spacer(), const MaterialFullscreenButton()],
     );
-    const desktop = MaterialDesktopVideoControlsThemeData(
+    final desktop = MaterialDesktopVideoControlsThemeData(
       displaySeekBar: false,
       modifyVolumeOnScroll: false,
       bottomButtonBar: [
-        MaterialDesktopPlayOrPauseButton(),
-        KeepsWheel(child: MaterialDesktopVolumeButton()),
-        Spacer(),
-        MaterialDesktopFullscreenButton(),
+        const MaterialDesktopPlayOrPauseButton(),
+        const KeepsWheel(child: MaterialDesktopVolumeButton()),
+        mode,
+        const Spacer(),
+        const MaterialDesktopFullscreenButton(),
       ],
     );
     return MaterialVideoControlsTheme(
@@ -409,5 +455,36 @@ class _Controls extends StatelessWidget {
         child: child,
       ),
     );
+  }
+}
+
+/// The [touch] controls after a touch, the [mouse] ones after a mouse
+/// ([LastPointer]). Under the touch ones a swipe down goes back a level,
+/// as Back does: out of media_kit's fullscreen, else off the page (out of
+/// theatre first). In fullscreen Escape leaves it too: the mouse ones'
+/// keys have their own Escape, the touch ones have no keys.
+class _ByLastPointer extends StatelessWidget {
+  const new({required this.touch, required this.mouse, required this.zoom});
+
+  final Widget touch;
+  final Widget mouse;
+  final ValueListenable<VideoZoom> zoom;
+
+  void _back(BuildContext context) => unawaited(
+    isFullscreen(context)
+        ? exitFullscreen(context)
+        : Navigator.maybePop(context),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    if (!LastPointer.isTouch(context)) return mouse;
+    final swipeable = SwipeDown(
+      zoom: zoom,
+      onSwipe: () => _back(context),
+      child: touch,
+    );
+    if (!isFullscreen(context)) return swipeable;
+    return EscapeGoesBack(onEscape: () => _back(context), child: swipeable);
   }
 }

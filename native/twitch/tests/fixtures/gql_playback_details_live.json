@@ -1,23 +1,26 @@
 {
   "data": {
     "user": {
-      "id": "71092938",
-      "login": "xqc",
-      "displayName": "xQc",
-      "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/xqc-profile_image-9298dca608632101-50x50.jpeg",
+      "id": "92038375",
+      "login": "caedrel",
+      "displayName": "Caedrel",
+      "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/483a37ac-58fd-4e2f-8dc3-2c68a0164112-profile_image-50x50.png",
       "stream": {
-        "title": "JUICED EVENT TODAY !! GTA RP NOPIXEL 4.0 | #ad",
-        "viewersCount": 22239,
-        "createdAt": "2026-10-26T20:59:27Z",
+        "title": "🔴WORLDS 2026 T1 VS KOI🔴",
+        "viewersCount": 108668,
+        "createdAt": "2026-10-28T15:14:09Z",
         "game": {
-          "id": "32982",
-          "displayName": "Grand Theft Auto V"
+          "id": "21779",
+          "displayName": "League of Legends"
+        },
+        "archiveVideo": {
+          "id": "2913096684"
         }
       }
     }
   },
   "extensions": {
-    "durationMilliseconds": 31,
-    "requestID": "01M5X5Q0Z8B3N2W4F6H7J9K1M2"
+    "durationMilliseconds": 51,
+    "requestID": "01M6206YVNE2MW6NN7QNFCK5Z7"
   }
 }

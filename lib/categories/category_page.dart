@@ -3,6 +3,7 @@ import 'package:jitter/categories/category_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/stream_grid.dart';
+import 'package:jitter/widgets/escape_goes_back.dart';
 import 'package:jitter/widgets/next_page_footer.dart';
 import 'package:jitter/widgets/retry_failure.dart';
 
@@ -46,12 +47,14 @@ class CategoryPage extends StatelessWidget {
     category.open(id);
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (context) => CategoryPage(
-          name: name,
-          category: category,
-          favorites: favorites,
-          onOpenStream: onOpenStream,
-          onOpenChannel: onOpenChannel,
+        builder: (context) => EscapeGoesBack(
+          child: CategoryPage(
+            name: name,
+            category: category,
+            favorites: favorites,
+            onOpenStream: onOpenStream,
+            onOpenChannel: onOpenChannel,
+          ),
         ),
       ),
     );

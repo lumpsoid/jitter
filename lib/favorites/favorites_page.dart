@@ -224,10 +224,14 @@ class _ChannelTile extends StatelessWidget {
           right: 0,
           child: Transform.scale(
             scale: 0.75,
-            child: FavoriteStar(
-              favorites: favorites,
-              channelId: channel.channelId,
-              login: channel.login,
+            // The pointer's alone: the arrow keys go tile to tile, and the
+            // channel's page has the star for the keyboard.
+            child: ExcludeFocus(
+              child: FavoriteStar(
+                favorites: favorites,
+                channelId: channel.channelId,
+                login: channel.login,
+              ),
             ),
           ),
         ),

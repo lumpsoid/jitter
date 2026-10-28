@@ -2,8 +2,8 @@ use jitter_core::fakes::FakeHistoryStore;
 use jitter_core::history::{HistoryChange, HistoryController};
 use jitter_core::history_policy::{MERGE_GAP, MIN_WATCH, TOUCH_STEP};
 use jitter_core::models::{
-    ChannelLogin, Playback, PlaybackDetails, QualityKind, QualityPreference, Seconds, Timestamp,
-    Variant, VideoId, Visit, VisitDetails, VisitId,
+    ChannelLogin, LiveDetails, Playback, PlaybackDetails, QualityKind, QualityPreference,
+    RewindOutcome, Seconds, Timestamp, Variant, VideoId, Visit, VisitDetails, VisitId,
 };
 use jitter_core::playback::{PlaybackController, PlaybackTarget};
 
@@ -495,5 +495,64 @@ fn leaving_a_player_stopped_away_writes_its_last_report() -> Result<(), String> 
         .leave(&playback, &a, at(500))
         .map_err(|e| e.to_string())?;
     assert_eq!(store.visits().first().map(|v| v.last_seen_at), Some(at(55)));
+    Ok(())
+}
+
+#[test]
+fn rewinding_a_live_page_keeps_counting_its_visit() -> Result<(), String> {
+    let store = FakeHistoryStore::default();
+    let mut history = controller(&store);
+    let a = live("a");
+    let Ok(archive) = VideoId::parse("2001") else {
+        unreachable!("valid id");
+    };
+    let mut playback = playing(
+        &a,
+        PlaybackDetails {
+            live: Some(LiveDetails {
+                viewers: 1,
+                started_at: Some(at(0)),
+                archive: Some(archive.clone()),
+            }),
+            ..titled("live")
+        },
+    );
+    play_through(&mut history, &playback, &a, 100, 101)?;
+    if playback.rewind(&a, at(3_600)).is_none() {
+        return Err("the rewind is offered".to_owned());
+    }
+    assert!(playback.playing(&a));
+    let vod = Playback::from_variants(
+        "https://example.test/vod/master.m3u8".to_owned(),
+        vec![Variant {
+            name: "720p".to_owned(),
+            url: "https://example.test/vod/720p.m3u8".to_owned(),
+            resolution: None,
+            frame_rate: None,
+            bandwidth: 1000,
+            kind: QualityKind::Source,
+        }],
+    );
+    assert_eq!(
+        playback.apply_rewind(
+            &a,
+            &archive,
+            Ok(vod),
+            Ok(titled("recording")),
+            QualityPreference::Source,
+        ),
+        Some(RewindOutcome::Rewound)
+    );
+    assert!(playback.playing(&a));
+    play_through(&mut history, &playback, &a, 102, 103)?;
+    assert!(playback.back_to_live(&a));
+    assert!(playback.playing(&a));
+    play_through(&mut history, &playback, &a, 104, 100 + secs(MIN_WATCH))?;
+    let visits = store.visits();
+    let [visit] = visits.as_slice() else {
+        return Err(format!("expected one visit, got {visits:?}"));
+    };
+    assert_eq!(visit.target, a);
+    assert_eq!(visit.started_at, at(100));
     Ok(())
 }

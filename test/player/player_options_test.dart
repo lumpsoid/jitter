@@ -21,6 +21,7 @@ PlaybackUpdateReady _ready({String? left}) => PlaybackUpdateReady(
   live: true,
   details: const PlaybackDetails(chapters: []),
   sleep: PlaybackSleep(presets: _presets, left: left),
+  rewind: const PlaybackRewindNone(),
 );
 
 void main() {

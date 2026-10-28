@@ -8,7 +8,10 @@
 //! count has no live details. A title Twitch sends empty is no title. A VOD's
 //! chapters come from their own query ([`super::video_chapters`]), asked beside
 //! it; chapters that fail to load leave the VOD without them, not without its
-//! details.
+//! details. A live stream's recording VOD is its `archiveVideo`, `null` when
+//! the channel does not save broadcasts and, anonymously, for some channels
+//! that do; only its id is asked, and an id core rejects leaves the stream
+//! without one.
 
 use jitter_core::models::{ChannelLogin, Chapters, LiveDetails, PlaybackDetails, VideoId};
 use jitter_core::playback::PlaybackTarget;
@@ -23,7 +26,8 @@ pub const LIVE_QUERY: RawQuery = RawQuery {
     operation: "PlaybackDetailsLive",
     document: "query($login: String!) { user(login: $login) { \
                id login displayName profileImageURL(width: 50) \
-               stream { title viewersCount createdAt game { id displayName } } } }",
+               stream { title viewersCount createdAt game { id displayName } \
+               archiveVideo { id } } } }",
 };
 
 pub const VOD_QUERY: RawQuery = RawQuery {
@@ -134,6 +138,12 @@ struct Stream {
     viewers_count: Option<u32>,
     created_at: Option<String>,
     game: Option<GameNode>,
+    archive_video: Option<ArchiveVideo>,
+}
+
+#[derive(Deserialize)]
+struct ArchiveVideo {
+    id: String,
 }
 
 impl Stream {
@@ -141,6 +151,10 @@ impl Stream {
         Some(LiveDetails {
             viewers: self.viewers_count?,
             started_at: self.created_at.as_deref().and_then(parse_timestamp),
+            archive: self
+                .archive_video
+                .as_ref()
+                .and_then(|video| VideoId::parse(&video.id).ok()),
         })
     }
 }

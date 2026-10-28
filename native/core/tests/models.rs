@@ -214,6 +214,7 @@ fn a_live_streams_uptime_is_the_time_since_it_went_live() {
     let live = |at: Option<i64>| LiveDetails {
         viewers: 1_234,
         started_at: at.map(Timestamp::from_unix),
+        archive: None,
     };
     let now = Timestamp::from_unix(1_000_000);
     assert_eq!(

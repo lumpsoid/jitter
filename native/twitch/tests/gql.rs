@@ -33,12 +33,16 @@ const VIDEOS: &[u8] = include_bytes!("fixtures/gql_channel_videos.json");
 const USERS_STREAM: &[u8] = include_bytes!("fixtures/gql_users_stream.json");
 const CHANNEL: &[u8] = include_bytes!("fixtures/gql_channel_by_login.json");
 const CHANNEL_UNKNOWN: &[u8] = include_bytes!("fixtures/gql_channel_by_login_unknown.json");
-// Hand-written after the raw `PlaybackDetails*` documents' live answers
+// Recorded from the raw `PlaybackDetailsLive` document on 2026-10-28:
+// caedrel live, its broadcast recording to VOD 2913096684; mr4thdimention
+// live with no `archiveVideo` and no past broadcasts.
+const DETAILS_LIVE: &[u8] = include_bytes!("fixtures/gql_playback_details_live.json");
+const DETAILS_LIVE_NO_ARCHIVE: &[u8] =
+    include_bytes!("fixtures/gql_playback_details_live_no_archive.json");
+// Hand-written after the raw `PlaybackDetailsVod` document's live answer
 // (checked with `jitter play` on 2026-10-27; VOD 2909822254 is in Just
 // Chatting and was streamed 2026-10-24 20:50 UTC, seconds not shown; its
-// owner is xQc), with `users_stream`'s recorded game, user, viewers and
-// start: not recorded.
-const DETAILS_LIVE: &[u8] = include_bytes!("fixtures/gql_playback_details_live.json");
+// owner is xQc): not recorded.
 const DETAILS_VOD: &[u8] = include_bytes!("fixtures/gql_playback_details_vod.json");
 // Hand-written after the raw `VideoMoments` document's response shape,
 // with a moment without a game and a null edge added: not recorded.
@@ -286,8 +290,8 @@ fn playback_details_ask_by_login_and_by_id() {
 fn live_details_carry_the_stream_game() {
     let details = ok(playback_details::parse_live(DETAILS_LIVE));
     let game = ok(details.game.ok_or("no game"));
-    assert_eq!(game.id.as_str(), "32982");
-    assert_eq!(game.name, "Grand Theft Auto V");
+    assert_eq!(game.id.as_str(), "21779");
+    assert_eq!(game.name, "League of Legends");
 }
 
 #[test]
@@ -329,7 +333,7 @@ fn live_and_vod_details_carry_their_title() {
         ok(playback_details::parse_live(DETAILS_LIVE))
             .title
             .as_deref(),
-        Some("JUICED EVENT TODAY !! GTA RP NOPIXEL 4.0 | #ad")
+        Some("🔴WORLDS 2026 T1 VS KOI🔴")
     );
     assert_eq!(
         ok(playback_details::parse_vod(DETAILS_VOD))
@@ -362,9 +366,43 @@ fn live_details_carry_the_viewers_and_when_it_went_live() {
     let live = ok(ok(playback_details::parse_live(DETAILS_LIVE))
         .live
         .ok_or("no live details"));
-    assert_eq!(live.viewers, 22_239);
-    // 2026-10-26T20:59:27Z
-    assert_eq!(live.started_at, Some(Timestamp::from_unix(1_793_048_367)));
+    assert_eq!(live.viewers, 108_668);
+    // 2026-10-28T15:14:09Z
+    assert_eq!(live.started_at, Some(Timestamp::from_unix(1_793_200_449)));
+}
+
+#[test]
+fn live_details_carry_the_vod_the_broadcast_records_to() {
+    let live = ok(ok(playback_details::parse_live(DETAILS_LIVE))
+        .live
+        .ok_or("no live details"));
+    assert_eq!(live.archive, VideoId::parse("2913096684").ok());
+    assert!(live.archive.is_some());
+}
+
+#[test]
+fn a_broadcast_without_a_recording_vod_still_has_live_details() {
+    let live = ok(ok(playback_details::parse_live(DETAILS_LIVE_NO_ARCHIVE))
+        .live
+        .ok_or("no live details"));
+    assert_eq!(live.archive, None);
+    assert_eq!(live.viewers, 61);
+}
+
+#[test]
+fn a_recording_vod_with_an_id_core_rejects_is_unknown_not_an_error() {
+    // The live fixture with its archive id corrupted: `VideoId::parse`
+    // rejects a non-numeric id.
+    let Ok(text) = std::str::from_utf8(DETAILS_LIVE) else {
+        unreachable!("fixture is UTF-8");
+    };
+    assert!(text.contains(r#""id": "2913096684""#));
+    let corrupted = text.replace(r#""id": "2913096684""#, r#""id": "v2913096684""#);
+    assert!(VideoId::parse("v2913096684").is_err());
+    let details = ok(playback_details::parse_live(corrupted.as_bytes()));
+    let live = ok(details.live.ok_or("no live details"));
+    assert_eq!(live.archive, None);
+    assert_eq!(live.viewers, 108_668);
 }
 
 #[test]
@@ -397,15 +435,21 @@ fn details_of_an_unknown_login_or_vod_are_not_found() {
 
 #[test]
 fn live_details_carry_the_channel_and_vod_details_its_owner() {
-    for details in [
-        ok(playback_details::parse_live(DETAILS_LIVE)),
-        ok(playback_details::parse_vod(DETAILS_VOD)),
+    for (details, (id, login, name, avatar)) in [
+        (
+            ok(playback_details::parse_live(DETAILS_LIVE)),
+            ("92038375", "caedrel", "Caedrel", "-50x50.png"),
+        ),
+        (
+            ok(playback_details::parse_vod(DETAILS_VOD)),
+            ("71092938", "xqc", "xQc", "-50x50.jpeg"),
+        ),
     ] {
         let channel = ok(details.channel.ok_or("no channel"));
-        assert_eq!(channel.id.as_str(), "71092938");
-        assert_eq!(channel.login.as_str(), "xqc");
-        assert_eq!(channel.display_name, "xQc");
-        assert!(channel.avatar_url.ends_with("-50x50.jpeg"));
+        assert_eq!(channel.id.as_str(), id);
+        assert_eq!(channel.login.as_str(), login);
+        assert_eq!(channel.display_name, name);
+        assert!(channel.avatar_url.ends_with(avatar));
     }
 }
 

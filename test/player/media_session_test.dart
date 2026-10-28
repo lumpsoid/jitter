@@ -10,6 +10,7 @@ PlaybackUpdateReady ready(PlaybackDetails details, {bool live = true}) =>
       live: live,
       details: details,
       sleep: const PlaybackSleep(presets: []),
+      rewind: const PlaybackRewindNone(),
     );
 
 void main() {
