@@ -76,6 +76,13 @@ cat >"$here/jitter-monochrome.svg" <<EOF
 $(bands '#ffffff' '#ffffff')
 </svg>
 EOF
+# Android notification small icon: Android draws only its alpha, so the J
+# alone, cropped close to fill the 24dp status-bar slot.
+cat >"$here/jitter-notification.svg" <<EOF
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="15 13 72 72">
+$(bands '#ffffff' '#ffffff')
+</svg>
+EOF
 
 png() { rsvg-convert -w "$2" -h "$2" "$here/$1" -o "$3"; }
 
@@ -86,7 +93,17 @@ for d in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
   png jitter-rounded.svg "$px" "$res/mipmap-$density/ic_launcher.png"
   png jitter-foreground.svg "$layer" "$res/mipmap-$density/ic_launcher_foreground.png"
   png jitter-monochrome.svg "$layer" "$res/mipmap-$density/ic_launcher_monochrome.png"
+  mkdir -p "$res/drawable-$density"
+  png jitter-notification.svg "$((px / 2))" "$res/drawable-$density/ic_stat_jitter.png"
 done
+# audio_service looks the notification icon up by name, so resource
+# shrinking cannot see it is used.
+mkdir -p "$res/raw"
+cat >"$res/raw/keep.xml" <<'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_jitter"/>
+EOF
 mkdir -p "$res/mipmap-anydpi-v26"
 cat >"$res/mipmap-anydpi-v26/ic_launcher.xml" <<'EOF'
 <?xml version="1.0" encoding="utf-8"?>
@@ -111,7 +128,7 @@ for f in "$root"/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-*.png; d
   scale=${name##*@}; scale=${scale%x}
   px=$(awk "BEGIN { print int($side * $scale + 0.5) }")
   png jitter.svg "$px" "$f"
-  magick "$f" -background "$BG" -alpha remove -alpha off "$f"
+  magick "$f" -background "$BG" -alpha remove -alpha off -define png:exclude-chunks=date,time "$f"
 done
 
 # macOS

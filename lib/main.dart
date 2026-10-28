@@ -91,6 +91,9 @@ Future<void> _startMediaSession(
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'dev.jitter.jitter.channel.playback',
         androidNotificationChannelName: 'Playback',
+        // The default, the launcher icon, is opaque and renders as a blank
+        // disc: Android draws a notification icon from its alpha only.
+        androidNotificationIcon: 'drawable/ic_stat_jitter',
         // A pause keeps the foreground service: Android 12+ may refuse to
         // start it again from the background.
         androidStopForegroundOnPause: false,
