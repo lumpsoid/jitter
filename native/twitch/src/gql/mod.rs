@@ -12,6 +12,7 @@ pub mod playback_details;
 pub mod search_channels;
 pub mod search_games;
 pub mod users_stream;
+pub mod video_chapters;
 pub mod video_comments;
 
 use jitter_core::models::{CategoryId, Channel, ChannelId, ChannelLogin, GameRef, Timestamp};

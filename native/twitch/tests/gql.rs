@@ -16,7 +16,7 @@ use jitter_twitch::gql::users_stream::{LIVE_STATUS_BATCH, batch_variables};
 use jitter_twitch::gql::{
     browse_directories, browse_popular, channel_by_login, channel_videos, decode, game_streams,
     persisted_body, playback_details, query_body, search_channels, search_games, users_stream,
-    video_comments,
+    video_chapters, video_comments,
 };
 
 const BROWSE: &[u8] = include_bytes!("fixtures/gql_browse_popular.json");
@@ -40,6 +40,9 @@ const CHANNEL_UNKNOWN: &[u8] = include_bytes!("fixtures/gql_channel_by_login_unk
 // start: not recorded.
 const DETAILS_LIVE: &[u8] = include_bytes!("fixtures/gql_playback_details_live.json");
 const DETAILS_VOD: &[u8] = include_bytes!("fixtures/gql_playback_details_vod.json");
+// Hand-written after the raw `VideoMoments` document's response shape,
+// with a moment without a game and a null edge added: not recorded.
+const VIDEO_CHAPTERS: &[u8] = include_bytes!("fixtures/gql_video_chapters.json");
 const BOGUS_HASH: &[u8] = include_bytes!("fixtures/gql_persisted_bogus_hash.json");
 // Recorded from `VideoCommentsByOffsetOrCursor` for VOD 2909822254 at
 // `contentOffsetSeconds` 3570 on 2026-10-27, cut from 59 edges to six
@@ -807,4 +810,33 @@ fn video_comments_of_an_unknown_vod_are_not_found() {
         video_comments::parse(br#"{"data":{"video":null}}"#),
         Err(TwitchError::NotFound)
     );
+}
+
+#[test]
+fn video_chapters_ask_by_id() {
+    let id = ok(VideoId::parse("2909822254"));
+    assert_eq!(video_chapters::variables(&id)["id"], "2909822254");
+}
+
+#[test]
+fn video_chapters_start_at_the_second_and_drop_moments_without_a_game() {
+    let chapters = ok(video_chapters::parse(VIDEO_CHAPTERS));
+    let game_at = |s| chapters.game_at(Seconds::new(s)).map(|g| g.name.clone());
+    assert_eq!(game_at(0).as_deref(), Some("Just Chatting"));
+    assert_eq!(game_at(5_024).as_deref(), Some("Just Chatting"));
+    assert_eq!(game_at(5_025).as_deref(), Some("Grand Theft Auto V"));
+    assert_eq!(game_at(8_000).as_deref(), Some("Grand Theft Auto V"));
+}
+
+#[test]
+fn a_vod_without_moments_has_no_chapters_and_an_unknown_one_is_not_found() {
+    let none = br#"{"data":{"video":{"moments":{"edges":[]}}}}"#;
+    assert!(ok(video_chapters::parse(none)).is_empty());
+    let null = br#"{"data":{"video":{"moments":null}}}"#;
+    assert!(ok(video_chapters::parse(null)).is_empty());
+    let unknown = br#"{"data":{"video":null}}"#;
+    assert!(matches!(
+        video_chapters::parse(unknown),
+        Err(TwitchError::NotFound)
+    ));
 }

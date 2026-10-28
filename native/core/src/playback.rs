@@ -47,6 +47,9 @@ pub enum PlaybackState {
         /// What is playing, for the page to show (boxed: it outweighs the
         /// other states).
         details: Box<PlaybackDetails>,
+        /// Where the player is, as it last reported ([`PlaybackController::follow`]);
+        /// `None` until it has.
+        at: Option<Seconds>,
         /// The page's sleep timer, while armed.
         sleep: Option<SleepTimer>,
     },
@@ -153,6 +156,7 @@ impl PlaybackController {
                     selected: q.name.clone(),
                     playback,
                     details: Box::new(details.unwrap_or_default()),
+                    at: None,
                     sleep: None,
                 },
             },
@@ -319,6 +323,48 @@ impl PlaybackController {
             return Ok(None);
         }
         resume.record(id.clone(), position, duration, now).map(Some)
+    }
+
+    /// The player showing `target` is at `position` of `duration`: kept
+    /// while `target` is the one ready, for the game its details show there
+    /// ([`PlaybackDetails::game_at`]). A zero `duration` is a player that
+    /// has not loaded yet, and a player stopped away
+    /// ([`Self::stopped_away`]) is not playing; neither position counts.
+    /// Returns whether the game shown changed, i.e. whether the page did.
+    pub fn follow(
+        &mut self,
+        target: &PlaybackTarget,
+        position: Seconds,
+        duration: Seconds,
+    ) -> bool {
+        if duration == Seconds::ZERO || self.stopped_away() {
+            return false;
+        }
+        let PlaybackState::Ready {
+            target: current,
+            details,
+            at,
+            ..
+        } = &mut self.state
+        else {
+            return false;
+        };
+        if current != target {
+            return false;
+        }
+        let before = details.game_at(*at).cloned();
+        *at = Some(position);
+        details.game_at(*at) != before.as_ref()
+    }
+
+    /// Where to seek to go to chapter `index` of the VOD ready
+    /// ([`crate::models::Chapters::to_go_to`]); `None` when nothing is
+    /// ready or it has no such chapter.
+    pub fn chapter_start(&self, index: usize) -> Option<Seconds> {
+        match &self.state {
+            PlaybackState::Ready { details, .. } => details.chapters.start(index),
+            _ => None,
+        }
     }
 
     /// The player showing `target` was left: back to idle, unless a later

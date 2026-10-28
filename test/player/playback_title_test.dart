@@ -29,7 +29,11 @@ void main() {
   ) async {
     await pumpTitle(
       tester,
-      const PlaybackDetails(title: 'GTA RP', game: 'Grand Theft Auto V'),
+      const PlaybackDetails(
+        chapters: [],
+        title: 'GTA RP',
+        game: 'Grand Theft Auto V',
+      ),
     );
 
     expect(find.text('xQc'), findsOneWidget);
@@ -41,7 +45,11 @@ void main() {
   testWidgets("shows a VOD's streamed day under the title", (tester) async {
     await pumpTitle(
       tester,
-      const PlaybackDetails(game: 'Just Chatting', streamed: 'Oct 24'),
+      const PlaybackDetails(
+        chapters: [],
+        game: 'Just Chatting',
+        streamed: 'Oct 24',
+      ),
     );
 
     expect(find.text('xQc'), findsOneWidget);
@@ -54,6 +62,7 @@ void main() {
     await pumpTitle(
       tester,
       const PlaybackDetails(
+        chapters: [],
         game: 'Just Chatting',
         live: PlaybackLive(viewers: '1.2K viewers', uptime: '2h 15m'),
       ),
@@ -68,7 +77,10 @@ void main() {
   ) async {
     await pumpTitle(
       tester,
-      const PlaybackDetails(live: PlaybackLive(viewers: '950 viewers')),
+      const PlaybackDetails(
+        chapters: [],
+        live: PlaybackLive(viewers: '950 viewers'),
+      ),
     );
 
     expect(find.text('LIVE'), findsOneWidget);
@@ -78,21 +90,28 @@ void main() {
   testWidgets('a VOD has no live badge', (tester) async {
     await pumpTitle(
       tester,
-      const PlaybackDetails(game: 'Just Chatting', streamed: 'Oct 24'),
+      const PlaybackDetails(
+        chapters: [],
+        game: 'Just Chatting',
+        streamed: 'Oct 24',
+      ),
     );
 
     expect(find.text('LIVE'), findsNothing);
   });
 
   testWidgets('shows the streamed day alone without a game', (tester) async {
-    await pumpTitle(tester, const PlaybackDetails(streamed: 'Dec 31, 2025'));
+    await pumpTitle(
+      tester,
+      const PlaybackDetails(chapters: [], streamed: 'Dec 31, 2025'),
+    );
 
     expect(find.text('xQc'), findsOneWidget);
     expect(find.text('Dec 31, 2025'), findsOneWidget);
   });
 
   testWidgets('shows the title alone without details to show', (tester) async {
-    await pumpTitle(tester, const PlaybackDetails());
+    await pumpTitle(tester, const PlaybackDetails(chapters: []));
 
     expect(find.text('xQc'), findsOneWidget);
     expect(find.byType(Column), findsNothing);
@@ -111,6 +130,7 @@ void main() {
       await pumpTitle(
         tester,
         const PlaybackDetails(
+          chapters: [],
           channel: _owner,
           game: 'Just Chatting',
           streamed: 'Oct 24',
@@ -128,7 +148,7 @@ void main() {
     final opened = <String>[];
     await pumpTitle(
       tester,
-      const PlaybackDetails(channel: _owner),
+      const PlaybackDetails(chapters: [], channel: _owner),
       onOpenChannel: opened.add,
     );
 
@@ -142,7 +162,10 @@ void main() {
   testWidgets('the title is not tappable before the channel is known', (
     tester,
   ) async {
-    await pumpTitle(tester, const PlaybackDetails(game: 'Just Chatting'));
+    await pumpTitle(
+      tester,
+      const PlaybackDetails(chapters: [], game: 'Just Chatting'),
+    );
 
     expect(find.byType(InkWell), findsNothing);
     expect(find.byType(CircleAvatar), findsNothing);
