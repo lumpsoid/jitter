@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:jitter/categories/categories_page.dart';
 import 'package:jitter/categories/category_tile_view.dart';
 import 'package:jitter/search/search_holder.dart';
@@ -8,6 +9,7 @@ import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/widgets/next_page_footer.dart';
 import 'package:jitter/widgets/paged_scroll_view.dart';
 import 'package:jitter/widgets/retry_failure.dart';
+import 'package:jitter/widgets/steam_keyboard.dart';
 
 /// Category tiles are at most this wide; the grid adds columns as it
 /// widens.
@@ -39,16 +41,37 @@ class SearchPage extends StatefulWidget {
 
 class _SearchPageState extends State<SearchPage> {
   final TextEditingController _field = TextEditingController();
+  final FocusNode _fieldFocus = FocusNode();
 
   @override
   void dispose() {
     _field.dispose();
+    _fieldFocus.dispose();
     super.dispose();
   }
 
   void _clear() {
     _field.clear();
     widget.search.type('');
+  }
+
+  /// Steam's keyboard button, where there is one, and Clear once typed.
+  Widget? _suffix({required bool typed}) {
+    final clear = typed
+        ? IconButton(
+            tooltip: 'Clear',
+            icon: const Icon(Icons.clear),
+            onPressed: _clear,
+          )
+        : null;
+    if (!SteamKeyboardButton.shown) return clear;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SteamKeyboardButton(field: _fieldFocus),
+        ?clear,
+      ],
+    );
   }
 
   @override
@@ -62,21 +85,28 @@ class _SearchPageState extends State<SearchPage> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: ValueListenableBuilder(
               valueListenable: _field,
-              builder: (context, value, _) => TextField(
-                controller: _field,
-                onChanged: search.type,
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  hintText: 'Search channels and categories',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: value.text.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: 'Clear',
-                          icon: const Icon(Icons.clear),
-                          onPressed: _clear,
-                        ),
-                  border: const OutlineInputBorder(),
+              // Down leaves the field for the results, as from any other
+              // widget: the field would keep it for its caret.
+              builder: (context, value, _) => Shortcuts(
+                shortcuts: const {
+                  SingleActivator(
+                    LogicalKeyboardKey.arrowDown,
+                  ): DirectionalFocusIntent(
+                    TraversalDirection.down,
+                    ignoreTextFields: false,
+                  ),
+                },
+                child: TextField(
+                  controller: _field,
+                  focusNode: _fieldFocus,
+                  onChanged: search.type,
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    hintText: 'Search channels and categories',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _suffix(typed: value.text.isNotEmpty),
+                    border: const OutlineInputBorder(),
+                  ),
                 ),
               ),
             ),
