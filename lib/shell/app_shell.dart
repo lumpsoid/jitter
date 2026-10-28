@@ -154,10 +154,25 @@ class _AppShellState extends State<AppShell> {
       login: login,
       channel: widget.channel,
       favorites: widget.favorites,
-      onOpenVod: (id) => _openPlayer(PlaybackTargetVod(id: id), id),
+      onOpenVod: _openVod,
       onOpenLive: _openLive,
     ),
   );
+
+  /// Opens the channel in place of the player page at [playerContext].
+  void _replacePlayerWithChannel(BuildContext playerContext, String login) =>
+      unawaited(
+        ChannelPage.replace(
+          playerContext,
+          login: login,
+          channel: widget.channel,
+          favorites: widget.favorites,
+          onOpenVod: _openVod,
+          onOpenLive: _openLive,
+        ),
+      );
+
+  void _openVod(String id) => _openPlayer(PlaybackTargetVod(id: id), id);
 
   void _openLive(String login) =>
       _openPlayer(PlaybackTargetLive(login: login), login);
@@ -165,8 +180,8 @@ class _AppShellState extends State<AppShell> {
   void _select(int index) => setState(() => _selected = index);
 
   /// Pushes the player for `target`; leaving the page stops it. Opening the
-  /// channel from it leaves it first, so player pages never stack (they
-  /// share one player and one playback state).
+  /// channel from it replaces it, so player pages never stack (they share
+  /// one player and one playback state).
   void _openPlayer(PlaybackTarget target, String title) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -176,10 +191,8 @@ class _AppShellState extends State<AppShell> {
           playback: widget.playback,
           player: widget.player,
           chat: widget.chat,
-          onOpenChannel: (login) {
-            Navigator.of(playerContext).pop();
-            _openChannel(login);
-          },
+          onOpenChannel: (login) =>
+              _replacePlayerWithChannel(playerContext, login),
         ),
       ),
     );

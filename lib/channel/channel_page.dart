@@ -51,17 +51,53 @@ class ChannelPage extends StatefulWidget {
   }) {
     channel.open(login);
     return Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (context) => ChannelPage(
-          login: login,
-          channel: channel,
-          favorites: favorites,
-          onOpenVod: onOpenVod,
-          onOpenLive: onOpenLive,
-        ),
+      _route(
+        login: login,
+        channel: channel,
+        favorites: favorites,
+        onOpenVod: onOpenVod,
+        onOpenLive: onOpenLive,
       ),
     );
   }
+
+  /// As [push], but the page takes the place of the current route: one
+  /// transition in, and the replaced page closes once it ends.
+  static Future<void> replace(
+    BuildContext context, {
+    required String login,
+    required ChannelHolder channel,
+    required FavoritesHolder favorites,
+    ValueChanged<String>? onOpenVod,
+    ValueChanged<String>? onOpenLive,
+  }) {
+    channel.open(login);
+    return Navigator.of(context).pushReplacement(
+      _route(
+        login: login,
+        channel: channel,
+        favorites: favorites,
+        onOpenVod: onOpenVod,
+        onOpenLive: onOpenLive,
+      ),
+    );
+  }
+
+  static Route<void> _route({
+    required String login,
+    required ChannelHolder channel,
+    required FavoritesHolder favorites,
+    ValueChanged<String>? onOpenVod,
+    ValueChanged<String>? onOpenLive,
+  }) => MaterialPageRoute<void>(
+    builder: (context) => ChannelPage(
+      login: login,
+      channel: channel,
+      favorites: favorites,
+      onOpenVod: onOpenVod,
+      onOpenLive: onOpenLive,
+    ),
+  );
 
   @override
   State<ChannelPage> createState() => _ChannelPageState();
