@@ -166,6 +166,42 @@ void main() {
     expect(under, closeTo(0.75, 0.01));
   });
 
+  testWidgets('a pinch zooms under media_kit-like drags', (tester) async {
+    final zoom = ValueNotifier(VideoZoom.none);
+    addTearDown(zoom.dispose);
+    await tester.pumpWidget(
+      SizedBox(
+        width: 400,
+        height: 200,
+        child: ZoomGestures(
+          zoom: zoom,
+          onWheel: (_) {},
+          // As media_kit's mobile controls: both drags, always on.
+          child: GestureDetector(
+            onHorizontalDragUpdate: (_) {},
+            onVerticalDragUpdate: (_) {},
+            child: const ColoredBox(color: Color(0xFF000000)),
+          ),
+        ),
+      ),
+    );
+
+    // One finger still, the other moving off: the drag's to win, alone.
+    final still = await tester.startGesture(const Offset(150, 100), pointer: 1);
+    final moving = await tester.startGesture(
+      const Offset(200, 100),
+      pointer: 2,
+    );
+    for (var i = 0; i < 5; i++) {
+      await moving.moveBy(const Offset(10, 0));
+    }
+    await still.up();
+    await moving.up();
+
+    // From 50 apart to 100.
+    expect(zoom.value.scale, closeTo(2, 1e-9));
+  });
+
   testWidgets('a drag moves the zoomed picture', (tester) async {
     final zoom = await pumpGestures(tester);
     zoom.value = VideoZoom.none.zoomBy(4);

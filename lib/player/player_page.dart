@@ -135,6 +135,22 @@ class _PlayerPageState extends State<PlayerPage> {
     fontSize: fontSize,
   );
 
+  /// [controls] under the zoom's gestures and reset: within media_kit's
+  /// controls, so its fullscreen route, which builds only the controls
+  /// anew, has them too.
+  Widget _zoomable(Widget controls) => Stack(
+    fit: StackFit.expand,
+    children: [
+      ZoomGestures(
+        zoom: _zoom,
+        onWheel: (notches) =>
+            unawaited(widget.player.nudgeVolume(notches * _wheelVolumeStep)),
+        child: controls,
+      ),
+      Positioned(top: 8, right: 8, child: ZoomReset(zoom: _zoom)),
+    ],
+  );
+
   /// A VOD's controls: the page's own on a phone ([VodPhoneControls]),
   /// media_kit's desktop ones themed by [_Controls] elsewhere. Chosen as
   /// media_kit's adaptive ones choose.
@@ -257,35 +273,26 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Widget _video(PlaybackUpdate state) => switch (state) {
-    PlaybackUpdateReady(:final live) => Stack(
-      fit: StackFit.expand,
-      children: [
-        ZoomGestures(
-          zoom: _zoom,
-          onWheel: (notches) =>
-              unawaited(widget.player.nudgeVolume(notches * _wheelVolumeStep)),
-          child: _Controls(
-            live: live,
-            player: widget.player,
-            bar: _seekBar(),
-            readout: _readout(fontSize: 12),
-            onToggleFullscreen: _toggleFullscreen,
-            onExitFullscreen: () =>
-                unawaited(_videoKey.currentState?.exitFullscreen()),
-            child: Video(
-              key: _videoKey,
-              controller: widget.player.controller,
-              controls: live ? AdaptiveVideoControls : _vodControls,
-              // Leaving media_kit's fullscreen from theatre goes back to
-              // theatre's screen, not out of fullscreen.
-              onExitFullscreen: _theatre
-                  ? returnToTheatreScreen
-                  : defaultExitNativeFullscreen,
-            ),
-          ),
+    PlaybackUpdateReady(:final live) => _Controls(
+      live: live,
+      player: widget.player,
+      bar: _seekBar(),
+      readout: _readout(fontSize: 12),
+      onToggleFullscreen: _toggleFullscreen,
+      onExitFullscreen: () =>
+          unawaited(_videoKey.currentState?.exitFullscreen()),
+      child: Video(
+        key: _videoKey,
+        controller: widget.player.controller,
+        controls: (video) => _zoomable(
+          live ? AdaptiveVideoControls(video) : _vodControls(video),
         ),
-        Positioned(top: 8, right: 8, child: ZoomReset(zoom: _zoom)),
-      ],
+        // Leaving media_kit's fullscreen from theatre goes back to
+        // theatre's screen, not out of fullscreen.
+        onExitFullscreen: _theatre
+            ? returnToTheatreScreen
+            : defaultExitNativeFullscreen,
+      ),
     ),
     PlaybackUpdateFailed(:final message) => PlaybackFailure(
       message: message,

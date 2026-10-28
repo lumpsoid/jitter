@@ -45,11 +45,13 @@ class KeepsWheel extends StatelessWidget {
 }
 
 class _ZoomGesturesState extends State<ZoomGestures> {
-  /// The pinch's scale at the last update, to zoom by each step of it.
+  /// The trackpad pinch's scale at the last update, to zoom by each step
+  /// of it.
   double _pinched = 1;
 
-  /// The pointers down on the video: one drags the picture.
-  final _down = <int>{};
+  /// The pointers down on the video, where each last was: one drags the
+  /// picture, two pinch it.
+  final _down = <int, Offset>{};
 
   /// Where the one pointer down went down, until it has moved past the
   /// hit slop: a tap's wobble does not move the picture. Null while it
@@ -57,13 +59,15 @@ class _ZoomGesturesState extends State<ZoomGestures> {
   Offset? _dragFrom;
 
   void _onDown(PointerDownEvent event) {
-    _down.add(event.pointer);
+    _down[event.pointer] = event.localPosition;
     _dragFrom = _down.length == 1 ? event.localPosition : null;
   }
 
+  /// The finger left after a pinch starts over from the slop, so lifting
+  /// the other does not jolt the picture.
   void _onUp(PointerEvent event) {
     _down.remove(event.pointer);
-    _dragFrom = null;
+    _dragFrom = _down.length == 1 ? _down.values.single : null;
   }
 
   Offset _fraction(Offset offset) {
@@ -87,11 +91,23 @@ class _ZoomGesturesState extends State<ZoomGestures> {
     });
   }
 
-  /// A drag by one pointer, from its raw moves rather than a gesture:
-  /// media_kit's mobile controls always take a one-finger drag in the
-  /// gesture arena, even with their drag gestures off.
+  /// A drag by one pointer or a pinch by two, from their raw moves rather
+  /// than gestures: media_kit's mobile controls always take a one-finger
+  /// drag in the gesture arena, even with their drag gestures off, and
+  /// take it before a pinch would win there.
   void _onMove(PointerMoveEvent event) {
-    if (_down.length != 1) return;
+    if (!_down.containsKey(event.pointer)) return;
+    final before = _down.values.toList();
+    _down[event.pointer] = event.localPosition;
+    switch (_down.length) {
+      case 1:
+        _drag(event);
+      case 2:
+        _pinch(before, _down.values.toList());
+    }
+  }
+
+  void _drag(PointerMoveEvent event) {
     final from = _dragFrom;
     if (from != null) {
       final slop = computeHitSlop(
@@ -106,16 +122,26 @@ class _ZoomGesturesState extends State<ZoomGestures> {
     widget.zoom.value = widget.zoom.value.panBy(_fraction(event.localDelta));
   }
 
-  /// A pinch, or a trackpad's two fingers; one pointer is [_onMove]'s.
+  /// Two fingers moved [from] to [to]: zooms by how far apart they went,
+  /// about their middle, and moves with that middle.
+  void _pinch(List<Offset> from, List<Offset> to) {
+    final span = (from[0] - from[1]).distance;
+    if (span == 0) return;
+    final factor = (to[0] - to[1]).distance / span;
+    final focus = (to[0] + to[1]) / 2;
+    final pan = focus - (from[0] + from[1]) / 2;
+    widget.zoom.value = widget.zoom.value
+        .zoomBy(factor, focus: _fraction(focus))
+        .panBy(_fraction(pan));
+  }
+
+  /// A trackpad's two fingers; a touch pinch is [_onMove]'s.
   void _onScaleUpdate(ScaleUpdateDetails details) {
     final factor = details.scale / _pinched;
     _pinched = details.scale;
-    final pan = details.pointerCount > 1
-        ? details.focalPointDelta
-        : Offset.zero;
     widget.zoom.value = widget.zoom.value
         .zoomBy(factor, focus: _fraction(details.localFocalPoint))
-        .panBy(_fraction(pan));
+        .panBy(_fraction(details.focalPointDelta));
   }
 
   @override
@@ -127,6 +153,7 @@ class _ZoomGesturesState extends State<ZoomGestures> {
       onPointerUp: _onUp,
       onPointerCancel: _onUp,
       child: GestureDetector(
+        supportedDevices: const {PointerDeviceKind.trackpad},
         onScaleStart: (_) => _pinched = 1,
         onScaleUpdate: _onScaleUpdate,
         child: widget.child,
