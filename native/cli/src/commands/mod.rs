@@ -5,6 +5,7 @@ pub mod categories;
 pub mod category;
 pub mod chat;
 pub mod fav;
+pub mod history;
 pub mod play;
 pub mod replay;
 pub mod resume;

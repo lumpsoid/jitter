@@ -8,9 +8,11 @@
 //! a controller and the clone shows what the controller wrote.
 
 mod fake_favorites_store;
+mod fake_history_store;
 mod fake_resume_store;
 mod fake_settings_store;
 
 pub use fake_favorites_store::FakeFavoritesStore;
+pub use fake_history_store::FakeHistoryStore;
 pub use fake_resume_store::FakeResumeStore;
 pub use fake_settings_store::FakeSettingsStore;

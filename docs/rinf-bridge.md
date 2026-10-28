@@ -34,7 +34,7 @@ Dependencies point down the arrows only.
   ask core what to load, call twitch, and hand the result back. Storage
   enters through core's ports. No decisions; no rinf.
 - **store** persists. `SqliteStore` implements core's storage ports
-  (`FavoritesStore`, `ResumeStore`, `SettingsStore`) over one SQLite file that every head on
+  (`FavoritesStore`, `HistoryStore`, `ResumeStore`, `SettingsStore`) over one SQLite file that every head on
   the machine shares: WAL, migrations in an `IMMEDIATE` transaction, and no
   upsert that could bring back a row another process removed. No decisions;
   no rinf.
@@ -76,7 +76,7 @@ Two ways in, one rule for choosing:
 
 | Dependency | Enters through | Why |
 |---|---|---|
-| Infrastructure: `RecipeStore`, `SettingsStore`, `IdGen` (jitter: `FavoritesStore`, `ResumeStore`, `SettingsStore`) | constructor (`Box<dyn Trait>`) | Border dependency; traits live in core, real impls in `store` (`SqliteStore`, `UuidIds`; jitter: `jitter_store::SqliteStore`, one clone per controller), fakes in core's `fakes/` |
+| Infrastructure: `RecipeStore`, `SettingsStore`, `IdGen` (jitter: `FavoritesStore`, `HistoryStore`, `ResumeStore`, `SettingsStore`) | constructor (`Box<dyn Trait>`) | Border dependency; traits live in core, real impls in `store` (`SqliteStore`, `UuidIds`; jitter: `jitter_store::SqliteStore`, one clone per controller), fakes in core's `fakes/` |
 | Shared controller: `RecipeCatalog` | method argument (`&` / `&mut`) | Shared mutable state; the borrow checker proves who reads and who writes, with no `Rc<RefCell>` and no runtime borrow failures |
 
 - The controller that owns data owns its persistence: `RecipeCatalog`
@@ -217,10 +217,10 @@ This also covers Flutter hot restart, where Dart state resets but Rust keeps
 running.
 
 **jitter: only features that hold state before any page asks have one.**
-`BrowseReady`, `CategoriesReady`, `FavoritesReady`, `ChatReady` and
-`SettingsReady` exist: the top streams and top categories load at start,
-the favorites and the settings at boot, and a chat session runs while the
-player does. Playback, the channel page,
+`BrowseReady`, `CategoriesReady`, `FavoritesReady`, `HistoryReady`,
+`ChatReady` and `SettingsReady` exist: the top streams and top categories
+load at start, the favorites, the history and the settings at boot, and a
+chat session runs while the player does. Playback, the channel page,
 the category page and search have none: they show nothing until a page
 opens or the user types, and that intent (`Play`, `OpenChannel`,
 `OpenCategory`, `SearchTyped`) is answered with the whole state, so it is
@@ -391,6 +391,20 @@ favorites change `run.rs`'s `favorites_changed` sends both again: the strip
 as `CategoriesUpdate::FromYourChannels`, the category as a whole
 `Snapshot`. Between two snapshots the category's unpinned streams only
 grow, so its next pages still go out as `Appended`.
+
+### The history follows the player's reports
+
+The history has no timer and no signal of its own while it records: each
+`PlayerPosition` that playback takes goes on to core's
+`HistoryController::heard`, with the playback controller to say whether
+that target is playing, and `LeavePlayer` calls `leave` before the player
+leaves. Core's `HistoryPolicy` decides what is a visit (10 s of playing),
+when one carries on the last (same target, nothing counted between,
+within 30 minutes) and how often its time is written (every 30 s). The
+hub sends the whole `HistoryUpdate::Snapshot` when the list changes and
+once more on leaving, not on every write. A visit is never moved:
+playing an old one again adds one today. The list is read at boot and
+again whenever a visit is stored, so the CLI's removals show up then.
 
 ### Settings take effect where they belong
 

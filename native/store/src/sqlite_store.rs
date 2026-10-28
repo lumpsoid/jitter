@@ -9,8 +9,9 @@ use rusqlite::{Connection, ErrorCode};
 use crate::migrations;
 
 /// One migrated SQLite connection that implements `FavoritesStore`,
-/// `ResumeStore` and `SettingsStore`. Clones share the connection, so a head hands one clone to
-/// each controller; an in-memory database stays a single database.
+/// `HistoryStore`, `ResumeStore` and `SettingsStore`. Clones share the
+/// connection, so a head hands one clone to each controller; an in-memory
+/// database stays a single database.
 ///
 /// Other processes may have the same file open. Rows are never cached here:
 /// every call reads or writes the database.

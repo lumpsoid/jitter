@@ -307,7 +307,7 @@ fn report<T>(result: Result<T, impl Display>) -> Option<T> {
 }
 
 /// Heads pass the clock to core; core never reads it.
-fn now() -> Result<Timestamp, String> {
+pub(crate) fn now() -> Result<Timestamp, String> {
     let since_epoch = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|e| format!("reading the clock: {e}"))?;
@@ -327,6 +327,19 @@ impl TryFrom<PlaybackTarget> for playback::PlaybackTarget {
             PlaybackTarget::Vod { id } => VideoId::parse(&id)
                 .map(Self::Vod)
                 .map_err(|e| format!("invalid video id {id:?}: {e:?}")),
+        }
+    }
+}
+
+impl From<&playback::PlaybackTarget> for PlaybackTarget {
+    fn from(target: &playback::PlaybackTarget) -> Self {
+        match target {
+            playback::PlaybackTarget::Live(login) => Self::Live {
+                login: login.as_str().to_owned(),
+            },
+            playback::PlaybackTarget::Vod(id) => Self::Vod {
+                id: id.as_str().to_owned(),
+            },
         }
     }
 }

@@ -10,6 +10,8 @@ import 'package:jitter/channel/channel_page.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/favorites/favorites_page.dart';
+import 'package:jitter/history/history_holder.dart';
+import 'package:jitter/history/history_page.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/player/player_page.dart';
@@ -45,6 +47,8 @@ class AppShell extends StatefulWidget {
     required this.category,
     // Favorites
     required this.favorites,
+    // History
+    required this.history,
     // Playback
     required this.playback,
     required this.player,
@@ -66,6 +70,8 @@ class AppShell extends StatefulWidget {
   final CategoryHolder category;
   // Favorites
   final FavoritesHolder favorites;
+  // History
+  final HistoryHolder history;
   // Playback: what a page needs to push a `PlayerPage`.
   final PlaybackHolder playback;
   final MediaKitEngine player;
@@ -114,6 +120,17 @@ class _AppShellState extends State<AppShell> {
         favorites: widget.favorites,
         onOpenChannel: _openChannel,
         onOpenLive: _openLive,
+      ),
+    ),
+    (
+      label: 'History',
+      icon: Icons.history_outlined,
+      selectedIcon: Icons.history,
+      page: HistoryPage(
+        history: widget.history,
+        onOpenLive: _openLive,
+        onOpenVod: _openVod,
+        onOpenChannel: _openChannel,
       ),
     ),
     (

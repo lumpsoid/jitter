@@ -8,6 +8,7 @@ import 'package:jitter/categories/category_holder.dart';
 import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
+import 'package:jitter/history/history_holder.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/search/search_holder.dart';
@@ -30,6 +31,8 @@ class JitterApp extends StatefulWidget {
     required this.category,
     // Favorites
     required this.favorites,
+    // History
+    required this.history,
     // Playback
     required this.playback,
     required this.player,
@@ -52,6 +55,8 @@ class JitterApp extends StatefulWidget {
   final CategoryHolder category;
   // Favorites
   final FavoritesHolder favorites;
+  // History
+  final HistoryHolder history;
   // Playback
   final PlaybackHolder playback;
   final MediaKitEngine player;
@@ -128,6 +133,8 @@ class _JitterAppState extends State<JitterApp> {
             category: widget.category,
             // Favorites
             favorites: widget.favorites,
+            // History
+            history: widget.history,
             // Playback
             playback: widget.playback,
             player: widget.player,

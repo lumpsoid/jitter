@@ -12,6 +12,8 @@ mod channel;
 mod chat;
 mod favorites;
 mod format;
+// History
+mod history;
 // Playback
 mod playback;
 mod run;

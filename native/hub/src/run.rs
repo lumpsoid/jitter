@@ -11,6 +11,7 @@
 use jitter_core::browse::BrowseController;
 use jitter_core::categories::TopCategoriesController;
 use jitter_core::favorites::FavoritesController;
+use jitter_core::history::HistoryController;
 use jitter_core::models::{Category, Page, PageRequest, Playback, PlaybackDetails, Stream};
 use jitter_core::playback::{Attempt, PlaybackController, PlaybackTarget};
 use jitter_core::ports::StoreError;
@@ -39,6 +40,9 @@ use crate::signals::{ChatReady, HideChat, SetTheme, ShowChat};
 // Favorites
 use crate::favorites::{self, FavoritesFetched};
 use crate::signals::{AddFavorite, FavoritesReady, RefreshFavorites, RemoveFavorite};
+// History
+use crate::history;
+use crate::signals::{ClearHistory, HistoryReady, RemoveFromHistory, RemoveVisit};
 // Playback
 use crate::playback;
 use crate::signals::{
@@ -58,6 +62,8 @@ use crate::signals::{ChangeSetting, SettingsReady};
 /// Every controller, built and loaded from one store.
 pub struct Controllers {
     favorites: FavoritesController,
+    // History
+    history: HistoryController,
     // Browse
     browse: BrowseController,
     // Categories
@@ -78,14 +84,19 @@ pub struct Controllers {
 
 impl Controllers {
     /// Builds each controller on a clone of `store`, then loads the
-    /// favorites and the settings; the chat starts under the settings.
+    /// favorites, the history and the settings; the chat starts under the
+    /// settings.
     pub fn boot(store: &SqliteStore) -> Result<Self, StoreError> {
         let mut favorites = FavoritesController::new(Box::new(store.clone()));
         favorites.load()?;
+        let mut history = HistoryController::new(Box::new(store.clone()));
+        history.load()?;
         let mut settings = SettingsController::new(Box::new(store.clone()));
         settings.load()?;
         Ok(Self {
             favorites,
+            // History
+            history,
             resume: ResumeController::new(Box::new(store.clone())),
             // Browse
             browse: BrowseController::new(),
@@ -183,6 +194,12 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
     let remove_favorite = RemoveFavorite::get_dart_signal_receiver();
     let refresh_favorites = RefreshFavorites::get_dart_signal_receiver();
 
+    // History
+    let history_ready = HistoryReady::get_dart_signal_receiver();
+    let remove_visit = RemoveVisit::get_dart_signal_receiver();
+    let remove_from_history = RemoveFromHistory::get_dart_signal_receiver();
+    let clear_history = ClearHistory::get_dart_signal_receiver();
+
     // Playback
     let play = Play::get_dart_signal_receiver();
     let select_quality = SelectQuality::get_dart_signal_receiver();
@@ -262,6 +279,14 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
                 favorites_changed(&c);
             }
 
+            // History
+            Some(_) = history_ready.recv() => history::ready(&c.history),
+            Some(pack) = remove_visit.recv() => history::remove(&mut c.history, pack.message),
+            Some(pack) = remove_from_history.recv() => {
+                history::remove_target(&mut c.history, pack.message);
+            }
+            Some(_) = clear_history.recv() => history::clear(&mut c.history),
+
             // Playback
             Some(pack) = play.recv() => {
                 let target = playback::play(&mut c.playback, &twitch, &fetch, pack.message.target);
@@ -273,13 +298,17 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
             }
             Some(pack) = go_to_time.recv() => playback::go_to_time(pack.message),
             Some(pack) = player_position.recv() => {
-                // Chat: a VOD's replay follows the player.
                 if let Some(at) = playback::position(&c.playback, &mut c.resume, pack.message) {
+                    // History: counts what the player plays.
+                    history::heard(&mut c.history, &c.playback, &at.target);
+                    // Chat: a VOD's replay follows the player.
                     let (position, duration) = (at.position, at.duration);
                     chat::position(&mut c.chat, &twitch, &fetch, &at.target, position, duration);
                 }
             }
             Some(pack) = leave_player.recv() => {
+                // History: the visit's last time, while the player still has it.
+                history::leave(&mut c.history, &c.playback, &pack.message.target);
                 // Chat: closes when the player stops.
                 if playback::leave(&mut c.playback, &mut c.resume, pack.message) {
                     chat::stop(&mut c.chat, &twitch, &fetch);
