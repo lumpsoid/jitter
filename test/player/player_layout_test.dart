@@ -16,6 +16,7 @@ ChatHolder _chat() => ChatHolder(sendTheme: (_) {})
         ChatItemMessage(
           line: ChatLine(
             id: 'a',
+            sender: '1',
             name: 'alice',
             color: 0xFFFF0000,
             action: false,
