@@ -13,7 +13,7 @@ mkdir -p "$appdir/usr/bin"
 # The Flutter runner finds data/ and lib/ next to its executable, so the
 # bundle stays intact under usr/bin.
 cp -a build/linux/x64/release/bundle/. "$appdir/usr/bin/"
-cp android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png build/jitter.png
+cp linux/runner/resources/app_icon.png build/jitter.png
 
 # Left to the host, on top of linuxdeploy's built-in excludelist (GL, DRM,
 # ALSA, core X11): the GTK/GLib stack the Flutter runner shares with the
