@@ -4,7 +4,7 @@ use jitter_core::models::{ChannelLogin, Cursor, Page, Seconds, Video, VideoId, V
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{PAGE_SIZE, PersistedQuery, UserNode, parse_timestamp};
+use super::{GameNode, PAGE_SIZE, PersistedQuery, UserNode, parse_timestamp};
 use crate::client::Twitch;
 use crate::error::TwitchError;
 
@@ -122,6 +122,7 @@ struct Node {
     #[serde(rename = "previewThumbnailURL")]
     preview_thumbnail_url: Option<String>,
     owner: Option<UserNode>,
+    game: Option<GameNode>,
 }
 
 impl Node {
@@ -134,6 +135,7 @@ impl Node {
             published_at: parse_timestamp(&self.published_at?)?,
             thumbnail_url: self.preview_thumbnail_url?,
             kind,
+            game: self.game.and_then(GameNode::into_game_ref),
         })
     }
 }

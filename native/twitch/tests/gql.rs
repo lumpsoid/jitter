@@ -233,6 +233,9 @@ fn videos_map_duration_published_at_and_requested_kind() {
     assert_eq!(second.duration, Seconds::new(42700));
     assert_eq!(second.published_at, Timestamp::from_unix(1792875046));
     assert_eq!(second.channel.login.as_str(), "xqc");
+    let game = ok(second.game.as_ref().ok_or("no game"));
+    assert_eq!(game.id.as_str(), "509658");
+    assert_eq!(game.name, "Just Chatting");
     assert!(page.items.iter().all(|v| v.kind == VideoKind::Highlight));
     assert!(page.next.is_some());
 }

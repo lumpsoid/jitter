@@ -126,6 +126,8 @@ pub struct VodTile {
     /// cannot be shown.
     pub date_label: Option<String>,
     pub thumbnail_url: String,
+    /// The category it was in; `None`: none shown.
+    pub game_name: Option<String>,
     /// How far in playback would resume, in (0, 1), for a bar over the
     /// thumbnail; `None`: no bar.
     pub progress: Option<f64>,

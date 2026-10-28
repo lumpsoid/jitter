@@ -5,7 +5,7 @@ import 'package:jitter/src/bindings/bindings.dart';
 const double _thumbnailWidth = 160;
 
 /// One VOD: its thumbnail with the duration over it and, when playback
-/// would resume part way, a bar of how far; then its title and date.
+/// would resume part way, a bar of how far; then its title, game and date.
 class VodTileView extends StatelessWidget {
   const new({required this.vod, this.onTap, super.key});
 
@@ -69,6 +69,13 @@ class VodTileView extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.titleSmall,
                   ),
+                  if (vod.gameName case final game?)
+                    Text(
+                      game,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall,
+                    ),
                   if (vod.dateLabel case final date?)
                     Text(
                       date,

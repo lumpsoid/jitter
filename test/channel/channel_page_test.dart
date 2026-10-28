@@ -93,7 +93,10 @@ void main() {
       ..applyVods(
         VodsUpdateSnapshot(
           state: VodsStateLoaded(
-            vods: [vod('1', progress: 0.25), vod('2')],
+            vods: [
+              vod('1', progress: 0.25, gameName: 'Just Chatting'),
+              vod('2'),
+            ],
             more: const VodsMoreIdle(),
           ),
         ),
@@ -110,6 +113,8 @@ void main() {
     expect(find.text('Title 1'), findsOneWidget);
     expect(find.text('1:02:03'), findsNWidgets(2));
     expect(find.text('Oct 24'), findsNWidgets(2));
+    // Only the VOD Twitch names a game for shows one.
+    expect(find.text('Just Chatting'), findsOneWidget);
     // Only the VOD that would resume has a bar.
     final bars = tester.widgetList<LinearProgressIndicator>(
       find.byType(LinearProgressIndicator),

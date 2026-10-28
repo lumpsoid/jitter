@@ -28,6 +28,7 @@ fn video(id: &str, kind: VideoKind) -> Video {
         published_at: Timestamp::from_unix(0),
         thumbnail_url: String::new(),
         kind,
+        game: None,
     }
 }
 

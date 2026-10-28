@@ -328,6 +328,7 @@ impl VodTile {
             duration_label: duration_label(video.duration),
             date_label: streamed_label(video.published_at),
             thumbnail_url: video.thumbnail_url.clone(),
+            game_name: video.game.as_ref().map(|game| game.name.clone()),
             progress: resume.progress(&video.id).ok().flatten(),
         }
     }
@@ -360,6 +361,7 @@ mod tests {
             published_at: Timestamp::from_unix(0),
             thumbnail_url: "https://cdn/320x180.jpg".to_owned(),
             kind: VideoKind::Archive,
+            game: None,
         })
     }
 

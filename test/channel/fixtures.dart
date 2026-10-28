@@ -1,11 +1,12 @@
 import 'package:jitter/src/bindings/bindings.dart';
 
-VodTile vod(String id, {double? progress}) => VodTile(
+VodTile vod(String id, {double? progress, String? gameName}) => VodTile(
   id: id,
   title: 'Title $id',
   durationLabel: '1:02:03',
   dateLabel: 'Oct 24',
   thumbnailUrl: 'https://cdn/$id-320x180.jpg',
+  gameName: gameName,
   progress: progress,
 );
 

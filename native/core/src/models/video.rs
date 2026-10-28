@@ -1,4 +1,4 @@
-use super::{Channel, Seconds, Timestamp, VideoId};
+use super::{Channel, GameRef, Seconds, Timestamp, VideoId};
 
 /// Broadcast types we list. Twitch's video nodes do not carry one: a video's
 /// kind is the type it was requested as.
@@ -18,4 +18,6 @@ pub struct Video {
     pub published_at: Timestamp,
     pub thumbnail_url: String,
     pub kind: VideoKind,
+    /// The category it was in, when Twitch names one.
+    pub game: Option<GameRef>,
 }
