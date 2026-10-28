@@ -100,7 +100,7 @@ class _RewindButton extends StatelessWidget {
         disabledForegroundColor: _white,
       ),
       icon: onPressed == null ? const _Busy() : const Icon(Icons.history),
-      label: const Text('Rewind stream'),
+      label: const Text('Rewind'),
     );
     return switch (tooltip) {
       final message? => Tooltip(message: message, child: button),

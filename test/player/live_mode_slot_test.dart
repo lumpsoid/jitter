@@ -68,7 +68,7 @@ void main() {
     expect(find.text('LIVE'), findsOneWidget);
     expect(find.byIcon(Icons.history), findsOneWidget);
 
-    await tester.tap(find.text('Rewind stream'));
+    await tester.tap(find.text('Rewind'));
     await tester.pump();
     expect(sent.rewinds, 1);
     expect(sent.returns, 0);
@@ -83,7 +83,7 @@ void main() {
     );
     expect(find.byTooltip('Timed out.'), findsOneWidget);
 
-    await tester.tap(find.text('Rewind stream'));
+    await tester.tap(find.text('Rewind'));
     await tester.pump();
     expect(sent.rewinds, 1);
   });
@@ -98,11 +98,11 @@ void main() {
   ) async {
     final sent = await pumpSlot(tester, const PlaybackRewindLoading());
     expect(find.text('LIVE'), findsOneWidget);
-    expect(find.text('Rewind stream'), findsOneWidget);
+    expect(find.text('Rewind'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(find.byIcon(Icons.history), findsNothing);
 
-    await tester.tap(find.text('Rewind stream'));
+    await tester.tap(find.text('Rewind'));
     await tester.pump();
     expect(sent.rewinds, 0);
     expect(sent.returns, 0);
@@ -119,7 +119,7 @@ void main() {
     expect(find.byTooltip(_reason), findsOneWidget);
     expect(find.text(_reason), findsNothing);
 
-    await tester.tap(find.text('Rewind stream'));
+    await tester.tap(find.text('Rewind'));
     await tester.pump();
     expect(find.text(_reason), findsOneWidget);
     expect(sent.rewinds, 0);
@@ -134,7 +134,7 @@ void main() {
   ) async {
     final sent = await pumpSlot(tester, const PlaybackRewindRewound());
     expect(find.text('LIVE'), findsOneWidget);
-    expect(find.text('Rewind stream'), findsNothing);
+    expect(find.text('Rewind'), findsNothing);
     expect(find.byTooltip('Back to live'), findsOneWidget);
     expect(find.byIcon(Icons.last_page), findsOneWidget);
 
