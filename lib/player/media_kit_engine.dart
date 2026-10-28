@@ -11,7 +11,10 @@ import 'package:media_kit_video/media_kit_video.dart';
 /// player page shows [controller]. The player is created on first use, so
 /// building this needs no libmpv.
 class MediaKitEngine implements PlayerEngine {
-  late final Player _player = Player();
+  // `title` is what the OS volume mixer shows for our audio stream.
+  late final Player _player = Player(
+    configuration: const PlayerConfiguration(title: 'Jitter'),
+  );
 
   /// What the player page's `Video` renders.
   late final VideoController controller = VideoController(_player);
