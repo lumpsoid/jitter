@@ -2,7 +2,7 @@
 //! every page that shows the same value shows it the same way.
 
 use chrono::{Datelike, Local, NaiveDate, NaiveDateTime, TimeZone};
-use jitter_core::models::{ClockError, Seconds, Timestamp};
+use jitter_core::models::{ClockError, NoRewind, Seconds, Timestamp};
 use jitter_twitch::TwitchError;
 
 /// What the user reads when a Twitch call failed: one sentence per
@@ -35,6 +35,22 @@ pub fn twitch_error(error: &TwitchError) -> String {
         TwitchError::Offline => "This channel is offline.".to_owned(),
         TwitchError::NotFound => "No such channel or video.".to_owned(),
     }
+}
+
+/// Why a live page cannot rewind, ready to show when its muted control is
+/// tapped. `NoRecording` does not say the channel keeps no recordings:
+/// Twitch hides the recording of many that do from a viewer not signed in.
+pub fn no_rewind_label(reason: NoRewind) -> String {
+    match reason {
+        NoRewind::NoRecording => "Twitch doesn't show a recording of this broadcast.",
+        NoRewind::Forbidden => {
+            "Twitch doesn't allow playing this broadcast without signing in \
+             (subscriber-only or region-blocked)."
+        }
+        NoRewind::NoStart => "Twitch didn't say when the stream started.",
+        NoRewind::NoDetails => "Stream details didn't load.",
+    }
+    .to_owned()
 }
 
 /// A live viewer count, compact like Twitch's own: `1 viewer`,
@@ -181,12 +197,12 @@ fn tenths(tenths: u32, suffix: &str) -> String {
 #[cfg(test)]
 mod tests {
     use chrono::NaiveDate;
-    use jitter_core::models::{ClockError, Seconds};
+    use jitter_core::models::{ClockError, NoRewind, Seconds};
     use jitter_twitch::TwitchError;
 
     use super::{
         clock_error, clock_label, date_label, day_label, day_time_label, duration_label,
-        followers_label, twitch_error, uptime_label, viewers_label, watched_label,
+        followers_label, no_rewind_label, twitch_error, uptime_label, viewers_label, watched_label,
     };
 
     #[test]
@@ -366,5 +382,33 @@ mod tests {
         assert_eq!(followers_label(704), "704 followers");
         assert_eq!(followers_label(39_950), "39.9K followers");
         assert_eq!(followers_label(2_998_637), "2.9M followers");
+    }
+
+    #[test]
+    fn why_a_live_page_cannot_rewind_reads_as_a_sentence() {
+        assert_eq!(
+            no_rewind_label(NoRewind::NoRecording),
+            "Twitch doesn't show a recording of this broadcast."
+        );
+        assert_eq!(
+            no_rewind_label(NoRewind::NoStart),
+            "Twitch didn't say when the stream started."
+        );
+        assert_eq!(
+            no_rewind_label(NoRewind::NoDetails),
+            "Stream details didn't load."
+        );
+        let forbidden = no_rewind_label(NoRewind::Forbidden);
+        assert_eq!(
+            forbidden,
+            "Twitch doesn't allow playing this broadcast without signing in \
+             (subscriber-only or region-blocked)."
+        );
+        // Twitch does not say why it refused: signing in is the one thing
+        // the viewer can do, so the text leads with it.
+        assert!(forbidden.contains("signing in"));
+        assert!(forbidden.contains("or region-blocked"));
+        // A channel that does archive may hide its recording anonymously.
+        assert!(!no_rewind_label(NoRewind::NoRecording).contains("save"));
     }
 }

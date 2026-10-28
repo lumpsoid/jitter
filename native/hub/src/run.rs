@@ -12,7 +12,9 @@ use jitter_core::browse::BrowseController;
 use jitter_core::categories::TopCategoriesController;
 use jitter_core::favorites::FavoritesController;
 use jitter_core::history::HistoryController;
-use jitter_core::models::{Category, Page, PageRequest, Playback, PlaybackDetails, Stream};
+use jitter_core::models::{
+    Category, Page, PageRequest, Playback, PlaybackDetails, RewindFailure, Stream, VideoId,
+};
 use jitter_core::playback::{Attempt, PlaybackController, PlaybackTarget};
 use jitter_core::ports::StoreError;
 use jitter_core::resume::ResumeController;
@@ -46,8 +48,8 @@ use crate::signals::{ClearHistory, HistoryReady, RemoveFromHistory, RemoveVisit}
 // Playback
 use crate::playback;
 use crate::signals::{
-    AppBackgrounded, AppForegrounded, ArmSleepTimer, GoToChapter, GoToTime, LeavePlayer, Play,
-    PlayerPosition, SelectQuality, TurnOffSleepTimer,
+    AppBackgrounded, AppForegrounded, ArmSleepTimer, BackToLive, GoToChapter, GoToTime,
+    LeavePlayer, Play, PlayerPosition, RewindStream, SelectQuality, TurnOffSleepTimer,
 };
 // Channel
 use crate::channel::{self, ChannelFetched, ChannelPage};
@@ -157,6 +159,22 @@ pub enum Fetched {
         details: Result<PlaybackDetails, TwitchError>,
     },
     PlaybackTimedOut(Attempt),
+    /// Live page `target`'s recording `video` resolved for a rewind; a
+    /// timeout arrives as a failure.
+    Rewound {
+        target: PlaybackTarget,
+        video: VideoId,
+        result: Result<Playback, RewindFailure>,
+        details: Result<PlaybackDetails, String>,
+    },
+    /// Live page `target`, returning from its recording `video`, resolved
+    /// live; a timeout arrives as a failure.
+    Returned {
+        target: PlaybackTarget,
+        video: VideoId,
+        result: Result<Playback, String>,
+        details: Result<PlaybackDetails, String>,
+    },
     // Channel
     Channel(ChannelFetched),
     // Chat
@@ -211,6 +229,8 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
     let turn_off_sleep_timer = TurnOffSleepTimer::get_dart_signal_receiver();
     let app_backgrounded = AppBackgrounded::get_dart_signal_receiver();
     let app_foregrounded = AppForegrounded::get_dart_signal_receiver();
+    let rewind_stream = RewindStream::get_dart_signal_receiver();
+    let back_to_live = BackToLive::get_dart_signal_receiver();
     // Channel
     let open_channel = OpenChannel::get_dart_signal_receiver();
     let refresh_channel = RefreshChannel::get_dart_signal_receiver();
@@ -301,11 +321,14 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
             Some(pack) = go_to_chapter.recv() => playback::go_to_chapter(&c.playback, pack.message),
             Some(pack) = player_position.recv() => {
                 if let Some(at) = playback::position(&mut c.playback, &mut c.resume, pack.message) {
-                    // History: counts what the player plays.
+                    // History: counts what the player plays, by the page.
                     history::heard(&mut c.history, &c.playback, &at.target);
-                    // Chat: a VOD's replay follows the player.
-                    let (position, duration) = (at.position, at.duration);
-                    chat::position(&mut c.chat, &twitch, &fetch, &at.target, position, duration);
+                    // Chat: a VOD's replay follows the player, by the stream
+                    // it plays (a rewound live page's recording).
+                    if let Some(stream) = &at.stream {
+                        let (position, duration) = (at.position, at.duration);
+                        chat::position(&mut c.chat, &twitch, &fetch, stream, position, duration);
+                    }
                 }
             }
             Some(pack) = leave_player.recv() => {
@@ -324,6 +347,12 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
             }
             Some(pack) = app_foregrounded.recv() => {
                 playback::foreground(&mut c.playback, &c.resume, pack.message);
+            }
+            Some(pack) = rewind_stream.recv() => {
+                playback::rewind(&mut c.playback, &twitch, &fetch, pack.message);
+            }
+            Some(pack) = back_to_live.recv() => {
+                playback::back_to_live(&mut c.playback, &twitch, &fetch, pack.message);
             }
             // The same sleep as the chat batch's: pending while no timer is armed.
             () = chat::until(sleep_wake) => {
@@ -426,6 +455,48 @@ fn on_fetched(
             );
         }
         Fetched::PlaybackTimedOut(attempt) => playback::timed_out(&mut c.playback, attempt),
+        Fetched::Rewound {
+            target,
+            video,
+            result,
+            details,
+        } => {
+            let preferred = c.settings.state().start_quality;
+            let stream = playback::rewound(
+                &mut c.playback,
+                &c.resume,
+                &target,
+                &video,
+                result,
+                details,
+                preferred,
+            );
+            // Chat: replays the recording, the panel shown or hidden as it was.
+            if let Some(stream) = stream {
+                chat::switch(&mut c.chat, twitch, fetch, &stream);
+            }
+        }
+        Fetched::Returned {
+            target,
+            video,
+            result,
+            details,
+        } => {
+            let preferred = c.settings.state().start_quality;
+            let stream = playback::returned(
+                &mut c.playback,
+                &c.resume,
+                &target,
+                &video,
+                result,
+                details,
+                preferred,
+            );
+            // Chat: back to the channel's live chat.
+            if let Some(stream) = stream {
+                chat::switch(&mut c.chat, twitch, fetch, &stream);
+            }
+        }
         // Channel
         Fetched::Channel(fetched) => {
             channel::on_fetched(&mut c.channel, &c.resume, fetched, twitch, fetch);

@@ -60,6 +60,23 @@ pub struct LeavePlayer {
     pub duration_s: u32,
 }
 
+/// The user asked the live page `target` to rewind: play the broadcast's
+/// recording from earlier, in place of the live stream. Tagged with the
+/// page, as [`LeavePlayer`] is, so a page already replaced changes nothing.
+/// A rewind that fails is answered with [`RewindAnswer`].
+#[derive(Deserialize, DartSignal)]
+pub struct RewindStream {
+    pub target: PlaybackTarget,
+}
+
+/// The user asked the rewound live page `target` to play live again.
+/// Tagged with the page like [`RewindStream`]; a return that fails is
+/// answered with [`RewindAnswer`].
+#[derive(Deserialize, DartSignal)]
+pub struct BackToLive {
+    pub target: PlaybackTarget,
+}
+
 /// The user armed the player page's sleep timer: stop playing `minutes`
 /// from now (one of [`PlaybackSleep`]'s `presets`), replacing a timer
 /// already armed.
@@ -90,7 +107,9 @@ pub struct AppForegrounded {
 pub enum PlaybackUpdate {
     Idle,
     Resolving,
-    /// `live` streams have no seek bar. `selected` is one of the
+    /// `live`: show the live controls, no seek bar; false on a live page
+    /// while it plays its recording ([`PlaybackRewind::Rewound`] and
+    /// [`PlaybackRewind::Returning`]). `selected` is one of the
     /// `qualities`' names.
     Ready {
         qualities: Vec<QualityOption>,
@@ -99,6 +118,7 @@ pub enum PlaybackUpdate {
         /// Boxed: it would make this variant far larger than the others.
         details: Box<PlaybackDetails>,
         sleep: PlaybackSleep,
+        rewind: PlaybackRewind,
     },
     /// The sleep timer stopped the player; the page offers to resume,
     /// which plays the same target again.
@@ -117,6 +137,36 @@ pub enum GoToTimeAnswer {
     Went,
     /// Not a time in this VOD; `message` says why, ready to show.
     Rejected { message: String },
+}
+
+/// A rewind or a return to live failed, once each: shown as a short
+/// message, then gone. Not view state, so apart from [`PlaybackUpdate`],
+/// which is resent whole on every change and cannot say "show this once".
+/// `message` is ready to show.
+#[derive(Serialize, RustSignal)]
+pub struct RewindAnswer {
+    pub message: String,
+}
+
+/// A player page's rewind control: on a live page, playing the
+/// broadcast's recording from earlier, and back to live.
+#[derive(Serialize, SignalPiece)]
+pub enum PlaybackRewind {
+    /// A VOD page: no control.
+    None,
+    /// Live, the control enabled ([`RewindStream`]); `last_failure` is why
+    /// the last try failed, for the tooltip only.
+    Offered { last_failure: Option<String> },
+    /// Live, the control muted: a tap shows `reason`, ready to show,
+    /// instead of rewinding.
+    Unavailable { reason: String },
+    /// Live, the control busy: the recording loads while live plays on.
+    Loading,
+    /// The recording plays, with the VOD controls and a "Back to live"
+    /// control ([`BackToLive`]).
+    Rewound,
+    /// The recording plays on while live loads; "Back to live" busy.
+    Returning,
 }
 
 /// The player page's sleep timer menu.

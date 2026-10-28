@@ -211,6 +211,21 @@ pub fn play(
     apply(panel, twitch, fetch, change);
 }
 
+/// The page swapped the stream it plays for `stream`: a live page
+/// rewinding into its recording, or going back to live. The chat follows,
+/// the recording's replay or the channel's live chat. Not [`play`]: that
+/// starts the panel hidden when the settings do not auto-load, and this
+/// keeps it shown or hidden as the user left it.
+pub fn switch(
+    panel: &mut ChatPanel,
+    twitch: &Twitch,
+    fetch: &UnboundedSender<Fetched>,
+    stream: &PlaybackTarget,
+) {
+    let change = panel.view.switch(stream);
+    apply(panel, twitch, fetch, change);
+}
+
 /// The player stopped: ends the session.
 pub fn stop(panel: &mut ChatPanel, twitch: &Twitch, fetch: &UnboundedSender<Fetched>) {
     let change = panel.view.stop();

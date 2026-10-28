@@ -6,7 +6,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use jitter_core::models::{
     self, BackgroundStep, Channel, ChannelLogin, FadeLevel, Open, Playback, Quality, QualityKind,
-    QualityPreference, Seconds, SleepStep, SleepTimer, Timestamp, VideoId,
+    QualityPreference, ReturnOutcome, Rewind, RewindFailure, RewindOutcome, Seconds, SleepStep,
+    SleepTimer, Timestamp, VideoId,
 };
 use jitter_core::playback::{self, PlaybackController, PlaybackState, SLEEP_PRESETS};
 use jitter_core::resume::ResumeController;
@@ -16,15 +17,15 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
 
 use crate::format::{
-    clock_error, duration_label, sleep_left_label, sleep_preset_label, streamed_label,
-    twitch_error, uptime_label, viewers_label,
+    clock_error, duration_label, no_rewind_label, sleep_left_label, sleep_preset_label,
+    streamed_label, twitch_error, uptime_label, viewers_label,
 };
 use crate::run::Fetched;
 use crate::signals::{
-    AppBackgrounded, AppForegrounded, ArmSleepTimer, GoToChapter, GoToTime, GoToTimeAnswer,
-    LeavePlayer, PlaybackChannel, PlaybackChapter, PlaybackDetails, PlaybackLive, PlaybackSleep,
-    PlaybackTarget, PlaybackUpdate, PlayerCommand, PlayerPosition, QualityOption, SelectQuality,
-    SleepPreset,
+    AppBackgrounded, AppForegrounded, ArmSleepTimer, BackToLive, GoToChapter, GoToTime,
+    GoToTimeAnswer, LeavePlayer, PlaybackChannel, PlaybackChapter, PlaybackDetails, PlaybackLive,
+    PlaybackRewind, PlaybackSleep, PlaybackTarget, PlaybackUpdate, PlayerCommand, PlayerPosition,
+    QualityOption, RewindAnswer, RewindStream, SelectQuality, SleepPreset,
 };
 
 /// `Play`: starts resolving `target` through twitch, and loading what it
@@ -49,24 +50,228 @@ pub fn play(
     send_state(playback);
     let (twitch, fetch, playing) = (twitch.clone(), fetch.clone(), target.clone());
     tokio::spawn(async move {
-        let resolve = async {
-            match &target {
-                playback::PlaybackTarget::Live(login) => twitch.live(login).await,
-                playback::PlaybackTarget::Vod(id) => twitch.vod(id).await,
-            }
-        };
-        let both = async { tokio::join!(resolve, twitch.playback_details(&target)) };
-        let limit = Duration::from_secs(u64::from(playback::RESOLVE_TIMEOUT.get()));
-        let _ = fetch.send(match tokio::time::timeout(limit, both).await {
-            Ok((result, details)) => Fetched::Playback {
+        let _ = fetch.send(match resolve_with_details(&twitch, &target).await {
+            Some((result, details)) => Fetched::Playback {
                 target,
                 result,
                 details,
             },
-            Err(_) => Fetched::PlaybackTimedOut(attempt),
+            None => Fetched::PlaybackTimedOut(attempt),
         });
     });
     Some(playing)
+}
+
+/// What resolving `target` and loading its details found; `None` when
+/// they took longer than core's `RESOLVE_TIMEOUT`.
+type Resolved = Option<(
+    Result<Playback, TwitchError>,
+    Result<models::PlaybackDetails, TwitchError>,
+)>;
+
+/// Resolves `target` through twitch and loads what it plays beside it,
+/// both at once, within core's `RESOLVE_TIMEOUT`.
+async fn resolve_with_details(twitch: &Twitch, target: &playback::PlaybackTarget) -> Resolved {
+    let resolve = async {
+        match target {
+            playback::PlaybackTarget::Live(login) => twitch.live(login).await,
+            playback::PlaybackTarget::Vod(id) => twitch.vod(id).await,
+        }
+    };
+    let both = async { tokio::join!(resolve, twitch.playback_details(target)) };
+    let limit = Duration::from_secs(u64::from(playback::RESOLVE_TIMEOUT.get()));
+    tokio::time::timeout(limit, both).await.ok()
+}
+
+/// `RewindStream`: core starts loading the live page's recording VOD,
+/// which resolves with its details and comes back as
+/// [`Fetched::Rewound`], tagged with the VOD it was for. The live stream
+/// plays on meanwhile. A rewind core does not offer changes nothing: the
+/// muted control already says why.
+pub fn rewind(
+    playback: &mut PlaybackController,
+    twitch: &Twitch,
+    fetch: &UnboundedSender<Fetched>,
+    signal: RewindStream,
+) {
+    let Some(target) = report(playback::PlaybackTarget::try_from(signal.target)) else {
+        return;
+    };
+    let Some(now) = report(now()) else {
+        return;
+    };
+    let Some(video) = playback.rewind(&target, now) else {
+        return;
+    };
+    send_state(playback);
+    let (twitch, fetch) = (twitch.clone(), fetch.clone());
+    tokio::spawn(async move {
+        let recording = playback::PlaybackTarget::Vod(video.clone());
+        let (result, details) = rewind_fetched(resolve_with_details(&twitch, &recording).await);
+        let _ = fetch.send(Fetched::Rewound {
+            target,
+            video,
+            result,
+            details,
+        });
+    });
+}
+
+/// A rewind's resolve as core takes it: a refusal to play is
+/// [`RewindFailure::Forbidden`]; anything else, running out of time too,
+/// a reason to show. A details failure stays the diagnostic text.
+fn rewind_fetched(
+    resolved: Resolved,
+) -> (
+    Result<Playback, RewindFailure>,
+    Result<models::PlaybackDetails, String>,
+) {
+    let Some((result, details)) = resolved else {
+        return (
+            Err(RewindFailure::Other(playback::TIMED_OUT.to_owned())),
+            Err(playback::TIMED_OUT.to_owned()),
+        );
+    };
+    let result = result.map_err(|e| match e {
+        TwitchError::PlaybackForbidden => RewindFailure::Forbidden,
+        e => RewindFailure::Other(twitch_error(&e)),
+    });
+    (result, details.map_err(|e| e.to_string()))
+}
+
+/// A rewind's resolve came back for `video`: core decides what the page
+/// plays. The recording opens where core says; a refusal or a failure is
+/// told once in a [`RewindAnswer`], and the live stream plays on. Returns
+/// the stream the chat now follows, the recording, when it rewound; a
+/// stale result changes nothing.
+pub fn rewound(
+    playback: &mut PlaybackController,
+    resume: &ResumeController,
+    target: &playback::PlaybackTarget,
+    video: &VideoId,
+    result: Result<Playback, RewindFailure>,
+    details: Result<models::PlaybackDetails, String>,
+    preferred: QualityPreference,
+) -> Option<playback::PlaybackTarget> {
+    let details = details.inspect_err(|e| debug_print!("loading the recording's details: {e}"));
+    match playback.apply_rewind(target, video, result, details, preferred)? {
+        RewindOutcome::Rewound => {
+            send_playing(playback, resume);
+            playback.streaming(target)
+        }
+        RewindOutcome::Refused(reason) => {
+            send_state(playback);
+            answer(no_rewind_label(reason));
+            None
+        }
+        RewindOutcome::Failed(message) => {
+            send_state(playback);
+            answer(message);
+            None
+        }
+    }
+}
+
+/// `BackToLive`: core starts returning the rewound live page, which
+/// resolves live afresh with its details and comes back as
+/// [`Fetched::Returned`], tagged with the recording it returns from. The
+/// recording plays on meanwhile.
+pub fn back_to_live(
+    playback: &mut PlaybackController,
+    twitch: &Twitch,
+    fetch: &UnboundedSender<Fetched>,
+    signal: BackToLive,
+) {
+    let Some(target) = report(playback::PlaybackTarget::try_from(signal.target)) else {
+        return;
+    };
+    if !playback.back_to_live(&target) {
+        return;
+    }
+    send_state(playback);
+    // Read before the resolve, so its result answers this return only.
+    let Some(playback::PlaybackTarget::Vod(video)) = playback.streaming(&target) else {
+        debug_print!("returning to live without a recording playing");
+        return;
+    };
+    let (twitch, fetch) = (twitch.clone(), fetch.clone());
+    tokio::spawn(async move {
+        let (result, details) = return_fetched(resolve_with_details(&twitch, &target).await);
+        let _ = fetch.send(Fetched::Returned {
+            target,
+            video,
+            result,
+            details,
+        });
+    });
+}
+
+/// A return's live resolve as core takes it: a failure, running out of
+/// time too, is a reason to show. A details failure stays the diagnostic
+/// text.
+fn return_fetched(
+    resolved: Resolved,
+) -> (
+    Result<Playback, String>,
+    Result<models::PlaybackDetails, String>,
+) {
+    let Some((result, details)) = resolved else {
+        return (
+            Err(playback::TIMED_OUT.to_owned()),
+            Err(playback::TIMED_OUT.to_owned()),
+        );
+    };
+    (
+        result.map_err(|e| twitch_error(&e)),
+        details.map_err(|e| e.to_string()),
+    )
+}
+
+/// A return's live resolve came back for the recording `video`: core
+/// decides what the page plays. Live opens at its edge; a failure is told
+/// once in a [`RewindAnswer`], and the recording plays on. Returns the
+/// stream the chat now follows, live, when it returned; a stale result
+/// changes nothing.
+pub fn returned(
+    playback: &mut PlaybackController,
+    resume: &ResumeController,
+    target: &playback::PlaybackTarget,
+    video: &VideoId,
+    result: Result<Playback, String>,
+    details: Result<models::PlaybackDetails, String>,
+    preferred: QualityPreference,
+) -> Option<playback::PlaybackTarget> {
+    let details = details.inspect_err(|e| debug_print!("loading the playback details: {e}"));
+    match playback.apply_return(target, video, result, details, preferred)? {
+        ReturnOutcome::Live => {
+            send_playing(playback, resume);
+            playback.streaming(target)
+        }
+        ReturnOutcome::Failed(message) => {
+            send_state(playback);
+            answer(message);
+            None
+        }
+    }
+}
+
+/// Sends the page, then opens what core says it plays now; a resume point
+/// that cannot be read fails the page instead.
+fn send_playing(playback: &PlaybackController, resume: &ResumeController) {
+    match playback.open(resume) {
+        Ok(open) => {
+            send_state(playback);
+            send_open(open);
+        }
+        Err(e) => PlaybackUpdate::Failed {
+            message: format!("Could not read the resume point: {e}"),
+        }
+        .send_signal_to_dart(),
+    }
+}
+
+fn answer(message: String) {
+    RewindAnswer { message }.send_signal_to_dart();
 }
 
 /// A resolve ran out of time: core decides whether the page fails.
@@ -179,16 +384,21 @@ pub fn go_to_chapter(playback: &PlaybackController, signal: GoToChapter) {
 
 /// Where a player is, as core's values: what a `PlayerPosition` reports.
 pub struct PlayerAt {
+    /// The page the report is tagged with.
     pub target: playback::PlaybackTarget,
+    /// The stream the page plays ([`PlaybackController::streaming`]): its
+    /// recording while a live page is rewound; `None` when `target` is no
+    /// longer the page ready.
+    pub stream: Option<playback::PlaybackTarget>,
     pub position: Seconds,
     pub duration: Seconds,
 }
 
 /// `PlayerPosition`: hands the position to core, which decides whether
 /// it is recorded, and sends the page again when the game being played
-/// there changed (a VOD's next chapter). Returns the report for the chat
-/// replay; `None` when its target is invalid or core says the player is
-/// stopped away, where its position means nothing.
+/// there changed (a VOD's next chapter). Returns the report for the
+/// history and the chat replay; `None` when its target is invalid or core
+/// says the player is stopped away, where its position means nothing.
 pub fn position(
     playback: &mut PlaybackController,
     resume: &mut ResumeController,
@@ -211,6 +421,7 @@ pub fn position(
         send_state(playback);
     }
     Some(PlayerAt {
+        stream: playback.streaming(&target),
         target,
         position,
         duration,
@@ -378,18 +589,38 @@ fn update(state: &PlaybackState, now: Option<Timestamp>) -> PlaybackUpdate {
             details,
             at,
             sleep,
-            rewind: _,
+            rewind,
         } => PlaybackUpdate::Ready {
             qualities: playback.qualities.iter().map(QualityOption::from).collect(),
             selected: selected.clone(),
-            live: matches!(target, playback::PlaybackTarget::Live(_)),
+            // A rewound live page plays its recording, with VOD controls.
+            live: matches!(target, playback::PlaybackTarget::Live(_))
+                && rewind.as_ref().and_then(Rewind::playing_vod).is_none(),
             details: Box::new(playback_details(details, *at, now)),
             sleep: playback_sleep(sleep.as_ref()),
+            rewind: playback_rewind(rewind.as_ref()),
         },
         PlaybackState::Slept { .. } => PlaybackUpdate::Slept,
         PlaybackState::Failed { message } => PlaybackUpdate::Failed {
             message: message.clone(),
         },
+    }
+}
+
+/// The page's rewind control: none on a VOD page.
+fn playback_rewind(rewind: Option<&Rewind>) -> PlaybackRewind {
+    match rewind {
+        None => PlaybackRewind::None,
+        Some(Rewind::Available { .. }) => PlaybackRewind::Offered { last_failure: None },
+        Some(Rewind::Failed { message, .. }) => PlaybackRewind::Offered {
+            last_failure: Some(message.clone()),
+        },
+        Some(Rewind::Unavailable(reason)) => PlaybackRewind::Unavailable {
+            reason: no_rewind_label(*reason),
+        },
+        Some(Rewind::Loading { .. }) => PlaybackRewind::Loading,
+        Some(Rewind::Rewound { .. }) => PlaybackRewind::Rewound,
+        Some(Rewind::Returning { .. }) => PlaybackRewind::Returning,
     }
 }
 
@@ -475,7 +706,8 @@ impl From<Open> for PlayerCommand {
 
 #[cfg(test)]
 mod tests {
-    use jitter_core::models::{CategoryId, ChannelId, Chapter, Chapters, GameRef};
+    use jitter_core::fakes::FakeResumeStore;
+    use jitter_core::models::{CategoryId, ChannelId, Chapter, Chapters, GameRef, NoRewind};
 
     use super::*;
 
@@ -664,6 +896,278 @@ mod tests {
         );
         let unplaced = playback_details(&details, None, None).chapters;
         assert!(unplaced.iter().all(|c| !c.current));
+        Ok(())
+    }
+
+    fn login(login: &str) -> Result<ChannelLogin, String> {
+        ChannelLogin::parse(login).map_err(|e| format!("{e:?}"))
+    }
+
+    fn recording() -> Result<VideoId, String> {
+        VideoId::parse("2600000000").map_err(|e| format!("{e:?}"))
+    }
+
+    fn one_quality(url: &str) -> Playback {
+        Playback {
+            master_url: url.to_owned(),
+            qualities: vec![Quality {
+                name: "1080p60".to_owned(),
+                url: url.to_owned(),
+                resolution: None,
+                frame_rate: None,
+                kind: QualityKind::Source,
+            }],
+        }
+    }
+
+    fn ready_with(target: playback::PlaybackTarget, rewind: Option<Rewind>) -> PlaybackState {
+        PlaybackState::Ready {
+            target,
+            playback: one_quality("https://example.test/a.m3u8"),
+            selected: "1080p60".to_owned(),
+            details: Box::default(),
+            at: None,
+            sleep: None,
+            rewind,
+        }
+    }
+
+    /// The rewind control and the `live` flag the page is sent, the
+    /// control as a readable label.
+    fn shown(state: &PlaybackState) -> Result<(String, bool), String> {
+        let PlaybackUpdate::Ready { rewind, live, .. } = update(state, None) else {
+            return Err("not ready".to_owned());
+        };
+        let rewind = match rewind {
+            PlaybackRewind::None => "none".to_owned(),
+            PlaybackRewind::Offered { last_failure } => format!("offered {last_failure:?}"),
+            PlaybackRewind::Unavailable { reason } => format!("unavailable: {reason}"),
+            PlaybackRewind::Loading => "loading".to_owned(),
+            PlaybackRewind::Rewound => "rewound".to_owned(),
+            PlaybackRewind::Returning => "returning".to_owned(),
+        };
+        Ok((rewind, live))
+    }
+
+    #[test]
+    fn each_rewind_is_sent_with_live_controls_except_while_the_recording_plays()
+    -> Result<(), String> {
+        let video = recording()?;
+        let start = Seconds::new(3_580);
+        let live = playback::PlaybackTarget::Live(login("a")?);
+        let cases = [
+            (
+                Rewind::Available {
+                    video: video.clone(),
+                },
+                "offered None",
+                true,
+            ),
+            (
+                Rewind::Failed {
+                    video: video.clone(),
+                    message: "Couldn't reach Twitch.".to_owned(),
+                },
+                "offered Some(\"Couldn't reach Twitch.\")",
+                true,
+            ),
+            (
+                Rewind::Unavailable(NoRewind::NoStart),
+                "unavailable: Twitch didn't say when the stream started.",
+                true,
+            ),
+            (
+                Rewind::Loading {
+                    video: video.clone(),
+                    start,
+                },
+                "loading",
+                true,
+            ),
+            (
+                Rewind::Rewound {
+                    video: video.clone(),
+                    start,
+                },
+                "rewound",
+                false,
+            ),
+            (
+                Rewind::Returning {
+                    video: video.clone(),
+                    start,
+                },
+                "returning",
+                false,
+            ),
+        ];
+        for (rewind, control, live_controls) in cases {
+            let state = ready_with(live.clone(), Some(rewind));
+            assert_eq!(shown(&state)?, (control.to_owned(), live_controls));
+        }
+        let vod_page = ready_with(playback::PlaybackTarget::Vod(video), None);
+        assert_eq!(shown(&vod_page)?, ("none".to_owned(), false));
+        Ok(())
+    }
+
+    #[test]
+    fn a_rewind_that_runs_out_of_time_or_is_refused_reaches_core_as_such() {
+        let timed_out = playback::TIMED_OUT;
+        assert_eq!(
+            rewind_fetched(None),
+            (
+                Err(RewindFailure::Other(timed_out.to_owned())),
+                Err(timed_out.to_owned())
+            )
+        );
+        let (forbidden, details) = rewind_fetched(Some((
+            Err(TwitchError::PlaybackForbidden),
+            Ok(models::PlaybackDetails::default()),
+        )));
+        assert_eq!(forbidden, Err(RewindFailure::Forbidden));
+        assert_eq!(details, Ok(models::PlaybackDetails::default()));
+        // Any other failure is a reason to show, and can be tried again.
+        let (offline, details) = rewind_fetched(Some((
+            Err(TwitchError::Offline),
+            Err(TwitchError::NotFound),
+        )));
+        assert_eq!(
+            offline,
+            Err(RewindFailure::Other("This channel is offline.".to_owned()))
+        );
+        assert_eq!(details, Err(TwitchError::NotFound.to_string()));
+        let resolved = one_quality("https://example.test/vod.m3u8");
+        let (result, _) = rewind_fetched(Some((
+            Ok(resolved.clone()),
+            Ok(models::PlaybackDetails::default()),
+        )));
+        assert_eq!(result, Ok(resolved));
+    }
+
+    #[test]
+    fn a_return_that_runs_out_of_time_or_fails_is_a_reason_to_show() {
+        assert_eq!(
+            return_fetched(None),
+            (
+                Err(playback::TIMED_OUT.to_owned()),
+                Err(playback::TIMED_OUT.to_owned())
+            )
+        );
+        let (forbidden, _) = return_fetched(Some((
+            Err(TwitchError::PlaybackForbidden),
+            Ok(models::PlaybackDetails::default()),
+        )));
+        assert_eq!(
+            forbidden,
+            Err(twitch_error(&TwitchError::PlaybackForbidden))
+        );
+    }
+
+    /// Live page `a` with its recording offered, an hour in.
+    fn live_page() -> Result<PlaybackController, String> {
+        let mut c = PlaybackController::new();
+        let live = playback::PlaybackTarget::Live(login("a")?);
+        c.begin(live.clone());
+        let details = models::PlaybackDetails {
+            live: Some(models::LiveDetails {
+                viewers: 10,
+                started_at: Some(Timestamp::from_unix(0)),
+                archive: Some(recording()?),
+            }),
+            ..Default::default()
+        };
+        let applied = c.apply(
+            live,
+            Ok(one_quality("https://example.test/live.m3u8")),
+            Ok(details),
+            QualityPreference::Source,
+        );
+        match applied {
+            true => Ok(c),
+            false => Err("the live page did not apply".to_owned()),
+        }
+    }
+
+    fn resume() -> ResumeController {
+        ResumeController::new(Box::new(FakeResumeStore::default()))
+    }
+
+    fn report_at(target: PlaybackTarget) -> PlayerPosition {
+        PlayerPosition {
+            target,
+            position_s: 30,
+            duration_s: 0,
+        }
+    }
+
+    #[test]
+    fn a_rewound_live_page_s_reports_reach_the_chat_as_its_recording() -> Result<(), String> {
+        let mut c = live_page()?;
+        let mut resume = resume();
+        let page = PlaybackTarget::Live {
+            login: "a".to_owned(),
+        };
+        let live = playback::PlaybackTarget::Live(login("a")?);
+        let video = recording()?;
+        let vod = playback::PlaybackTarget::Vod(video.clone());
+
+        let at = position(&mut c, &mut resume, report_at(page.clone())).ok_or("no report")?;
+        assert_eq!(at.stream, Some(live.clone()));
+
+        assert_eq!(
+            c.rewind(&live, Timestamp::from_unix(3_600)),
+            Some(video.clone())
+        );
+        let preferred = QualityPreference::Source;
+        // A result for another recording is stale: nothing for the chat.
+        let other = VideoId::parse("1").map_err(|e| format!("{e:?}"))?;
+        let ok = || Ok(one_quality("https://example.test/vod.m3u8"));
+        let stale = rewound(
+            &mut c,
+            &resume,
+            &live,
+            &other,
+            ok(),
+            Ok(Default::default()),
+            preferred,
+        );
+        assert_eq!(stale, None);
+        let switched = rewound(
+            &mut c,
+            &resume,
+            &live,
+            &video,
+            ok(),
+            Ok(Default::default()),
+            preferred,
+        );
+        assert_eq!(switched, Some(vod.clone()));
+
+        let at = position(&mut c, &mut resume, report_at(page.clone())).ok_or("no report")?;
+        assert_eq!(at.target, live);
+        assert_eq!(at.stream, Some(vod));
+
+        // A page already replaced plays nothing the chat should follow.
+        let replaced = PlaybackTarget::Live {
+            login: "b".to_owned(),
+        };
+        let at = position(&mut c, &mut resume, report_at(replaced)).ok_or("no report")?;
+        assert_eq!(at.stream, None);
+
+        assert!(c.back_to_live(&live));
+        let ok = Ok(one_quality("https://example.test/live.m3u8"));
+        let back = returned(
+            &mut c,
+            &resume,
+            &live,
+            &video,
+            ok,
+            Ok(Default::default()),
+            preferred,
+        );
+        assert_eq!(back, Some(live.clone()));
+        let at = position(&mut c, &mut resume, report_at(page)).ok_or("no report")?;
+        assert_eq!(at.stream, Some(live));
         Ok(())
     }
 }

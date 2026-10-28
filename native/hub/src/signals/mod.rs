@@ -52,10 +52,11 @@ pub use history::{
 };
 // Playback
 pub use playback::{
-    AppBackgrounded, AppForegrounded, ArmSleepTimer, GoToChapter, GoToTime, GoToTimeAnswer,
-    LeavePlayer, Play, PlaybackChannel, PlaybackChapter, PlaybackDetails, PlaybackLive,
-    PlaybackSleep, PlaybackTarget, PlaybackUpdate, PlayerCommand, PlayerPosition, QualityOption,
-    SelectQuality, SleepPreset, TurnOffSleepTimer,
+    AppBackgrounded, AppForegrounded, ArmSleepTimer, BackToLive, GoToChapter, GoToTime,
+    GoToTimeAnswer, LeavePlayer, Play, PlaybackChannel, PlaybackChapter, PlaybackDetails,
+    PlaybackLive, PlaybackRewind, PlaybackSleep, PlaybackTarget, PlaybackUpdate, PlayerCommand,
+    PlayerPosition, QualityOption, RewindAnswer, RewindStream, SelectQuality, SleepPreset,
+    TurnOffSleepTimer,
 };
 // Channel
 pub use channel::{
