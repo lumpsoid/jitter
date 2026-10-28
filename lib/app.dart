@@ -16,6 +16,7 @@ import 'package:jitter/settings/settings_holder.dart';
 import 'package:jitter/shell/app_shell.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
+import 'package:jitter/widgets/last_pointer.dart';
 import 'package:rinf/rinf.dart';
 
 /// The app: a spinner until Rust has booted, its failure with a Retry, or
@@ -111,51 +112,53 @@ class _JitterAppState extends State<JitterApp> {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: widget.settings,
-      builder: (context, home) => MaterialApp(
-        title: 'Jitter',
-        theme: ThemeData(colorSchemeSeed: Colors.deepPurple),
-        darkTheme: ThemeData(
-          colorSchemeSeed: Colors.deepPurple,
-          brightness: Brightness.dark,
-        ),
-        themeMode: widget.settings.themeMode,
-        home: home,
-      ),
+    return LastPointer(
       child: ListenableBuilder(
-        listenable: widget.boot,
-        builder: (context, _) => switch (widget.boot.status) {
-          BootPending() => const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+        listenable: widget.settings,
+        builder: (context, home) => MaterialApp(
+          title: 'Jitter',
+          theme: ThemeData(colorSchemeSeed: Colors.deepPurple),
+          darkTheme: ThemeData(
+            colorSchemeSeed: Colors.deepPurple,
+            brightness: Brightness.dark,
           ),
-          BootError(:final message) => BootFailurePage(
-            message: message,
-            onRetry: widget.boot.boot,
-          ),
-          BootReady() => AppShell(
-            // Browse
-            browse: widget.browse,
-            // Categories
-            categories: widget.categories,
-            category: widget.category,
-            // Favorites
-            favorites: widget.favorites,
-            // History
-            history: widget.history,
-            // Playback
-            playback: widget.playback,
-            player: widget.player,
-            // Channel
-            channel: widget.channel,
-            // Chat
-            chat: widget.chat,
-            // Search
-            search: widget.search,
-            // Settings
-            settings: widget.settings,
-          ),
-        },
+          themeMode: widget.settings.themeMode,
+          home: home,
+        ),
+        child: ListenableBuilder(
+          listenable: widget.boot,
+          builder: (context, _) => switch (widget.boot.status) {
+            BootPending() => const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            ),
+            BootError(:final message) => BootFailurePage(
+              message: message,
+              onRetry: widget.boot.boot,
+            ),
+            BootReady() => AppShell(
+              // Browse
+              browse: widget.browse,
+              // Categories
+              categories: widget.categories,
+              category: widget.category,
+              // Favorites
+              favorites: widget.favorites,
+              // History
+              history: widget.history,
+              // Playback
+              playback: widget.playback,
+              player: widget.player,
+              // Channel
+              channel: widget.channel,
+              // Chat
+              chat: widget.chat,
+              // Search
+              search: widget.search,
+              // Settings
+              settings: widget.settings,
+            ),
+          },
+        ),
       ),
     );
   }
