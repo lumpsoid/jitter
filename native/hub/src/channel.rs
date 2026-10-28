@@ -17,7 +17,7 @@ use jitter_twitch::{Twitch, TwitchError};
 use rinf::RustSignal;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::format::{duration_label, followers_label, twitch_error, viewers_label};
+use crate::format::{duration_label, followers_label, streamed_label, twitch_error, viewers_label};
 use crate::run::Fetched;
 use crate::signals::{
     ChannelLive, ChannelUpdate, VodKind, VodTile, VodsMore, VodsState, VodsUpdate,
@@ -326,6 +326,7 @@ impl VodTile {
             id: video.id.as_str().to_owned(),
             title: video.title.clone(),
             duration_label: duration_label(video.duration),
+            date_label: streamed_label(video.published_at),
             thumbnail_url: video.thumbnail_url.clone(),
             progress: resume.progress(&video.id).ok().flatten(),
         }
@@ -397,6 +398,7 @@ mod tests {
         let resume = ResumeController::new(Box::new(store));
         let watched = VodTile::of(&video("7")?, &resume);
         assert_eq!(watched.duration_label, "1:02:03");
+        assert_eq!(watched.date_label, streamed_label(Timestamp::from_unix(0)));
         assert_eq!(watched.progress, Some(0.25));
         let unwatched = VodTile::of(&video("8")?, &resume);
         assert_eq!(unwatched.progress, None);
