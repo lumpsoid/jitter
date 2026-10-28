@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:jitter/player/live_badge.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 
 /// The player page's app bar title: the channel's or the VOD's name, with
@@ -49,7 +50,7 @@ class PlaybackTitle extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _LiveBadge(style: style),
+                    LiveBadge(style: style),
                     const SizedBox(width: 6),
                     Flexible(child: line),
                   ],
@@ -82,34 +83,6 @@ class PlaybackTitle extends StatelessWidget {
               const SizedBox(width: 12),
               Flexible(child: text),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Marks the stream as live, ahead of its viewers and uptime.
-class _LiveBadge extends StatelessWidget {
-  const new({this.style});
-
-  final TextStyle? style;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.error,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Text(
-          'LIVE',
-          style: style?.copyWith(
-            color: colors.onError,
-            fontWeight: FontWeight.bold,
           ),
         ),
       ),

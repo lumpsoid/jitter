@@ -24,8 +24,8 @@ const _white = Color(0xFFFFFFFF);
 /// third goes [vodSeekStep] back or on, shown or not, and flashes it.
 ///
 /// The parts are given: media_kit's [playPause] and [fullscreen] buttons,
-/// the page's [readout] and seek [bar]; these controls only show and hide
-/// them.
+/// the page's [readout], seek [bar] and, for a rewound live stream, its
+/// [mode]; these controls only show and hide them.
 class VodPhoneControls extends StatefulWidget {
   const new({
     required this.playPause,
@@ -34,6 +34,7 @@ class VodPhoneControls extends StatefulWidget {
     required this.bar,
     required this.bufferings,
     required this.onSeekBy,
+    this.mode,
     super.key,
   });
 
@@ -41,6 +42,10 @@ class VodPhoneControls extends StatefulWidget {
   final Widget readout;
   final Widget fullscreen;
   final Widget bar;
+
+  /// After the [readout], away from [fullscreen] so neither is tapped for
+  /// the other.
+  final Widget? mode;
 
   /// Whether the player waits for the VOD to load: now, then each change;
   /// a new stream each call. The spinner shows in place of [playPause].
@@ -205,7 +210,12 @@ class _VodPhoneControlsState extends State<VodPhoneControls> {
               Padding(
                 padding: const EdgeInsets.only(left: 8, right: 8),
                 child: Row(
-                  children: [widget.readout, const Spacer(), widget.fullscreen],
+                  children: [
+                    widget.readout,
+                    ?widget.mode,
+                    const Spacer(),
+                    widget.fullscreen,
+                  ],
                 ),
               ),
               Padding(
