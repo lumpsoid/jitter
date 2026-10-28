@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/player/theatre.dart';
+import 'package:jitter/widgets/escape_goes_back.dart';
 
 const _mediaKit = MethodChannel('com.alexmercerind/media_kit_video');
 
@@ -22,7 +23,8 @@ List<String> recordSystemUi(WidgetTester tester) {
 }
 
 /// Pumps a page with the theatre over a stand-in video, [on] at first;
-/// the page turns it off on exit. Returns the number of exits.
+/// the page turns it off on exit. Escape goes back on it, as on the
+/// player's route. Returns the number of exits.
 Future<ValueNotifier<int>> pumpTheatre(
   WidgetTester tester, {
   bool on = true,
@@ -31,7 +33,9 @@ Future<ValueNotifier<int>> pumpTheatre(
   addTearDown(exits.dispose);
   await tester.pumpWidget(
     MaterialApp(
-      home: _Host(on: on, exits: exits),
+      home: EscapeGoesBack(
+        child: _Host(on: on, exits: exits),
+      ),
     ),
   );
   return exits;

@@ -22,6 +22,7 @@ import 'package:jitter/settings/settings_page.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:jitter/top/top_page.dart';
+import 'package:jitter/widgets/escape_goes_back.dart';
 
 /// Below this width the destinations sit in a bottom bar, from it in a
 /// side rail (Material's compact window class).
@@ -202,14 +203,16 @@ class _AppShellState extends State<AppShell> {
   void _openPlayer(PlaybackTarget target, String title) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (playerContext) => PlayerPage(
-          target: target,
-          title: title,
-          playback: widget.playback,
-          player: widget.player,
-          chat: widget.chat,
-          onOpenChannel: (login) =>
-              _replacePlayerWithChannel(playerContext, login),
+        builder: (playerContext) => EscapeGoesBack(
+          child: PlayerPage(
+            target: target,
+            title: title,
+            playback: widget.playback,
+            player: widget.player,
+            chat: widget.chat,
+            onOpenChannel: (login) =>
+                _replacePlayerWithChannel(playerContext, login),
+          ),
         ),
       ),
     );
