@@ -418,7 +418,7 @@ fn playback_details(
         game: details.game_at(at).map(|game| game.name.clone()),
         chapters: playback_chapters(&details.chapters, at),
         streamed: details.streamed_at.and_then(streamed_label),
-        live: details.live.map(|live| PlaybackLive {
+        live: details.live.as_ref().map(|live| PlaybackLive {
             viewers: viewers_label(live.viewers),
             uptime: now.and_then(|now| live.uptime(now)).map(uptime_label),
         }),
@@ -562,6 +562,7 @@ mod tests {
             live: Some(models::LiveDetails {
                 viewers: 1_234,
                 started_at: started_at.map(Timestamp::from_unix),
+                archive: None,
             }),
             ..Default::default()
         }

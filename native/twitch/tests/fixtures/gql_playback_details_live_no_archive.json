@@ -1,0 +1,24 @@
+{
+  "data": {
+    "user": {
+      "id": "71569238",
+      "login": "mr4thdimention",
+      "displayName": "Mr4thDimention",
+      "profileImageURL": "https://static-cdn.jtvnw.net/jtv_user_pictures/d3c491a7-80ce-4ded-bb1f-171165ca0e08-profile_image-50x50.png",
+      "stream": {
+        "title": "Developing the RPG Simulator",
+        "viewersCount": 61,
+        "createdAt": "2026-10-28T17:51:19Z",
+        "game": {
+          "id": "1469308723",
+          "displayName": "Software and Game Development"
+        },
+        "archiveVideo": null
+      }
+    }
+  },
+  "extensions": {
+    "durationMilliseconds": 47,
+    "requestID": "01M6206Z5R09NR53P1Q8B00X18"
+  }
+}
