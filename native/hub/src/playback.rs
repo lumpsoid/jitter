@@ -16,14 +16,15 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
 
 use crate::format::{
-    clock_error, sleep_left_label, sleep_preset_label, streamed_label, twitch_error, uptime_label,
-    viewers_label,
+    clock_error, duration_label, sleep_left_label, sleep_preset_label, streamed_label,
+    twitch_error, uptime_label, viewers_label,
 };
 use crate::run::Fetched;
 use crate::signals::{
-    AppBackgrounded, AppForegrounded, ArmSleepTimer, GoToTime, GoToTimeAnswer, LeavePlayer,
-    PlaybackChannel, PlaybackDetails, PlaybackLive, PlaybackSleep, PlaybackTarget, PlaybackUpdate,
-    PlayerCommand, PlayerPosition, QualityOption, SelectQuality, SleepPreset,
+    AppBackgrounded, AppForegrounded, ArmSleepTimer, GoToChapter, GoToTime, GoToTimeAnswer,
+    LeavePlayer, PlaybackChannel, PlaybackChapter, PlaybackDetails, PlaybackLive, PlaybackSleep,
+    PlaybackTarget, PlaybackUpdate, PlayerCommand, PlayerPosition, QualityOption, SelectQuality,
+    SleepPreset,
 };
 
 /// `Play`: starts resolving `target` through twitch, and loading what it
@@ -162,6 +163,20 @@ pub fn foreground(
     }
 }
 
+/// `GoToChapter`: the player seeks to the chapter's start; one the VOD
+/// does not have changes nothing.
+pub fn go_to_chapter(playback: &PlaybackController, signal: GoToChapter) {
+    let start = usize::try_from(signal.index)
+        .ok()
+        .and_then(|index| playback.chapter_start(index));
+    if let Some(start) = start {
+        PlayerCommand::Seek {
+            position_s: start.get(),
+        }
+        .send_signal_to_dart();
+    }
+}
+
 /// Where a player is, as core's values: what a `PlayerPosition` reports.
 pub struct PlayerAt {
     pub target: playback::PlaybackTarget,
@@ -170,11 +185,12 @@ pub struct PlayerAt {
 }
 
 /// `PlayerPosition`: hands the position to core, which decides whether
-/// it is recorded. Returns the report for the chat replay; `None` when
-/// its target is invalid or core says the player is stopped away, where
-/// its position means nothing.
+/// it is recorded, and sends the page again when the game being played
+/// there changed (a VOD's next chapter). Returns the report for the chat
+/// replay; `None` when its target is invalid or core says the player is
+/// stopped away, where its position means nothing.
 pub fn position(
-    playback: &PlaybackController,
+    playback: &mut PlaybackController,
     resume: &mut ResumeController,
     signal: PlayerPosition,
 ) -> Option<PlayerAt> {
@@ -189,10 +205,15 @@ pub fn position(
         signal.position_s,
         signal.duration_s,
     ));
+    let position = Seconds::new(signal.position_s);
+    let duration = Seconds::new(signal.duration_s);
+    if playback.follow(&target, position, duration) {
+        send_state(playback);
+    }
     Some(PlayerAt {
         target,
-        position: Seconds::new(signal.position_s),
-        duration: Seconds::new(signal.duration_s),
+        position,
+        duration,
     })
 }
 
@@ -355,12 +376,13 @@ fn update(state: &PlaybackState, now: Option<Timestamp>) -> PlaybackUpdate {
             playback,
             selected,
             details,
+            at,
             sleep,
         } => PlaybackUpdate::Ready {
             qualities: playback.qualities.iter().map(QualityOption::from).collect(),
             selected: selected.clone(),
             live: matches!(target, playback::PlaybackTarget::Live(_)),
-            details: Box::new(playback_details(details, now)),
+            details: Box::new(playback_details(details, *at, now)),
             sleep: playback_sleep(sleep.as_ref()),
         },
         PlaybackState::Slept { .. } => PlaybackUpdate::Slept,
@@ -383,17 +405,39 @@ fn playback_sleep(timer: Option<&SleepTimer>) -> PlaybackSleep {
     }
 }
 
-fn playback_details(details: &models::PlaybackDetails, now: Option<Timestamp>) -> PlaybackDetails {
+/// `details` with the player `at` that position: the game is the one
+/// being played there.
+fn playback_details(
+    details: &models::PlaybackDetails,
+    at: Option<Seconds>,
+    now: Option<Timestamp>,
+) -> PlaybackDetails {
     PlaybackDetails {
         channel: details.channel.as_ref().map(PlaybackChannel::from),
         title: details.title.clone(),
-        game: details.game.as_ref().map(|game| game.name.clone()),
+        game: details.game_at(at).map(|game| game.name.clone()),
+        chapters: playback_chapters(&details.chapters, at),
         streamed: details.streamed_at.and_then(streamed_label),
         live: details.live.map(|live| PlaybackLive {
             viewers: viewers_label(live.viewers),
             uptime: now.and_then(|now| live.uptime(now)).map(uptime_label),
         }),
     }
+}
+
+/// The chapters to go to, the one playing `at` that position marked.
+fn playback_chapters(chapters: &models::Chapters, at: Option<Seconds>) -> Vec<PlaybackChapter> {
+    let current = at.and_then(|at| chapters.index_at(at));
+    chapters
+        .to_go_to()
+        .iter()
+        .enumerate()
+        .map(|(index, chapter)| PlaybackChapter {
+            game: chapter.game.name.clone(),
+            start: duration_label(chapter.start),
+            current: current == Some(index),
+        })
+        .collect()
 }
 
 impl From<&Channel> for PlaybackChannel {
@@ -430,7 +474,7 @@ impl From<Open> for PlayerCommand {
 
 #[cfg(test)]
 mod tests {
-    use jitter_core::models::{CategoryId, ChannelId, GameRef};
+    use jitter_core::models::{CategoryId, ChannelId, Chapter, Chapters, GameRef};
 
     use super::*;
 
@@ -446,9 +490,11 @@ mod tests {
                     id,
                     name: "Just Chatting".to_owned(),
                 }),
+                chapters: Chapters::default(),
                 streamed_at: Some(at),
                 live: None,
             },
+            None,
             None,
         );
         assert_eq!(details.title.as_deref(), Some("WATCH PARTY + REACT"));
@@ -465,9 +511,11 @@ mod tests {
                 channel: None,
                 title: None,
                 game: None,
+                chapters: Chapters::default(),
                 streamed_at: None,
                 live: None,
             },
+            None,
             None,
         );
         assert!(details.channel.is_none());
@@ -491,9 +539,11 @@ mod tests {
                 channel: Some(channel("https://example.test/xqc.jpeg")?),
                 title: None,
                 game: None,
+                chapters: Chapters::default(),
                 streamed_at: None,
                 live: None,
             },
+            None,
             None,
         );
         let sent = details.channel.ok_or("no channel")?;
@@ -520,7 +570,7 @@ mod tests {
     #[test]
     fn a_live_stream_sends_its_viewers_and_uptime_as_of_now() -> Result<(), String> {
         let now = Some(Timestamp::from_unix(1_000 + 8_100));
-        let sent = playback_details(&live(Some(1_000)), now)
+        let sent = playback_details(&live(Some(1_000)), None, now)
             .live
             .ok_or("no live details")?;
         assert_eq!(sent.viewers, "1.2K viewers");
@@ -531,9 +581,9 @@ mod tests {
     #[test]
     fn no_start_time_or_no_clock_means_no_uptime() -> Result<(), String> {
         let now = Some(Timestamp::from_unix(100));
-        let unstarted = playback_details(&live(None), now).live;
+        let unstarted = playback_details(&live(None), None, now).live;
         assert_eq!(unstarted.ok_or("no live details")?.uptime, None);
-        let clockless = playback_details(&live(Some(0)), None).live;
+        let clockless = playback_details(&live(Some(0)), None, None).live;
         let clockless = clockless.ok_or("no live details")?;
         assert_eq!(clockless.viewers, "1.2K viewers");
         assert_eq!(clockless.uptime, None);
@@ -541,9 +591,77 @@ mod tests {
     }
 
     #[test]
+    fn a_vod_in_one_chapter_sends_none_to_go_to() -> Result<(), String> {
+        let details = models::PlaybackDetails {
+            chapters: Chapters::new(vec![Chapter {
+                start: Seconds::ZERO,
+                game: GameRef {
+                    id: CategoryId::parse("509658").map_err(|e| format!("{e:?}"))?,
+                    name: "Just Chatting".to_owned(),
+                },
+            }]),
+            ..Default::default()
+        };
+        let sent = playback_details(&details, Some(Seconds::ZERO), None);
+        assert!(sent.chapters.is_empty());
+        assert_eq!(sent.game.as_deref(), Some("Just Chatting"));
+        Ok(())
+    }
+
+    #[test]
     fn a_vod_sends_no_live_details() {
         let now = Some(Timestamp::from_unix(100));
-        let details = playback_details(&models::PlaybackDetails::default(), now);
+        let details = playback_details(&models::PlaybackDetails::default(), None, now);
         assert!(details.live.is_none());
+    }
+
+    #[test]
+    fn a_vod_with_chapters_sends_the_game_at_its_position() -> Result<(), String> {
+        let game = |id: &str, name: &str| -> Result<GameRef, String> {
+            Ok(GameRef {
+                id: CategoryId::parse(id).map_err(|e| format!("{e:?}"))?,
+                name: name.to_owned(),
+            })
+        };
+        let details = models::PlaybackDetails {
+            game: Some(game("509658", "Just Chatting")?),
+            chapters: Chapters::new(vec![
+                Chapter {
+                    start: Seconds::ZERO,
+                    game: game("509658", "Just Chatting")?,
+                },
+                Chapter {
+                    start: Seconds::new(3_600),
+                    game: game("32982", "Grand Theft Auto V")?,
+                },
+            ]),
+            ..Default::default()
+        };
+        let game_at = |at| playback_details(&details, at, None).game;
+        assert_eq!(game_at(None), None);
+        assert_eq!(
+            game_at(Some(Seconds::new(60))).as_deref(),
+            Some("Just Chatting")
+        );
+        assert_eq!(
+            game_at(Some(Seconds::new(3_600))).as_deref(),
+            Some("Grand Theft Auto V")
+        );
+
+        let sent = playback_details(&details, Some(Seconds::new(3_725)), None).chapters;
+        let shown: Vec<_> = sent
+            .iter()
+            .map(|c| (c.game.as_str(), c.start.as_str(), c.current))
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                ("Just Chatting", "0:00", false),
+                ("Grand Theft Auto V", "1:00:00", true)
+            ]
+        );
+        let unplaced = playback_details(&details, None, None).chapters;
+        assert!(unplaced.iter().all(|c| !c.current));
+        Ok(())
     }
 }

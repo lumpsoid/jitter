@@ -46,8 +46,8 @@ use crate::signals::{ClearHistory, HistoryReady, RemoveFromHistory, RemoveVisit}
 // Playback
 use crate::playback;
 use crate::signals::{
-    AppBackgrounded, AppForegrounded, ArmSleepTimer, GoToTime, LeavePlayer, Play, PlayerPosition,
-    SelectQuality, TurnOffSleepTimer,
+    AppBackgrounded, AppForegrounded, ArmSleepTimer, GoToChapter, GoToTime, LeavePlayer, Play,
+    PlayerPosition, SelectQuality, TurnOffSleepTimer,
 };
 // Channel
 use crate::channel::{self, ChannelFetched, ChannelPage};
@@ -204,6 +204,7 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
     let play = Play::get_dart_signal_receiver();
     let select_quality = SelectQuality::get_dart_signal_receiver();
     let go_to_time = GoToTime::get_dart_signal_receiver();
+    let go_to_chapter = GoToChapter::get_dart_signal_receiver();
     let player_position = PlayerPosition::get_dart_signal_receiver();
     let leave_player = LeavePlayer::get_dart_signal_receiver();
     let arm_sleep_timer = ArmSleepTimer::get_dart_signal_receiver();
@@ -297,8 +298,9 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
                 playback::select_quality(&mut c.playback, pack.message);
             }
             Some(pack) = go_to_time.recv() => playback::go_to_time(pack.message),
+            Some(pack) = go_to_chapter.recv() => playback::go_to_chapter(&c.playback, pack.message),
             Some(pack) = player_position.recv() => {
-                if let Some(at) = playback::position(&c.playback, &mut c.resume, pack.message) {
+                if let Some(at) = playback::position(&mut c.playback, &mut c.resume, pack.message) {
                     // History: counts what the player plays.
                     history::heard(&mut c.history, &c.playback, &at.target);
                     // Chat: a VOD's replay follows the player.

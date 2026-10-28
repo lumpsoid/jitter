@@ -44,6 +44,14 @@ pub struct GoToTime {
     pub duration_s: u32,
 }
 
+/// The user picked chapter `index` of the VOD playing, one of
+/// [`PlaybackDetails`]'s `chapters`: Rust answers with a
+/// [`PlayerCommand::Seek`] to its start.
+#[derive(Deserialize, DartSignal)]
+pub struct GoToChapter {
+    pub index: u32,
+}
+
 /// The player page for `target` closed, with the player's last position.
 #[derive(Deserialize, DartSignal)]
 pub struct LeavePlayer {
@@ -137,14 +145,31 @@ pub struct PlaybackDetails {
     pub channel: Option<PlaybackChannel>,
     /// The stream's or the VOD's title; `None` when there is none to show.
     pub title: Option<String>,
-    /// The game or category's name; `None` when there is none to show.
+    /// The game or category's name: for a VOD with chapters, the one at
+    /// the player's position, sent again when it changes. `None` when
+    /// there is none to show.
     pub game: Option<String>,
+    /// A VOD's chapters to go to, in the order they start; empty for a
+    /// live stream or a VOD in one chapter.
+    pub chapters: Vec<PlaybackChapter>,
     /// The day a VOD was streamed, ready to show (`Oct 24`); `None` for a
     /// live stream or when it is not known.
     pub streamed: Option<String>,
     /// A live stream's figures; `None` for a VOD or when they are not
     /// known.
     pub live: Option<PlaybackLive>,
+}
+
+/// One chapter of a VOD, ready to show: going to it sends its place in
+/// [`PlaybackDetails`]'s `chapters` as [`GoToChapter`]'s `index`.
+#[derive(Serialize, SignalPiece)]
+pub struct PlaybackChapter {
+    /// The game played in it.
+    pub game: String,
+    /// Where it starts (`1:02:03`, or `4:05` under an hour).
+    pub start: String,
+    /// Whether it is the one playing now.
+    pub current: bool,
 }
 
 /// What a live stream shows beside its video, ready to show.

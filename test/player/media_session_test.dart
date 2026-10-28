@@ -17,6 +17,7 @@ void main() {
     final item = mediaItemOf(
       ready(
         const PlaybackDetails(
+          chapters: [],
           channel: PlaybackChannel(
             login: 'xqc',
             displayName: 'xQc',
@@ -35,7 +36,9 @@ void main() {
   });
 
   test('a page without details still shows the app', () {
-    final item = mediaItemOf(ready(const PlaybackDetails(), live: false));
+    final item = mediaItemOf(
+      ready(const PlaybackDetails(chapters: []), live: false),
+    );
 
     expect(item?.title, 'Jitter');
     expect(item?.artist, isNull);
@@ -59,7 +62,7 @@ void main() {
   });
 
   test('a playing page offers pause, a paused one play', () {
-    final page = ready(const PlaybackDetails());
+    final page = ready(const PlaybackDetails(chapters: []));
 
     final playing = sessionStateOf(page, playing: true);
     expect(playing.processingState, AudioProcessingState.ready);

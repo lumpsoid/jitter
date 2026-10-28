@@ -18,7 +18,7 @@ void main() {
       ],
       selected: '1080p60',
       live: true,
-      details: PlaybackDetails(game: 'Grand Theft Auto V'),
+      details: PlaybackDetails(chapters: [], game: 'Grand Theft Auto V'),
       sleep: PlaybackSleep(
         presets: [SleepPreset(minutes: 15, label: '15 minutes')],
       ),

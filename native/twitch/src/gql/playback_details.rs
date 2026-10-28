@@ -5,9 +5,12 @@
 //! cannot fully describe (missing a field, or an id or login core rejects) is
 //! left unknown rather than failing the details. A live stream's viewers and
 //! start are its `viewersCount` and `createdAt`; a stream without a viewer
-//! count has no live details. A title Twitch sends empty is no title.
+//! count has no live details. A title Twitch sends empty is no title. A VOD's
+//! chapters come from their own query ([`super::video_chapters`]), asked beside
+//! it; chapters that fail to load leave the VOD without them, not without its
+//! details.
 
-use jitter_core::models::{ChannelLogin, LiveDetails, PlaybackDetails, VideoId};
+use jitter_core::models::{ChannelLogin, Chapters, LiveDetails, PlaybackDetails, VideoId};
 use jitter_core::playback::PlaybackTarget;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -60,6 +63,7 @@ fn map_live(data: LiveData) -> Result<PlaybackDetails, TwitchError> {
         game: stream
             .and_then(|s| s.game)
             .and_then(GameNode::into_game_ref),
+        chapters: Chapters::default(),
         streamed_at: None,
         live,
     })
@@ -71,6 +75,7 @@ fn map_vod(data: VodData) -> Result<PlaybackDetails, TwitchError> {
         channel: video.owner.and_then(UserNode::into_channel),
         title: set_title(video.title.as_deref()),
         game: video.game.and_then(GameNode::into_game_ref),
+        chapters: Chapters::default(),
         streamed_at: video.created_at.as_deref().and_then(parse_timestamp),
         live: None,
     })
@@ -85,8 +90,8 @@ fn set_title(title: Option<&str>) -> Option<String> {
 
 impl Twitch {
     /// What `target` is playing: the channel, and the game a live stream
-    /// is in now, or the one a VOD was recorded in and when it was
-    /// streamed.
+    /// is in now, or the one a VOD was recorded in, its chapters and when
+    /// it was streamed.
     pub async fn playback_details(
         &self,
         target: &PlaybackTarget,
@@ -95,7 +100,17 @@ impl Twitch {
             PlaybackTarget::Live(login) => {
                 map_live(self.query(&LIVE_QUERY, live_variables(login)).await?)
             }
-            PlaybackTarget::Vod(id) => map_vod(self.query(&VOD_QUERY, vod_variables(id)).await?),
+            PlaybackTarget::Vod(id) => {
+                let (details, chapters) = tokio::join!(
+                    self.query(&VOD_QUERY, vod_variables(id)),
+                    self.video_chapters(id)
+                );
+                let mut details = map_vod(details?)?;
+                details.chapters = chapters
+                    .inspect_err(|e| log::debug!("chapters of VOD {id}: {e}"))
+                    .unwrap_or_default();
+                Ok(details)
+            }
         }
     }
 }

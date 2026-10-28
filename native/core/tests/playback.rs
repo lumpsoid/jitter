@@ -2,9 +2,9 @@ use std::time::{Duration, Instant};
 
 use jitter_core::fakes::FakeResumeStore;
 use jitter_core::models::{
-    BackgroundStep, CategoryId, ChannelLogin, FadeLevel, GameRef, Open, Playback, PlaybackDetails,
-    QualityKind, QualityPreference, Resolution, ResumePoint, SLEEP_FADE, Seconds, SleepStep,
-    Timestamp, Variant, VideoId,
+    BackgroundStep, CategoryId, ChannelLogin, Chapter, Chapters, FadeLevel, GameRef, Open,
+    Playback, PlaybackDetails, QualityKind, QualityPreference, Resolution, ResumePoint, SLEEP_FADE,
+    Seconds, SleepStep, Timestamp, Variant, VideoId,
 };
 use jitter_core::playback::{PlaybackController, PlaybackState, PlaybackTarget, TIMED_OUT};
 use jitter_core::resume::ResumeController;
@@ -218,6 +218,7 @@ fn gta() -> PlaybackDetails {
             id,
             name: "Grand Theft Auto V".to_owned(),
         }),
+        chapters: Chapters::default(),
         streamed_at: None,
         live: None,
     }
@@ -309,6 +310,7 @@ fn a_vod_carries_when_it_was_streamed() {
         channel: None,
         title: None,
         game: None,
+        chapters: Chapters::default(),
         streamed_at: Some(Timestamp::from_unix(1_792_875_046)),
         live: None,
     };
@@ -321,6 +323,153 @@ fn a_vod_carries_when_it_was_streamed() {
         QualityPreference::Source
     ));
     assert_eq!(details(&c), Some(&streamed));
+}
+
+fn game(id: &str, name: &str) -> GameRef {
+    let Ok(id) = CategoryId::parse(id) else {
+        unreachable!("valid id");
+    };
+    GameRef {
+        id,
+        name: name.to_owned(),
+    }
+}
+
+/// A VOD in Just Chatting for its first hour, then in GTA V.
+fn chaptered() -> PlaybackDetails {
+    PlaybackDetails {
+        game: Some(game("509658", "Just Chatting")),
+        chapters: Chapters::new(vec![
+            Chapter {
+                start: Seconds::new(3_600),
+                game: game("32982", "Grand Theft Auto V"),
+            },
+            Chapter {
+                start: Seconds::ZERO,
+                game: game("509658", "Just Chatting"),
+            },
+        ]),
+        ..PlaybackDetails::default()
+    }
+}
+
+fn chaptered_vod() -> PlaybackController {
+    let mut c = PlaybackController::new();
+    c.begin(PlaybackTarget::Vod(vod()));
+    c.apply(
+        PlaybackTarget::Vod(vod()),
+        one_quality(),
+        Ok(chaptered()),
+        QualityPreference::Source,
+    );
+    c
+}
+
+/// The game the page shows, as the player last reported its position.
+fn game_shown(c: &PlaybackController) -> Option<&str> {
+    match c.state() {
+        PlaybackState::Ready { details, at, .. } => details.game_at(*at).map(|g| g.name.as_str()),
+        _ => None,
+    }
+}
+
+#[test]
+fn chapters_tell_the_game_at_a_position_in_any_order() {
+    let chapters = chaptered().chapters;
+    let at = |s| chapters.game_at(Seconds::new(s)).map(|g| g.name.as_str());
+    assert_eq!(at(0), Some("Just Chatting"));
+    assert_eq!(at(3_599), Some("Just Chatting"));
+    assert_eq!(at(3_600), Some("Grand Theft Auto V"));
+    assert_eq!(at(90_000), Some("Grand Theft Auto V"));
+    assert_eq!(Chapters::default().game_at(Seconds::ZERO), None);
+}
+
+#[test]
+fn a_chapter_is_gone_to_at_its_start() {
+    let c = chaptered_vod();
+    assert_eq!(c.chapter_start(0), Some(Seconds::ZERO));
+    assert_eq!(c.chapter_start(1), Some(Seconds::new(3_600)));
+    assert_eq!(c.chapter_start(2), None);
+    assert_eq!(ready(live("a")).chapter_start(0), None);
+    assert_eq!(PlaybackController::new().chapter_start(0), None);
+}
+
+#[test]
+fn only_a_vod_in_two_chapters_or_more_has_chapters_to_go_to() {
+    assert_eq!(chaptered().chapters.to_go_to().len(), 2);
+    let one = Chapters::new(vec![Chapter {
+        start: Seconds::ZERO,
+        game: game("509658", "Just Chatting"),
+    }]);
+    assert!(one.to_go_to().is_empty());
+    assert!(Chapters::default().to_go_to().is_empty());
+}
+
+#[test]
+fn before_its_first_chapter_a_vod_is_in_that_chapter_s_game() {
+    let late = Chapters::new(vec![Chapter {
+        start: Seconds::new(30),
+        game: game("32982", "Grand Theft Auto V"),
+    }]);
+    assert_eq!(
+        late.game_at(Seconds::ZERO).map(|g| g.name.as_str()),
+        Some("Grand Theft Auto V")
+    );
+}
+
+#[test]
+fn a_chaptered_vod_shows_the_game_at_the_player_s_position() {
+    let mut c = chaptered_vod();
+    let target = PlaybackTarget::Vod(vod());
+    assert_eq!(game_shown(&c), None, "no position yet");
+
+    assert!(c.follow(&target, Seconds::new(10), Seconds::new(7_200)));
+    assert_eq!(game_shown(&c), Some("Just Chatting"));
+    assert!(!c.follow(&target, Seconds::new(11), Seconds::new(7_200)));
+
+    assert!(c.follow(&target, Seconds::new(3_600), Seconds::new(7_200)));
+    assert_eq!(game_shown(&c), Some("Grand Theft Auto V"));
+
+    assert!(
+        c.follow(&target, Seconds::new(5), Seconds::new(7_200)),
+        "seeked back"
+    );
+    assert_eq!(game_shown(&c), Some("Just Chatting"));
+}
+
+#[test]
+fn a_vod_without_chapters_shows_its_game_from_the_start() {
+    let mut c = PlaybackController::new();
+    c.begin(PlaybackTarget::Vod(vod()));
+    c.apply(
+        PlaybackTarget::Vod(vod()),
+        one_quality(),
+        Ok(gta()),
+        QualityPreference::Source,
+    );
+    assert_eq!(game_shown(&c), Some("Grand Theft Auto V"));
+    assert!(!c.follow(
+        &PlaybackTarget::Vod(vod()),
+        Seconds::new(4_000),
+        Seconds::new(7_200)
+    ));
+    assert_eq!(game_shown(&c), Some("Grand Theft Auto V"));
+}
+
+#[test]
+fn an_unloaded_stale_or_stopped_player_s_position_is_not_followed() {
+    let mut c = chaptered_vod();
+    let target = PlaybackTarget::Vod(vod());
+    assert!(
+        !c.follow(&target, Seconds::new(4_000), Seconds::ZERO),
+        "not loaded"
+    );
+    assert!(!c.follow(&live("a"), Seconds::new(4_000), Seconds::new(7_200)));
+    assert_eq!(game_shown(&c), None);
+
+    c.background(false, Seconds::ZERO);
+    assert!(!c.follow(&target, Seconds::new(4_000), Seconds::new(7_200)));
+    assert_eq!(game_shown(&c), None);
 }
 
 fn ready(target: PlaybackTarget) -> PlaybackController {

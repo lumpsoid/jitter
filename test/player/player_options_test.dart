@@ -19,7 +19,7 @@ PlaybackUpdateReady _ready({String? left}) => PlaybackUpdateReady(
   qualities: _qualities,
   selected: 'source',
   live: true,
-  details: const PlaybackDetails(),
+  details: const PlaybackDetails(chapters: []),
   sleep: PlaybackSleep(presets: _presets, left: left),
 );
 

@@ -115,6 +115,9 @@ class _PlayerPageState extends State<PlayerPage> {
     durationS: widget.player.duration.inSeconds,
   ).sendSignalToRust();
 
+  /// Asks Rust to seek to the start of a VOD's chapter.
+  void _goToChapter(int index) => GoToChapter(index: index).sendSignalToRust();
+
   /// A VOD's seek bar, for either controls.
   SeekBar _seekBar() => SeekBar(
     positions: widget.player.positions,
@@ -225,7 +228,12 @@ class _PlayerPageState extends State<PlayerPage> {
                 // details come.
                 nowPlaying: _theatre
                     ? null
-                    : NowPlaying(title: details?.title, game: details?.game),
+                    : NowPlaying(
+                        title: details?.title,
+                        game: details?.game,
+                        chapters: details?.chapters ?? const [],
+                        onGoToChapter: _goToChapter,
+                      ),
                 video: VideoFrame(
                   // The video, the failure's Retry or the sleep timer's
                   // Resume; not the spinner.

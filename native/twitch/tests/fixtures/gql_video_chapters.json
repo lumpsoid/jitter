@@ -1,0 +1,29 @@
+{
+  "data": {
+    "video": {
+      "moments": {
+        "edges": [
+          {
+            "node": {
+              "positionMilliseconds": 0,
+              "details": { "game": { "id": "509658", "displayName": "Just Chatting" } }
+            }
+          },
+          {
+            "node": {
+              "positionMilliseconds": 5025999,
+              "details": { "game": { "id": "32982", "displayName": "Grand Theft Auto V" } }
+            }
+          },
+          {
+            "node": {
+              "positionMilliseconds": 7000000,
+              "details": {}
+            }
+          },
+          null
+        ]
+      }
+    }
+  }
+}
