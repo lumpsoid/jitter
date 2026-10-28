@@ -12,9 +12,10 @@ import 'package:media_kit_video/media_kit_video.dart';
 /// building this needs no libmpv.
 class MediaKitEngine implements PlayerEngine {
   // `title` is what the OS volume mixer shows for our audio stream.
-  late final Player _player = Player(
+  Player get _player => _created ??= Player(
     configuration: const PlayerConfiguration(title: 'Jitter'),
   );
+  Player? _created;
 
   /// What the player page's `Video` renders.
   late final VideoController controller = VideoController(_player);
@@ -35,6 +36,10 @@ class MediaKitEngine implements PlayerEngine {
     await _player.stop();
     await _setVolume(_volume.end());
   }
+
+  /// Stops what plays, if a player was ever created, so the exit does not
+  /// wait on libmpv tearing down a live stream and its video output.
+  Future<void> stopForExit() async => await _created?.stop();
 
   @override
   Future<void> setFade(double level) =>

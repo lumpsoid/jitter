@@ -73,6 +73,9 @@ class JitterApp extends StatefulWidget {
   State<JitterApp> createState() => _JitterAppState();
 }
 
+/// How long the exit waits for the player to stop.
+const _stopForExitFor = Duration(milliseconds: 500);
+
 class _JitterAppState extends State<JitterApp> {
   late final AppLifecycleListener _lifecycle;
 
@@ -80,8 +83,13 @@ class _JitterAppState extends State<JitterApp> {
   void initState() {
     super.initState();
     _lifecycle = AppLifecycleListener(
-      // Lets Rust shut down and close the database before the process ends.
+      // Stops the player, then lets Rust shut down and close the database
+      // before the process ends. A stuck stop does not hold the exit.
       onExitRequested: () async {
+        await widget.player.stopForExit().timeout(
+          _stopForExitFor,
+          onTimeout: () {},
+        );
         finalizeRust();
         return AppExitResponse.exit;
       },
