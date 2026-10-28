@@ -5,6 +5,7 @@ import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/chat/chat_mode.dart';
 import 'package:jitter/chat/chat_panel.dart';
 import 'package:jitter/player/media_kit_engine.dart';
+import 'package:jitter/player/now_playing.dart';
 import 'package:jitter/player/playback_failure.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/player/playback_loading.dart';
@@ -191,6 +192,10 @@ class _PlayerPageState extends State<PlayerPage> {
         listenable: Listenable.merge([widget.playback, widget.chat]),
         builder: (context, _) {
           final state = widget.playback.state;
+          final details = switch (state) {
+            PlaybackUpdateReady(:final details) => details,
+            _ => null,
+          };
           return Scaffold(
             appBar: _theatre
                 ? null
@@ -198,10 +203,7 @@ class _PlayerPageState extends State<PlayerPage> {
                     title: PlaybackTitle(
                       title: widget.title,
                       onOpenChannel: widget.onOpenChannel,
-                      details: switch (state) {
-                        PlaybackUpdateReady(:final details) => details,
-                        _ => null,
-                      },
+                      details: details,
                     ),
                     actions: [
                       PlayerOptions(
@@ -218,6 +220,12 @@ class _PlayerPageState extends State<PlayerPage> {
               on: _theatre,
               onExit: _exitTheatre,
               child: PlayerLayout(
+                // Theatre leaves the video alone, as it does the app bar.
+                // Shown from the open, so the video stays put when the
+                // details come.
+                nowPlaying: _theatre
+                    ? null
+                    : NowPlaying(title: details?.title, game: details?.game),
                 video: VideoFrame(
                   // The video, the failure's Retry or the sleep timer's
                   // Resume; not the spinner.

@@ -373,6 +373,7 @@ fn playback_sleep(timer: Option<&SleepTimer>) -> PlaybackSleep {
 fn playback_details(details: &models::PlaybackDetails, now: Option<Timestamp>) -> PlaybackDetails {
     PlaybackDetails {
         channel: details.channel.as_ref().map(PlaybackChannel::from),
+        title: details.title.clone(),
         game: details.game.as_ref().map(|game| game.name.clone()),
         streamed: details.streamed_at.and_then(streamed_label),
         live: details.live.map(|live| PlaybackLive {
@@ -421,12 +422,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn details_send_the_game_name_and_the_streamed_day() -> Result<(), String> {
+    fn details_send_the_title_game_name_and_the_streamed_day() -> Result<(), String> {
         let id = CategoryId::parse("509658").map_err(|e| format!("{e:?}"))?;
         let at = Timestamp::from_unix(1_792_875_000);
         let details = playback_details(
             &models::PlaybackDetails {
                 channel: None,
+                title: Some("WATCH PARTY + REACT".to_owned()),
                 game: Some(GameRef {
                     id,
                     name: "Just Chatting".to_owned(),
@@ -436,6 +438,7 @@ mod tests {
             },
             None,
         );
+        assert_eq!(details.title.as_deref(), Some("WATCH PARTY + REACT"));
         assert_eq!(details.game.as_deref(), Some("Just Chatting"));
         assert_eq!(details.streamed, streamed_label(at));
         assert!(details.streamed.is_some());
@@ -447,6 +450,7 @@ mod tests {
         let details = playback_details(
             &models::PlaybackDetails {
                 channel: None,
+                title: None,
                 game: None,
                 streamed_at: None,
                 live: None,
@@ -454,6 +458,7 @@ mod tests {
             None,
         );
         assert!(details.channel.is_none());
+        assert_eq!(details.title, None);
         assert_eq!(details.game, None);
         assert_eq!(details.streamed, None);
     }
@@ -471,6 +476,7 @@ mod tests {
         let details = playback_details(
             &models::PlaybackDetails {
                 channel: Some(channel("https://example.test/xqc.jpeg")?),
+                title: None,
                 game: None,
                 streamed_at: None,
                 live: None,

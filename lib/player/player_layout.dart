@@ -7,29 +7,44 @@ const double _chatBesideMinWidth = 840;
 const double _chatWidth = 340;
 
 /// The player page's body: the [video] alone (no [chat], or hidden), or
-/// with the [chat] beside it (wide) or below it (narrow). Tab goes through
-/// the video, then the chat, in either layout: each is its own traversal
-/// group, so the focus finishes one before it enters the other.
+/// with the [chat] beside it (wide) or below it (narrow). The [nowPlaying]
+/// strip heads the video's column: at the top of the body, over the
+/// video, beside the chat rather than over it. Tab goes through the video,
+/// then the chat, in either layout: each is its own traversal group, so
+/// the focus finishes one before it enters the other.
 class PlayerLayout extends StatelessWidget {
-  const new({required this.video, required this.chat, super.key});
+  const new({
+    required this.video,
+    required this.chat,
+    this.nowPlaying,
+    super.key,
+  });
 
   final Widget video;
   final Widget? chat;
+  final Widget? nowPlaying;
 
   @override
   Widget build(BuildContext context) {
     final video = _group(1, this.video);
     final chat = this.chat;
+    final nowPlaying = this.nowPlaying;
+    final videoColumn = Column(
+      children: [
+        ?nowPlaying,
+        Expanded(child: Center(child: video)),
+      ],
+    );
     return FocusTraversalGroup(
       policy: OrderedTraversalPolicy(),
       child: chat == null
-          ? Center(child: video)
+          ? videoColumn
           : LayoutBuilder(
               builder: (context, constraints) {
                 if (constraints.maxWidth >= _chatBesideMinWidth) {
                   return Row(
                     children: [
-                      Expanded(child: Center(child: video)),
+                      Expanded(child: videoColumn),
                       const VerticalDivider(width: 1),
                       SizedBox(width: _chatWidth, child: _group(2, chat)),
                     ],
@@ -37,6 +52,7 @@ class PlayerLayout extends StatelessWidget {
                 }
                 return Column(
                   children: [
+                    ?nowPlaying,
                     video,
                     const Divider(height: 1),
                     Expanded(child: _group(2, chat)),

@@ -33,7 +33,8 @@ ChatHolder _chat() => ChatHolder(sendTheme: (_) {})
 
 /// Pumps the page as `PlayerPage` lays it out, at [width]: the shortcuts
 /// around stand-ins for the app bar's controls, then the layout, with a
-/// loading video and, if [chat], the chat. Returns the page keys pressed.
+/// loading video under a stand-in strip and, if [chat], the chat. Returns
+/// the page keys pressed.
 Future<List<String>> pumpLayout(
   WidgetTester tester, {
   required double width,
@@ -64,6 +65,7 @@ Future<List<String>> pumpLayout(
             ],
           ),
           body: PlayerLayout(
+            nowPlaying: const SizedBox(key: _strip, height: 40),
             video: const VideoFrame(childTakesFocus: false, child: SizedBox()),
             chat: chat ? ChatPanel(chat: holder) : null,
           ),
@@ -99,6 +101,15 @@ Future<List<String>> tabThrough(WidgetTester tester, int count) async {
   return stops;
 }
 
+const _strip = Key('now playing');
+
+/// Where the strip and the video are laid out, and the app bar's bottom.
+({Rect strip, Rect video, double top}) rects(WidgetTester tester) => (
+  strip: tester.getRect(find.byKey(_strip)),
+  video: tester.getRect(find.byType(VideoFrame)),
+  top: tester.getRect(find.byType(AppBar)).bottom,
+);
+
 const _order = [
   'Title',
   'Quality',
@@ -118,6 +129,10 @@ void main() {
     final video = tester.getRect(find.byType(VideoFrame));
     final chat = tester.getRect(find.byType(ChatPanel));
     expect(chat.left, greaterThanOrEqualTo(video.right));
+    final (:strip, video: _, :top) = rects(tester);
+    expect(strip.top, top);
+    expect(strip.right, lessThanOrEqualTo(chat.left));
+    expect(video.top, greaterThanOrEqualTo(strip.bottom));
 
     expect(await tabThrough(tester, _order.length), _order);
   });
@@ -129,12 +144,18 @@ void main() {
     final video = tester.getRect(find.byType(VideoFrame));
     final chat = tester.getRect(find.byType(ChatPanel));
     expect(chat.top, greaterThanOrEqualTo(video.bottom));
+    final (:strip, video: _, :top) = rects(tester);
+    expect(strip.top, top);
+    expect(video.top, strip.bottom);
 
     expect(await tabThrough(tester, _order.length), _order);
   });
 
   testWidgets('without the chat Tab goes app bar then video', (tester) async {
     await pumpLayout(tester, width: 1200, chat: false);
+    final (:strip, :video, :top) = rects(tester);
+    expect(strip.top, top);
+    expect(video.top, greaterThan(strip.bottom));
 
     expect(await tabThrough(tester, 6), [
       'Title',

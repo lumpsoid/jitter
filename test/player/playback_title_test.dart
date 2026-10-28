@@ -24,26 +24,31 @@ Future<void> pumpTitle(
 const _owner = PlaybackChannel(login: 'xqc', displayName: 'xQc_Owner');
 
 void main() {
-  testWidgets('shows the game under the title', (tester) async {
-    await pumpTitle(tester, const PlaybackDetails(game: 'Grand Theft Auto V'));
-
-    expect(find.text('xQc'), findsOneWidget);
-    expect(find.text('Grand Theft Auto V'), findsOneWidget);
-  });
-
-  testWidgets("shows a VOD's game and streamed day under the title", (
+  testWidgets('leaves the title and game to the strip over the video', (
     tester,
   ) async {
+    await pumpTitle(
+      tester,
+      const PlaybackDetails(title: 'GTA RP', game: 'Grand Theft Auto V'),
+    );
+
+    expect(find.text('xQc'), findsOneWidget);
+    expect(find.text('GTA RP'), findsNothing);
+    expect(find.text('Grand Theft Auto V'), findsNothing);
+    expect(find.byType(Column), findsNothing);
+  });
+
+  testWidgets("shows a VOD's streamed day under the title", (tester) async {
     await pumpTitle(
       tester,
       const PlaybackDetails(game: 'Just Chatting', streamed: 'Oct 24'),
     );
 
     expect(find.text('xQc'), findsOneWidget);
-    expect(find.text('Just Chatting · Oct 24'), findsOneWidget);
+    expect(find.text('Oct 24'), findsOneWidget);
   });
 
-  testWidgets('marks a live stream and shows its viewers, uptime and game', (
+  testWidgets('marks a live stream and shows its viewers and uptime', (
     tester,
   ) async {
     await pumpTitle(
@@ -55,7 +60,7 @@ void main() {
     );
 
     expect(find.text('LIVE'), findsOneWidget);
-    expect(find.text('1.2K viewers · 2h 15m · Just Chatting'), findsOneWidget);
+    expect(find.text('1.2K viewers · 2h 15m'), findsOneWidget);
   });
 
   testWidgets('a live stream without an uptime shows its viewers', (
@@ -114,7 +119,7 @@ void main() {
 
       expect(find.text('xQc_Owner'), findsOneWidget);
       expect(find.text('xQc'), findsNothing);
-      expect(find.text('Just Chatting · Oct 24'), findsOneWidget);
+      expect(find.text('Oct 24'), findsOneWidget);
       expect(find.byType(CircleAvatar), findsOneWidget);
     },
   );
