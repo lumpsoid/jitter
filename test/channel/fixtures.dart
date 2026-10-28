@@ -4,6 +4,7 @@ VodTile vod(String id, {double? progress}) => VodTile(
   id: id,
   title: 'Title $id',
   durationLabel: '1:02:03',
+  dateLabel: 'Oct 24',
   thumbnailUrl: 'https://cdn/$id-320x180.jpg',
   progress: progress,
 );

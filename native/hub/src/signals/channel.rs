@@ -122,6 +122,9 @@ pub struct VodTile {
     pub title: String,
     /// `1:02:03`, or `4:05` under an hour.
     pub duration_label: String,
+    /// The day it was streamed or published (`Oct 24`); `None` when it
+    /// cannot be shown.
+    pub date_label: Option<String>,
     pub thumbnail_url: String,
     /// How far in playback would resume, in (0, 1), for a bar over the
     /// thumbnail; `None`: no bar.
