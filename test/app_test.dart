@@ -7,6 +7,7 @@ import 'package:jitter/categories/category_holder.dart';
 import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
+import 'package:jitter/history/history_holder.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/search/search_holder.dart';
@@ -20,6 +21,7 @@ JitterApp _app(BootHolder boot, {SettingsHolder? settings}) => JitterApp(
   categories: CategoriesHolder(),
   category: CategoryHolder(),
   favorites: FavoritesHolder(),
+  history: HistoryHolder(),
   channel: ChannelHolder(),
   playback: PlaybackHolder(),
   player: MediaKitEngine(),

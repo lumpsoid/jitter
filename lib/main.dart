@@ -9,6 +9,7 @@ import 'package:jitter/categories/category_holder.dart';
 import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
+import 'package:jitter/history/history_holder.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/media_session.dart';
 import 'package:jitter/player/playback_holder.dart';
@@ -42,6 +43,8 @@ Future<void> main() async {
   final category = CategoryHolder()..connect();
   // Favorites
   final favorites = FavoritesHolder()..connect();
+  // History
+  final history = HistoryHolder()..connect();
   // Channel
   final channel = ChannelHolder()..connect();
   // Chat
@@ -64,6 +67,8 @@ Future<void> main() async {
       category: category,
       // Favorites
       favorites: favorites,
+      // History
+      history: history,
       // Playback
       playback: playback,
       player: player,

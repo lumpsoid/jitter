@@ -13,6 +13,8 @@ pub mod chat_replay;
 #[cfg(any(test, feature = "test-fakes"))]
 pub mod fakes;
 pub mod favorites;
+pub mod history;
+pub mod history_policy;
 pub mod models;
 pub mod name_color;
 pub mod paged_list;

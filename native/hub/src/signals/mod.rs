@@ -13,6 +13,8 @@ mod categories;
 mod chat;
 // Favorites
 mod favorites;
+// History
+mod history;
 // Playback
 mod playback;
 // Channel
@@ -42,6 +44,11 @@ pub use chat::{
 pub use favorites::{
     AddFavorite, FavoriteChannel, FavoritesReady, FavoritesUpdate, LiveFavorite, RefreshFavorites,
     RemoveFavorite,
+};
+// History
+pub use history::{
+    ClearHistory, HistoryDay, HistoryEntry, HistoryReady, HistoryUpdate, RemoveFromHistory,
+    RemoveVisit,
 };
 // Playback
 pub use playback::{

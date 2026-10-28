@@ -52,6 +52,9 @@ mod user_notice;
 mod variant;
 mod video;
 mod video_id;
+mod visit;
+mod visit_details;
+mod visit_id;
 
 pub use background_step::BackgroundStep;
 pub use badge::Badge;
@@ -105,3 +108,6 @@ pub use user_notice::UserNotice;
 pub use variant::Variant;
 pub use video::{Video, VideoKind};
 pub use video_id::{VideoId, VideoIdError};
+pub use visit::{NewVisit, Visit};
+pub use visit_details::VisitDetails;
+pub use visit_id::VisitId;

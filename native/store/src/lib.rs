@@ -6,6 +6,7 @@
 //! no upsert that could bring back a row another process deleted.
 
 mod favorite_rows;
+mod history_rows;
 mod migrations;
 mod resume_rows;
 mod settings_rows;

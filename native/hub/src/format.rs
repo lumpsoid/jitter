@@ -1,7 +1,7 @@
 //! Labels and error messages the GUI shows as sent, formatted once here so
 //! every page that shows the same value shows it the same way.
 
-use chrono::{Datelike, Local, NaiveDate, TimeZone};
+use chrono::{Datelike, Local, NaiveDate, NaiveDateTime, TimeZone};
 use jitter_core::models::{ClockError, Seconds, Timestamp};
 use jitter_twitch::TwitchError;
 
@@ -128,6 +128,48 @@ fn date_label(date: NaiveDate, this_year: i32) -> String {
     date.format(pattern).to_string()
 }
 
+/// `at` on the viewer's clock; `None` outside the dates chrono can hold.
+pub fn local_time(at: Timestamp) -> Option<NaiveDateTime> {
+    Some(Local.timestamp_opt(at.unix(), 0).single()?.naive_local())
+}
+
+/// The viewer's today.
+pub fn today() -> NaiveDate {
+    Local::now().date_naive()
+}
+
+/// A day of the history: `Today`, `Yesterday`, or the weekday and date,
+/// `Mon, Oct 24`, with the year when it is not this one:
+/// `Wed, Dec 31, 2025`.
+pub fn day_label(date: NaiveDate, today: NaiveDate) -> String {
+    if date == today {
+        return "Today".to_owned();
+    }
+    if today.pred_opt() == Some(date) {
+        return "Yesterday".to_owned();
+    }
+    format!("{}, {}", date.format("%a"), date_label(date, today.year()))
+}
+
+/// A time of day on a 24-hour clock: `14:02`.
+pub fn clock_label(at: NaiveDateTime) -> String {
+    at.format("%H:%M").to_string()
+}
+
+/// A day and its time: `Today, 14:02`, `Mon, Oct 24, 09:30`.
+pub fn day_time_label(at: NaiveDateTime, today: NaiveDate) -> String {
+    format!("{}, {}", day_label(at.date(), today), clock_label(at))
+}
+
+/// How long a visit was watched, to the minute: `<1m` in its first
+/// minute, then as [`uptime_label`]: `40m`, `1h 5m`.
+pub fn watched_label(watched: Seconds) -> String {
+    match watched.get() {
+        0..60 => "<1m".to_owned(),
+        _ => uptime_label(watched),
+    }
+}
+
 /// `123` tenths with suffix `K` is `12.3K`; a whole number drops the `.0`.
 fn tenths(tenths: u32, suffix: &str) -> String {
     match tenths % 10 {
@@ -143,8 +185,8 @@ mod tests {
     use jitter_twitch::TwitchError;
 
     use super::{
-        clock_error, date_label, duration_label, followers_label, twitch_error, uptime_label,
-        viewers_label,
+        clock_error, clock_label, date_label, day_label, day_time_label, duration_label,
+        followers_label, twitch_error, uptime_label, viewers_label, watched_label,
     };
 
     #[test]
@@ -255,6 +297,34 @@ mod tests {
             unreachable!("valid date");
         };
         date
+    }
+
+    #[test]
+    fn history_days_read_today_yesterday_then_the_date() {
+        let today = day(2026, 10, 28);
+        assert_eq!(day_label(today, today), "Today");
+        assert_eq!(day_label(day(2026, 10, 27), today), "Yesterday");
+        assert_eq!(day_label(day(2026, 10, 24), today), "Sat, Oct 24");
+        assert_eq!(day_label(day(2025, 12, 31), today), "Wed, Dec 31, 2025");
+        assert_eq!(day_label(day(2026, 1, 1), day(2026, 1, 1)), "Today");
+        assert_eq!(day_label(day(2025, 12, 31), day(2026, 1, 1)), "Yesterday");
+    }
+
+    #[test]
+    fn history_times_read_on_a_24_hour_clock() {
+        let Some(at) = day(2026, 10, 27).and_hms_opt(9, 5, 59) else {
+            unreachable!("valid time");
+        };
+        assert_eq!(clock_label(at), "09:05");
+        assert_eq!(day_time_label(at, day(2026, 10, 28)), "Yesterday, 09:05");
+    }
+
+    #[test]
+    fn watched_time_reads_to_the_minute() {
+        assert_eq!(watched_label(Seconds::new(10)), "<1m");
+        assert_eq!(watched_label(Seconds::new(59)), "<1m");
+        assert_eq!(watched_label(Seconds::new(60)), "1m");
+        assert_eq!(watched_label(Seconds::new(3_900)), "1h 5m");
     }
 
     #[test]

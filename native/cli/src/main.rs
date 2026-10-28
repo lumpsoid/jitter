@@ -10,6 +10,7 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use commands::fav::FavCommand;
+use commands::history::HistoryCommand;
 use commands::play::PlayArgs;
 use commands::settings::SettingsCommand;
 
@@ -90,6 +91,12 @@ enum Command {
         #[command(subcommand)]
         command: Option<SettingsCommand>,
     },
+    /// List what you watched, newest first; `unique` lists each once.
+    /// The GUI records it; the CLI only reads and removes.
+    History {
+        #[command(subcommand)]
+        command: Option<HistoryCommand>,
+    },
     /// Record a VOD position by hand.
     Resume {
         id: String,
@@ -136,5 +143,6 @@ async fn run(command: Command) -> commands::Result<()> {
             duration_s,
         } => commands::resume::run(&id, position_s, duration_s),
         Command::Settings { command } => commands::settings::run(command),
+        Command::History { command } => commands::history::run(command),
     }
 }

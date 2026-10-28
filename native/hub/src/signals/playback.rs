@@ -3,8 +3,9 @@ use serde::{Deserialize, Serialize};
 
 /// What to play: a channel live, or a VOD. Dart holds it for the page's
 /// lifetime and tags every report with it, so Rust can tell a page that
-/// was replaced from the one showing now.
-#[derive(Deserialize, SignalPiece)]
+/// was replaced from the one showing now. Rust sends it in a history
+/// entry, to play again.
+#[derive(Clone, Serialize, Deserialize, SignalPiece)]
 pub enum PlaybackTarget {
     Live { login: String },
     Vod { id: String },

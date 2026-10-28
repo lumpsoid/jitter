@@ -7,11 +7,13 @@
 //! a head's spawned task.
 
 mod favorites_store;
+mod history_store;
 mod resume_store;
 mod settings_store;
 mod store_error;
 
 pub use favorites_store::FavoritesStore;
+pub use history_store::HistoryStore;
 pub use resume_store::ResumeStore;
 pub use settings_store::SettingsStore;
 pub use store_error::StoreError;

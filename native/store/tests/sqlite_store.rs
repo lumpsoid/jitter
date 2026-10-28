@@ -8,10 +8,12 @@ use std::thread;
 
 use jitter_core::favorites::FavoritesController;
 use jitter_core::models::{
-    Channel, ChannelId, ChannelLogin, Favorite, QualityPreference, ResumePoint, Seconds, Setting,
-    Settings, Stream, ThemeChoice, Timestamp, VideoId,
+    CategoryId, Channel, ChannelId, ChannelLogin, Favorite, GameRef, NewVisit, QualityPreference,
+    ResumePoint, Seconds, Setting, Settings, Stream, ThemeChoice, Timestamp, VideoId, VisitDetails,
+    VisitId,
 };
-use jitter_core::ports::{FavoritesStore, ResumeStore, SettingsStore};
+use jitter_core::playback::PlaybackTarget;
+use jitter_core::ports::{FavoritesStore, HistoryStore, ResumeStore, SettingsStore};
 use jitter_core::resume::ResumeController;
 use jitter_core::settings::SettingsController;
 use jitter_store::SqliteStore;
@@ -265,7 +267,7 @@ fn reopening_a_migrated_file_keeps_its_rows() -> TestResult {
     drop(store);
     let store = SqliteStore::open(&path)?;
     assert_eq!(store.load_all()?, [favorite("1", "Alpha", 10)]);
-    assert_eq!(user_version(&path)?, 4);
+    assert_eq!(user_version(&path)?, 5);
     Ok(())
 }
 
@@ -291,7 +293,7 @@ fn a_v1_file_is_migrated_and_its_favorites_load_without_an_avatar() -> TestResul
     )?;
     drop(v1);
     let mut store = SqliteStore::open(&path)?;
-    assert_eq!(user_version(&path)?, 4);
+    assert_eq!(user_version(&path)?, 5);
     assert_eq!(store.load_all()?, [favorite("1", "Alpha", 10)]);
     store.set_avatar(&id("1"), "https://a/1.png")?;
     let expected = Favorite {
@@ -308,6 +310,143 @@ fn a_file_with_a_newer_schema_is_refused() -> TestResult {
     Connection::open(&path)?.pragma_update(None, "user_version", 99)?;
     assert!(SqliteStore::open(&path).is_err());
     assert_eq!(user_version(&path)?, 99);
+    Ok(())
+}
+
+// --- History -------------------------------------------------------------
+
+fn new_visit(target: PlaybackTarget, started_at: i64) -> NewVisit {
+    NewVisit {
+        target,
+        started_at: Timestamp::from_unix(started_at),
+        last_seen_at: Timestamp::from_unix(started_at + 60),
+        details: VisitDetails::default(),
+    }
+}
+
+fn live(raw: &str) -> PlaybackTarget {
+    PlaybackTarget::Live(login(raw))
+}
+
+fn vod(raw: &str) -> PlaybackTarget {
+    PlaybackTarget::Vod(video(raw))
+}
+
+#[test]
+fn a_visit_round_trips_with_what_was_on() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    let Ok(game) = CategoryId::parse("509658") else {
+        unreachable!("valid id");
+    };
+    let mut visit = new_visit(vod("42"), 1_000);
+    visit.details = VisitDetails {
+        channel: Some(with_avatar(
+            channel("1", "Xqc"),
+            "https://example.test/a.png",
+        )),
+        title: Some("react andy".to_owned()),
+        game: Some(GameRef {
+            id: game,
+            name: "Just Chatting".to_owned(),
+        }),
+        streamed_at: Some(Timestamp::from_unix(500)),
+    };
+    let id = store.add_visit(&visit)?;
+    let loaded = store.load_visits()?;
+    let [stored] = loaded.as_slice() else {
+        return Err(format!("expected one visit, got {loaded:?}").into());
+    };
+    assert_eq!(stored.id, id);
+    assert_eq!(stored.target, visit.target);
+    assert_eq!(stored.started_at, visit.started_at);
+    assert_eq!(stored.last_seen_at, visit.last_seen_at);
+    assert_eq!(stored.details, visit.details);
+    assert_eq!(store.latest_visit()?.as_ref(), Some(stored));
+    Ok(())
+}
+
+#[test]
+fn a_visit_without_details_round_trips_empty() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.add_visit(&new_visit(live("xqc"), 1_000))?;
+    let loaded = store.load_visits()?;
+    assert_eq!(
+        loaded.first().map(|v| &v.details),
+        Some(&VisitDetails::default())
+    );
+    Ok(())
+}
+
+#[test]
+fn visits_load_newest_start_first() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.add_visit(&new_visit(live("a"), 200))?;
+    store.add_visit(&new_visit(live("b"), 100))?;
+    store.add_visit(&new_visit(live("c"), 300))?;
+    let starts: Vec<i64> = store
+        .load_visits()?
+        .iter()
+        .map(|v| v.started_at.unix())
+        .collect();
+    assert_eq!(starts, [300, 200, 100]);
+    assert_eq!(store.latest_visit()?.map(|v| v.target), Some(live("c")));
+    Ok(())
+}
+
+#[test]
+fn touch_moves_last_seen_forward_only_and_never_inserts() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    let id = store.add_visit(&new_visit(live("a"), 1_000))?;
+    assert!(store.touch_visit(id, Timestamp::from_unix(2_000))?);
+    assert!(store.touch_visit(id, Timestamp::from_unix(1_500))?);
+    assert_eq!(
+        store.latest_visit()?.map(|v| v.last_seen_at),
+        Some(Timestamp::from_unix(2_000))
+    );
+    store.remove_visit(id)?;
+    assert!(!store.touch_visit(id, Timestamp::from_unix(3_000))?);
+    assert!(store.load_visits()?.is_empty());
+    Ok(())
+}
+
+#[test]
+fn a_removed_visit_id_is_never_given_out_again() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    let first = store.add_visit(&new_visit(live("a"), 1_000))?;
+    store.remove_visit(first)?;
+    let second = store.add_visit(&new_visit(live("b"), 2_000))?;
+    assert_ne!(first, second);
+    store.clear_visits()?;
+    let third = store.add_visit(&new_visit(live("c"), 3_000))?;
+    assert!(third.get() > second.get());
+    Ok(())
+}
+
+#[test]
+fn remove_target_removes_that_targets_visits_only() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.add_visit(&new_visit(live("a"), 100))?;
+    store.add_visit(&new_visit(vod("42"), 200))?;
+    store.add_visit(&new_visit(live("a"), 300))?;
+    store.remove_visits_to(&live("a"))?;
+    let left: Vec<PlaybackTarget> = store.load_visits()?.into_iter().map(|v| v.target).collect();
+    assert_eq!(left, [vod("42")]);
+    store.remove_visit(VisitId::from_raw(999))?;
+    store.clear_visits()?;
+    assert!(store.load_visits()?.is_empty());
+    Ok(())
+}
+
+#[test]
+fn a_corrupt_visit_row_fails_the_load() -> TestResult {
+    let (_dir, path) = fresh_file()?;
+    let store = SqliteStore::open(&path)?;
+    Connection::open(&path)?.execute(
+        "INSERT INTO visits (kind, target, started_at, last_seen_at)
+         VALUES ('vod', 'not a video id', 0, 0)",
+        [],
+    )?;
+    assert!(store.load_visits().is_err());
     Ok(())
 }
 
@@ -346,7 +485,7 @@ fn two_connections_opening_a_fresh_file_at_once_both_succeed() -> TestResult {
             let opened = handle.join().map_err(|_| "open thread panicked")?;
             assert_eq!(opened, Ok(()));
         }
-        assert_eq!(user_version(&path)?, 4);
+        assert_eq!(user_version(&path)?, 5);
     }
     Ok(())
 }
@@ -447,5 +586,17 @@ fn a_setting_changed_through_one_connection_survives_a_change_through_the_other(
     gui.load()?;
     assert_eq!(gui.state().theme, ThemeChoice::Dark);
     assert_eq!(gui.state().start_quality, QualityPreference::P720);
+    Ok(())
+}
+
+#[test]
+fn a_visit_one_connection_removed_stays_removed_when_the_other_touches_it() -> TestResult {
+    let (_dir, path) = fresh_file()?;
+    let mut gui = SqliteStore::open(&path)?;
+    let mut cli = SqliteStore::open(&path)?;
+    let id = gui.add_visit(&new_visit(live("a"), 1_000))?;
+    cli.clear_visits()?;
+    assert!(!gui.touch_visit(id, Timestamp::from_unix(2_000))?);
+    assert!(cli.load_visits()?.is_empty());
     Ok(())
 }

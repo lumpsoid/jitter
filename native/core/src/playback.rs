@@ -27,7 +27,7 @@ pub const SLEEP_PRESETS: [u32; 5] = [15, 30, 45, 60, 90];
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Attempt(u64);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PlaybackTarget {
     Live(ChannelLogin),
     Vod(VideoId),
@@ -251,6 +251,15 @@ impl PlaybackController {
     /// reports to be means nothing.
     pub fn stopped_away(&self) -> bool {
         matches!(self.away, Some(Away::Stopped { .. }))
+    }
+
+    /// Whether the player is playing `target`: it is the one ready, and
+    /// the app is in front or listening away. A page left behind by a
+    /// later [`Self::begin`], one still resolving, failed or slept, and a
+    /// player stopped away ([`Self::stopped_away`]) are not playing.
+    pub fn playing(&self, target: &PlaybackTarget) -> bool {
+        matches!(&self.state, PlaybackState::Ready { target: current, .. } if current == target)
+            && !self.stopped_away()
     }
 
     /// The quality the player plays: the selected one, the audio-only one

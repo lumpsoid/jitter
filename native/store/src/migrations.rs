@@ -31,6 +31,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 4,
         sql: V4_BACKGROUND_AUDIO,
     },
+    Migration {
+        version: 5,
+        sql: V5_VISITS,
+    },
 ];
 
 /// v1: favorite channels (login and display name are display caches; the
@@ -82,6 +86,32 @@ const V4_BACKGROUND_AUDIO: &str = "
 ALTER TABLE settings ADD COLUMN background_audio INTEGER;
 ";
 
+/// v5: the watch history, one row per visit. `id` is `AUTOINCREMENT` so a
+/// removed visit's id is never given out again. The target is a live
+/// channel's login (`kind` `live`) or a VOD's id (`vod`). The rest is what
+/// was on when the visit started; the channel's columns are all set or all
+/// `NULL`, and so are the game's.
+const V5_VISITS: &str = "
+CREATE TABLE visits (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind            TEXT NOT NULL CHECK (kind IN ('live', 'vod')),
+    target          TEXT NOT NULL,
+    started_at      INTEGER NOT NULL,
+    last_seen_at    INTEGER NOT NULL,
+    title           TEXT,
+    channel_id      TEXT,
+    channel_login   TEXT,
+    channel_name    TEXT,
+    channel_avatar  TEXT,
+    game_id         TEXT,
+    game_name       TEXT,
+    streamed_at     INTEGER
+);
+
+CREATE INDEX visits_by_start ON visits (started_at DESC, id DESC);
+CREATE INDEX visits_by_target ON visits (kind, target);
+";
+
 /// Applies every pending migration in one transaction: the database ends at
 /// the latest version or is left as it was. A database newer than this build
 /// is refused rather than written with an older schema's assumptions.
@@ -130,11 +160,20 @@ mod tests {
     }
 
     #[test]
-    fn empty_database_ends_at_v4_with_every_table() -> TestResult {
+    fn empty_database_ends_at_v5_with_every_table() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 4);
-        assert_eq!(tables(&conn)?, ["favorites", "resume_points", "settings"]);
+        assert_eq!(user_version(&conn)?, 5);
+        assert_eq!(
+            tables(&conn)?,
+            [
+                "favorites",
+                "resume_points",
+                "settings",
+                "sqlite_sequence",
+                "visits"
+            ]
+        );
         Ok(())
     }
 
@@ -145,7 +184,7 @@ mod tests {
         conn.execute_batch(V2_FAVORITE_AVATARS)?;
         conn.pragma_update(None, "user_version", 2)?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 4);
+        assert_eq!(user_version(&conn)?, 5);
         let row: (i64, Option<String>, Option<i64>) = conn.query_row(
             "SELECT COUNT(*), MAX(theme), MAX(animated_emotes) FROM settings WHERE id = 1",
             [],
@@ -164,7 +203,7 @@ mod tests {
         conn.pragma_update(None, "user_version", 3)?;
         conn.execute("UPDATE settings SET theme = 'dark' WHERE id = 1", [])?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 4);
+        assert_eq!(user_version(&conn)?, 5);
         let row: (Option<String>, Option<i64>) = conn.query_row(
             "SELECT theme, background_audio FROM settings WHERE id = 1",
             [],
@@ -180,7 +219,7 @@ mod tests {
         migrate(&mut conn)?;
         conn.execute("INSERT INTO favorites VALUES ('1', 'a', 'A', 0, NULL)", [])?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 4);
+        assert_eq!(user_version(&conn)?, 5);
         let rows: i64 = conn.query_row("SELECT COUNT(*) FROM favorites", [], |r| r.get(0))?;
         assert_eq!(rows, 1);
         Ok(())
@@ -193,7 +232,7 @@ mod tests {
         conn.pragma_update(None, "user_version", 1)?;
         conn.execute("INSERT INTO favorites VALUES ('1', 'a', 'A', 7)", [])?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 4);
+        assert_eq!(user_version(&conn)?, 5);
         let row: (String, Option<String>, i64) = conn.query_row(
             "SELECT login, avatar_url, added_at FROM favorites WHERE channel_id = '1'",
             [],
@@ -206,9 +245,9 @@ mod tests {
     #[test]
     fn newer_database_is_refused_and_left_alone() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
-        conn.pragma_update(None, "user_version", 5)?;
+        conn.pragma_update(None, "user_version", 6)?;
         assert!(migrate(&mut conn).is_err());
-        assert_eq!(user_version(&conn)?, 5);
+        assert_eq!(user_version(&conn)?, 6);
         assert!(tables(&conn)?.is_empty());
         Ok(())
     }
