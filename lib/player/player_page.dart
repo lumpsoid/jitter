@@ -4,18 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/chat/chat_mode.dart';
 import 'package:jitter/chat/chat_panel.dart';
-import 'package:jitter/chat/chat_toggle.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_failure.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/player/playback_loading.dart';
 import 'package:jitter/player/playback_title.dart';
 import 'package:jitter/player/player_layout.dart';
+import 'package:jitter/player/player_options.dart';
 import 'package:jitter/player/player_shortcuts.dart';
 import 'package:jitter/player/position_readout.dart';
 import 'package:jitter/player/seek_bar.dart';
 import 'package:jitter/player/sleep_stopped.dart';
-import 'package:jitter/player/sleep_timer_button.dart';
 import 'package:jitter/player/theatre.dart';
 import 'package:jitter/player/video_frame.dart';
 import 'package:jitter/player/video_zoom.dart';
@@ -59,7 +58,7 @@ class PlayerPage extends StatefulWidget {
   final MediaKitEngine player;
 
   /// The chat (live, or a VOD's replay), shown while Rust has one open;
-  /// the app bar can hide and show it.
+  /// the app bar's options can hide and show it.
   final ChatHolder chat;
 
   /// Opens the channel being watched (a VOD's owner) by login, from the
@@ -205,27 +204,13 @@ class _PlayerPageState extends State<PlayerPage> {
                       },
                     ),
                     actions: [
-                      if (state case PlaybackUpdateReady(
-                        :final qualities,
-                        :final selected,
-                        :final sleep,
-                      )) ...[
-                        SleepTimerButton(
-                          sleep: sleep,
-                          onArm: _armSleep,
-                          onTurnOff: _turnOffSleep,
-                        ),
-                        _QualityMenu(
-                          qualities: qualities,
-                          selected: selected,
-                          onSelected: _selectQuality,
-                        ),
-                      ],
-                      ChatToggle(chat: widget.chat),
-                      IconButton(
-                        tooltip: 'Theatre mode',
-                        icon: const Icon(Icons.fit_screen_outlined),
-                        onPressed: _toggleTheatre,
+                      PlayerOptions(
+                        playback: widget.playback,
+                        chat: widget.chat,
+                        onSelectQuality: _selectQuality,
+                        onArmSleep: _armSleep,
+                        onTurnOffSleep: _turnOffSleep,
+                        onToggleTheatre: _toggleTheatre,
                       ),
                     ],
                   ),
@@ -293,36 +278,6 @@ class _PlayerPageState extends State<PlayerPage> {
     PlaybackUpdateSlept() => SleepStopped(onResume: _play),
     _ => const PlaybackLoading(),
   };
-}
-
-/// The quality menu: Rust's labels, the selected one checked.
-class _QualityMenu extends StatelessWidget {
-  const new({
-    required this.qualities,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final List<QualityOption> qualities;
-  final String selected;
-  final ValueChanged<String> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      icon: const Icon(Icons.high_quality_outlined),
-      tooltip: 'Quality',
-      onSelected: onSelected,
-      itemBuilder: (context) => [
-        for (final q in qualities)
-          CheckedPopupMenuItem(
-            value: q.name,
-            checked: q.name == selected,
-            child: Text(q.label),
-          ),
-      ],
-    );
-  }
 }
 
 /// media_kit's controls, themed (play/pause, volume, fullscreen; on desktop
