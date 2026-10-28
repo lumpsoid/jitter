@@ -144,3 +144,31 @@ fn without_auto_load_a_chat_shown_on_one_page_starts_hidden_on_the_next() {
     assert_eq!(c.play(Some(&vod()), false), SessionChange::Leave);
     assert_eq!(c.state(), ChatPanelState::Hidden);
 }
+
+#[test]
+fn a_shown_chat_follows_the_page_into_its_recording_and_back() {
+    let mut c = ChatPanelController::new();
+    c.play(Some(&live("xqc")), true);
+    assert_eq!(c.switch(&vod()), SessionChange::Replay(video()));
+    assert_eq!(c.state(), ChatPanelState::Shown);
+    assert_eq!(c.switch(&live("xqc")), SessionChange::Join(login("xqc")));
+    assert_eq!(c.state(), ChatPanelState::Shown);
+}
+
+#[test]
+fn a_hidden_chat_stays_hidden_through_a_switch() {
+    let mut c = ChatPanelController::new();
+    c.play(Some(&live("xqc")), false);
+    assert_eq!(c.switch(&vod()), SessionChange::Leave);
+    assert_eq!(c.state(), ChatPanelState::Hidden);
+    assert_eq!(c.show(), SessionChange::Replay(video()));
+}
+
+#[test]
+fn without_auto_load_a_switch_never_hides_a_shown_chat() {
+    let mut c = ChatPanelController::new();
+    c.play(Some(&live("xqc")), false);
+    c.show();
+    assert_eq!(c.switch(&vod()), SessionChange::Replay(video()));
+    assert_eq!(c.state(), ChatPanelState::Shown);
+}

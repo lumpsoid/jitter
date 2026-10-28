@@ -78,6 +78,16 @@ impl ChatPanelController {
         self.session()
     }
 
+    /// The page swapped the stream it plays for `stream`, as a live page
+    /// rewinding into its recording or going back: the chat follows, a
+    /// recording's replay or the channel's live chat. Unlike [`Self::play`]
+    /// it keeps the panel as the user left it, whatever the auto-load
+    /// setting.
+    pub fn switch(&mut self, stream: &PlaybackTarget) -> SessionChange {
+        self.playing = Some(stream.clone());
+        self.session()
+    }
+
     /// The player stopped: no chat to show.
     pub fn stop(&mut self) -> SessionChange {
         self.playing = None;

@@ -378,6 +378,7 @@ fn update(state: &PlaybackState, now: Option<Timestamp>) -> PlaybackUpdate {
             details,
             at,
             sleep,
+            rewind: _,
         } => PlaybackUpdate::Ready {
             qualities: playback.qualities.iter().map(QualityOption::from).collect(),
             selected: selected.clone(),
