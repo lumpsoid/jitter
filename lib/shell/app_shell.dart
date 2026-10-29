@@ -19,6 +19,7 @@ import 'package:jitter/search/search_holder.dart';
 import 'package:jitter/search/search_page.dart';
 import 'package:jitter/settings/settings_holder.dart';
 import 'package:jitter/settings/settings_page.dart';
+import 'package:jitter/shell/quit_button.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:jitter/top/top_page.dart';
@@ -253,6 +254,8 @@ class _AppShellState extends State<AppShell> {
                   selectedIndex: _selected,
                   onDestinationSelected: _select,
                   labelType: NavigationRailLabelType.all,
+                  trailing: const QuitButton(),
+                  trailingAtBottom: true,
                   destinations: [
                     for (final d in destinations)
                       NavigationRailDestination(
