@@ -69,8 +69,13 @@ impl ChatPanelController {
     /// live channel joins its chat and a VOD replays its own, unless the
     /// panel is hidden; a rejected target leaves. Without `auto_load` (the
     /// user's setting) the panel starts hidden, so nothing is joined until
-    /// the user shows it.
+    /// the user shows it. The target that already plays (the page's Retry,
+    /// say after the channel went offline) keeps the chat as it is: only
+    /// the player reconnects.
     pub fn play(&mut self, target: Option<&PlaybackTarget>, auto_load: bool) -> SessionChange {
+        if target.is_some() && self.playing.as_ref() == target {
+            return SessionChange::Keep;
+        }
         self.playing = target.cloned();
         if !auto_load {
             self.hidden = true;

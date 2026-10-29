@@ -172,3 +172,42 @@ fn without_auto_load_a_switch_never_hides_a_shown_chat() {
     assert_eq!(c.switch(&vod()), SessionChange::Replay(video()));
     assert_eq!(c.state(), ChatPanelState::Shown);
 }
+
+#[test]
+fn a_retry_on_the_playing_channel_keeps_its_chat() {
+    let mut c = ChatPanelController::new();
+    c.play(Some(&live("xqc")), true);
+    assert_eq!(c.play(Some(&live("xqc")), true), SessionChange::Keep);
+    assert_eq!(c.state(), ChatPanelState::Shown);
+}
+
+#[test]
+fn without_auto_load_a_retry_never_hides_a_shown_chat() {
+    let mut c = ChatPanelController::new();
+    c.play(Some(&live("xqc")), false);
+    c.show();
+    assert_eq!(c.play(Some(&live("xqc")), false), SessionChange::Keep);
+    assert_eq!(c.state(), ChatPanelState::Shown);
+}
+
+#[test]
+fn a_retry_on_a_rewound_page_follows_the_player_back_to_live() {
+    let mut c = ChatPanelController::new();
+    c.play(Some(&live("xqc")), true);
+    c.switch(&vod());
+    assert_eq!(
+        c.play(Some(&live("xqc")), true),
+        SessionChange::Join(login("xqc"))
+    );
+}
+
+#[test]
+fn after_the_player_stops_the_same_channel_joins_again() {
+    let mut c = ChatPanelController::new();
+    c.play(Some(&live("xqc")), true);
+    c.stop();
+    assert_eq!(
+        c.play(Some(&live("xqc")), true),
+        SessionChange::Join(login("xqc"))
+    );
+}
