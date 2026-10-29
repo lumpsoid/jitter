@@ -29,6 +29,30 @@ Needs podman. The build runs in an Ubuntu 24.04 container and writes
 The AppImage needs **glibc 2.38 or newer** on the target: Ubuntu 24.04+,
 Debian 13, current Fedora, Arch, SteamOS 3.x. Check with `ldd --version`.
 
+### On this machine instead
+
+```
+make appimage-host
+```
+
+Builds on the host from its own libmpv and ffmpeg, without podman, and
+writes `dist/Jitter-<version>-host-x86_64.AppImage`. Written for Arch: needs
+`mpv`, `flutter`, `cargo` and `rinf`; the first run fetches linuxdeploy into
+`build/`.
+
+It is for testing. glibc can't be bundled, and Arch's libraries ask for the
+newest one. The build lowers that to `GLIBC_TARGET` (default 2.43, SteamOS's
+in October 2026) where glibc keeps an older version of the symbol: glibc
+2.44's `cosh` and `sinh` (`packaging/appimage/glibc_compat.py`). It stops,
+naming the symbols, where it can't. It also bundles Arch's `libstdc++`, which
+`libopenal` needs newer than SteamOS's. The script prints the glibc the
+result needs.
+
+An Arch update can bring another symbol only the newest glibc has, and break
+the build again. For a build to hand out, use `make appimage`. What the host
+build gains is the host's ffmpeg: Arch's is 9.0+, which seeks in a VOD that
+is still recording (see below).
+
 ## Run
 
 ```
@@ -63,7 +87,8 @@ released in 9.0). So when "Rewind stream" opens the live broadcast's
 recording, or you open a VOD that is still recording from a channel's archive,
 playback starts at the recording's live edge and every seek snaps back there.
 Fixing it is a packaging change: build FFmpeg 9.0 or newer, or the backport
-patch Android carries, in the container.
+patch Android carries, in the container. The host build (`make
+appimage-host`) on a machine with ffmpeg 9.0+ does not have this limitation.
 
 ## SteamOS
 

@@ -1,7 +1,7 @@
 # Command runner only: every target is phony. Cargo and Flutter own
 # incremental builds; don't model file dependencies here.
 
-.PHONY: check rust-check flutter-check gen fmt run cli appimage
+.PHONY: check rust-check flutter-check gen fmt run cli appimage appimage-host
 
 # The full gate. Run before committing.
 check: rust-check flutter-check
@@ -33,3 +33,8 @@ cli:
 # Portable Linux build in dist/. Needs podman.
 appimage:
 	packaging/appimage/build.sh
+
+# Linux build in dist/ from this machine's libraries; runs only where glibc
+# is at least this machine's. Needs mpv.
+appimage-host:
+	packaging/appimage/host.sh
