@@ -344,9 +344,10 @@ pub fn go_to_time(signal: GoToTime) {
 }
 
 /// `AppBackgrounded`: the player carries on with what core picks for
-/// `audio` (the user's background audio setting), or stops.
+/// `audio` (the user's background audio setting), stops, or, paused,
+/// stays as it is.
 pub fn background(playback: &mut PlaybackController, audio: bool, signal: AppBackgrounded) {
-    match playback.background(audio, Seconds::new(signal.position_s)) {
+    match playback.background(audio, signal.playing, Seconds::new(signal.position_s)) {
         None => {}
         Some(BackgroundStep::Open(open)) => send_open(Some(open)),
         Some(BackgroundStep::Stop) => PlayerCommand::Stop.send_signal_to_dart(),

@@ -95,9 +95,10 @@ class _JitterAppState extends State<JitterApp> {
         return AppExitResponse.exit;
       },
       // Rust decides what the player does while the app is out of sight.
-      onHide: () =>
-          AppBackgrounded(positionS: widget.player.position.inSeconds)
-              .sendSignalToRust(),
+      onHide: () => AppBackgrounded(
+        positionS: widget.player.position.inSeconds,
+        playing: widget.player.isPlaying,
+      ).sendSignalToRust(),
       onShow: () =>
           AppForegrounded(positionS: widget.player.position.inSeconds)
               .sendSignalToRust(),

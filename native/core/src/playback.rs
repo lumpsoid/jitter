@@ -75,6 +75,9 @@ pub enum PlaybackState {
 enum Away {
     /// The player carries on with the audio-only quality.
     Listening,
+    /// The user had paused the player: it stays as it was, on the
+    /// selected quality.
+    Paused,
     /// The player stopped; `at` is where it carries on from, `None` when
     /// nothing was playing yet.
     Stopped { at: Option<Seconds> },
@@ -232,19 +235,29 @@ impl PlaybackController {
     /// With `audio` (the user's [`crate::models::Settings::background_audio`])
     /// the player carries on with the audio-only quality, or with the
     /// selected one when the stream has none; without, it stops until
-    /// [`Self::foreground`]. The selection stays the user's. `None` when
-    /// the player has nothing to change: nothing playing, already audio
-    /// only, or already away.
-    pub fn background(&mut self, audio: bool, position: Seconds) -> Option<BackgroundStep> {
+    /// [`Self::foreground`]. A player the user paused (`playing` false)
+    /// is left as it is either way, so it neither switches quality nor
+    /// starts playing. The selection stays the user's. `None` when the
+    /// player has nothing to change: nothing playing, paused, already
+    /// audio only, or already away.
+    pub fn background(
+        &mut self,
+        audio: bool,
+        playing: bool,
+        position: Seconds,
+    ) -> Option<BackgroundStep> {
         if self.away.is_some() {
             return None;
         }
         let before = self.playing_url();
-        self.away = Some(match audio {
-            true => Away::Listening,
-            false => Away::Stopped {
+        self.away = Some(if before.is_some() && !playing {
+            Away::Paused
+        } else if audio {
+            Away::Listening
+        } else {
+            Away::Stopped {
                 at: before.is_some().then_some(position),
-            },
+            }
         });
         match (before, self.open_at(position)) {
             (Some(_), None) => Some(BackgroundStep::Stop),
@@ -266,7 +279,7 @@ impl PlaybackController {
         let before = self.playing_url();
         let open = match self.away.take() {
             None => return Ok(None),
-            Some(Away::Listening) => self.open_at(position),
+            Some(Away::Listening | Away::Paused) => self.open_at(position),
             Some(Away::Stopped { at: Some(at) }) => self.open_at(at),
             Some(Away::Stopped { at: None }) => self.open(resume)?,
         };
@@ -288,14 +301,15 @@ impl PlaybackController {
             && !self.stopped_away()
     }
 
-    /// The quality the player plays: the selected one, the audio-only one
+    /// The quality the player plays: the selected one, also while paused
+    /// away; the audio-only one
     /// while listening away, none while stopped away.
     fn playing_quality(&self) -> Option<&Quality> {
         let PlaybackState::Ready { playback, .. } = &self.state else {
             return None;
         };
         match self.away {
-            None => self.selected_quality(),
+            None | Some(Away::Paused) => self.selected_quality(),
             Some(Away::Listening) => playback.audio_only().or_else(|| self.selected_quality()),
             Some(Away::Stopped { .. }) => None,
         }

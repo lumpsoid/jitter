@@ -145,7 +145,7 @@ fn a_player_stopped_away_is_not_watching() -> Result<(), String> {
     let mut history = controller(&store);
     let a = live("a");
     let mut playback = playing(&a, PlaybackDetails::default());
-    playback.background(false, Seconds::ZERO);
+    playback.background(false, true, Seconds::ZERO);
     play_through(&mut history, &playback, &a, 0, 60)?;
     assert!(store.visits().is_empty());
     Ok(())
@@ -157,7 +157,7 @@ fn listening_away_is_watching() -> Result<(), String> {
     let mut history = controller(&store);
     let a = live("a");
     let mut playback = playing(&a, PlaybackDetails::default());
-    playback.background(true, Seconds::ZERO);
+    playback.background(true, true, Seconds::ZERO);
     play_through(&mut history, &playback, &a, 0, 60)?;
     assert_eq!(targets(&store), [a]);
     Ok(())
@@ -490,7 +490,7 @@ fn leaving_a_player_stopped_away_writes_its_last_report() -> Result<(), String> 
     let a = live("a");
     let mut playback = playing(&a, PlaybackDetails::default());
     play_through(&mut history, &playback, &a, 0, 55)?;
-    playback.background(false, Seconds::ZERO);
+    playback.background(false, true, Seconds::ZERO);
     history
         .leave(&playback, &a, at(500))
         .map_err(|e| e.to_string())?;
