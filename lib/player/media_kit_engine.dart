@@ -132,6 +132,9 @@ class MediaKitEngine implements PlayerEngine {
     if (volume != null) await _player.setVolume(volume);
   }
 
+  /// Whether it is playing now, not paused.
+  bool get isPlaying => _player.state.playing;
+
   @override
   Duration get position => _player.state.position;
 

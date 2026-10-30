@@ -55,8 +55,8 @@ pub use playback::{
     AppBackgrounded, AppForegrounded, ArmSleepTimer, BackToLive, GoToChapter, GoToTime,
     GoToTimeAnswer, LeavePlayer, Play, PlaybackChannel, PlaybackChapter, PlaybackDetails,
     PlaybackLive, PlaybackRewind, PlaybackSleep, PlaybackTarget, PlaybackUpdate, PlayerCommand,
-    PlayerPosition, QualityOption, RewindAnswer, RewindStream, SelectQuality, SleepPreset,
-    TurnOffSleepTimer,
+    PlayerPosition, PlayerStartedAway, QualityOption, RewindAnswer, RewindStream, SelectQuality,
+    SleepPreset, TurnOffSleepTimer,
 };
 // Channel
 pub use channel::{

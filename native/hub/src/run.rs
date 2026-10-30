@@ -49,7 +49,8 @@ use crate::signals::{ClearHistory, HistoryReady, RemoveFromHistory, RemoveVisit}
 use crate::playback;
 use crate::signals::{
     AppBackgrounded, AppForegrounded, ArmSleepTimer, BackToLive, GoToChapter, GoToTime,
-    LeavePlayer, Play, PlayerPosition, RewindStream, SelectQuality, TurnOffSleepTimer,
+    LeavePlayer, Play, PlayerPosition, PlayerStartedAway, RewindStream, SelectQuality,
+    TurnOffSleepTimer,
 };
 // Channel
 use crate::channel::{self, ChannelFetched, ChannelPage};
@@ -229,6 +230,7 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
     let turn_off_sleep_timer = TurnOffSleepTimer::get_dart_signal_receiver();
     let app_backgrounded = AppBackgrounded::get_dart_signal_receiver();
     let app_foregrounded = AppForegrounded::get_dart_signal_receiver();
+    let player_started_away = PlayerStartedAway::get_dart_signal_receiver();
     let rewind_stream = RewindStream::get_dart_signal_receiver();
     let back_to_live = BackToLive::get_dart_signal_receiver();
     // Channel
@@ -344,6 +346,10 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
             Some(pack) = app_backgrounded.recv() => {
                 let audio = c.settings.state().background_audio;
                 playback::background(&mut c.playback, audio, pack.message);
+            }
+            Some(pack) = player_started_away.recv() => {
+                let audio = c.settings.state().background_audio;
+                playback::play_away(&mut c.playback, audio, pack.message);
             }
             Some(pack) = app_foregrounded.recv() => {
                 playback::foreground(&mut c.playback, &c.resume, pack.message);

@@ -470,7 +470,7 @@ fn an_unloaded_stale_or_stopped_player_s_position_is_not_followed() {
     assert!(!c.follow(&live("a"), Seconds::new(4_000), Seconds::new(7_200)));
     assert_eq!(game_shown(&c), None);
 
-    c.background(false, Seconds::ZERO);
+    c.background(false, true, Seconds::ZERO);
     assert!(!c.follow(&target, Seconds::new(4_000), Seconds::new(7_200)));
     assert_eq!(game_shown(&c), None);
 }
@@ -980,7 +980,7 @@ fn background_audio_carries_on_audio_only_and_comes_back_to_the_selection() {
     let mut c = ready_with_audio(PlaybackTarget::Vod(vod()));
     c.select("720p60");
     assert_eq!(
-        c.background(true, Seconds::new(600)),
+        c.background(true, true, Seconds::new(600)),
         Some(BackgroundStep::Open(open("audio_only", 600, false)))
     );
     assert_eq!(selected(&c), Some("720p60"));
@@ -994,7 +994,7 @@ fn background_audio_carries_on_audio_only_and_comes_back_to_the_selection() {
 fn background_audio_on_live_reopens_at_the_live_edge() {
     let mut c = ready_with_audio(live("a"));
     assert_eq!(
-        c.background(true, Seconds::new(600)),
+        c.background(true, true, Seconds::new(600)),
         Some(BackgroundStep::Open(open("audio_only", 0, true)))
     );
     assert_eq!(
@@ -1007,14 +1007,14 @@ fn background_audio_on_live_reopens_at_the_live_edge() {
 fn already_audio_only_changes_nothing_either_way() {
     let mut c = ready_with_audio(live("a"));
     c.select("audio_only");
-    assert_eq!(c.background(true, Seconds::ZERO), None);
+    assert_eq!(c.background(true, true, Seconds::ZERO), None);
     assert_eq!(foreground(&mut c, 0, &no_resume()), None);
 }
 
 #[test]
 fn a_stream_without_audio_only_keeps_its_quality_in_the_background() {
     let mut c = ready(live("a"));
-    assert_eq!(c.background(true, Seconds::ZERO), None);
+    assert_eq!(c.background(true, true, Seconds::ZERO), None);
     assert_eq!(foreground(&mut c, 0, &no_resume()), None);
 }
 
@@ -1022,7 +1022,7 @@ fn a_stream_without_audio_only_keeps_its_quality_in_the_background() {
 fn background_audio_off_stops_and_carries_on_where_it_stopped() {
     let mut c = ready_with_audio(PlaybackTarget::Vod(vod()));
     assert_eq!(
-        c.background(false, Seconds::new(600)),
+        c.background(false, true, Seconds::new(600)),
         Some(BackgroundStep::Stop)
     );
     assert!(c.stopped_away());
@@ -1034,12 +1034,74 @@ fn background_audio_off_stops_and_carries_on_where_it_stopped() {
 }
 
 #[test]
+fn a_paused_player_stays_as_it_is_in_the_background_and_back() {
+    for audio in [true, false] {
+        let mut c = ready_with_audio(PlaybackTarget::Vod(vod()));
+        assert_eq!(c.background(audio, false, Seconds::new(600)), None);
+        assert!(!c.stopped_away());
+        assert_eq!(foreground(&mut c, 600, &no_resume()), None);
+    }
+}
+
+#[test]
+fn played_again_away_a_paused_player_carries_on_audio_only() {
+    let mut c = ready_with_audio(PlaybackTarget::Vod(vod()));
+    c.background(true, false, Seconds::new(600));
+    assert_eq!(
+        c.play_away(true, Seconds::new(610)),
+        Some(open("audio_only", 610, false))
+    );
+    assert_eq!(c.play_away(true, Seconds::new(620)), None);
+    assert_eq!(
+        foreground(&mut c, 900, &no_resume()),
+        Some(open("1080p60", 900, false))
+    );
+}
+
+#[test]
+fn played_again_away_without_background_audio_plays_on_as_it_is() {
+    let mut c = ready_with_audio(PlaybackTarget::Vod(vod()));
+    c.background(false, false, Seconds::new(600));
+    assert_eq!(c.play_away(false, Seconds::new(610)), None);
+    assert!(!c.stopped_away());
+    assert_eq!(foreground(&mut c, 900, &no_resume()), None);
+}
+
+#[test]
+fn playing_away_changes_nothing_unless_paused_away() {
+    let mut c = ready_with_audio(live("a"));
+    assert_eq!(c.play_away(true, Seconds::ZERO), None);
+    c.background(true, true, Seconds::ZERO);
+    assert_eq!(c.play_away(true, Seconds::ZERO), None);
+}
+
+/// A page still resolving reports a player not playing; it is not one
+/// the user paused.
+#[test]
+fn a_page_resolving_as_the_app_leaves_still_opens_audio_only() {
+    let target = live("a");
+    let mut c = PlaybackController::new();
+    c.begin(target.clone());
+    assert_eq!(c.background(true, false, Seconds::ZERO), None);
+    c.apply(
+        target,
+        Ok(playback(vec![
+            variant("1080p60", 1080, QualityKind::Source),
+            variant("audio_only", 0, QualityKind::AudioOnly),
+        ])),
+        no_details(),
+        QualityPreference::Source,
+    );
+    assert_eq!(c.open(&no_resume()), Ok(Some(open("audio_only", 0, true))));
+}
+
+#[test]
 fn a_stopped_player_records_nothing() {
     let store = FakeResumeStore::default();
     let mut resume = ResumeController::new(Box::new(store.clone()));
     let target = PlaybackTarget::Vod(vod());
     let mut c = ready_with_audio(target.clone());
-    c.background(false, Seconds::new(600));
+    c.background(false, true, Seconds::new(600));
     assert_eq!(record(&c, &mut resume, &target, 0, 3600), None);
     assert!(store.points().is_empty());
 }
@@ -1049,7 +1111,7 @@ fn a_listening_player_records_its_position() {
     let mut resume = no_resume();
     let target = PlaybackTarget::Vod(vod());
     let mut c = ready_with_audio(target.clone());
-    c.background(true, Seconds::new(600));
+    c.background(true, true, Seconds::new(600));
     assert_eq!(
         record(&c, &mut resume, &target, 700, 3600),
         Some(ResumeDecision::Save)
@@ -1059,8 +1121,8 @@ fn a_listening_player_records_its_position() {
 #[test]
 fn backgrounding_twice_changes_nothing_the_second_time() {
     let mut c = ready_with_audio(live("a"));
-    assert!(c.background(true, Seconds::ZERO).is_some());
-    assert_eq!(c.background(false, Seconds::ZERO), None);
+    assert!(c.background(true, true, Seconds::ZERO).is_some());
+    assert_eq!(c.background(false, true, Seconds::ZERO), None);
     assert!(!c.stopped_away());
 }
 
@@ -1074,7 +1136,7 @@ fn foreground_without_background_changes_nothing() {
 fn nothing_playing_has_nothing_to_change() {
     let mut c = PlaybackController::new();
     c.begin(live("a"));
-    assert_eq!(c.background(true, Seconds::ZERO), None);
+    assert_eq!(c.background(true, true, Seconds::ZERO), None);
     assert_eq!(foreground(&mut c, 0, &no_resume()), None);
 }
 
@@ -1083,7 +1145,7 @@ fn a_page_resolved_while_listening_opens_audio_only() {
     let target = PlaybackTarget::Vod(vod());
     let mut c = PlaybackController::new();
     c.begin(target.clone());
-    c.background(true, Seconds::ZERO);
+    c.background(true, true, Seconds::ZERO);
     c.apply(
         target,
         Ok(playback(vec![
@@ -1107,7 +1169,7 @@ fn a_page_resolved_while_stopped_opens_nothing_until_back_then_at_its_resume_poi
     let target = PlaybackTarget::Vod(vod());
     let mut c = PlaybackController::new();
     c.begin(target.clone());
-    assert_eq!(c.background(false, Seconds::ZERO), None);
+    assert_eq!(c.background(false, true, Seconds::ZERO), None);
     c.apply(
         target,
         Ok(playback(vec![variant(
@@ -1561,7 +1623,7 @@ fn a_refused_recording_turns_the_rewind_off_for_good_while_live_plays_on() {
 fn a_recording_resolved_while_stopped_away_opens_at_the_rewind_start_not_the_live_position() {
     let mut c = loading();
     assert_eq!(
-        c.background(false, Seconds::new(600)),
+        c.background(false, true, Seconds::new(600)),
         Some(BackgroundStep::Stop)
     );
     apply_rewind(&mut c, Ok(vod_ladder()));
@@ -1799,7 +1861,7 @@ fn back_at_live_without_details_plays_and_offers_no_rewind() {
 fn a_rewound_page_carries_on_mid_recording_in_the_background_and_back() {
     for mut c in [rewound(), returning()] {
         assert_eq!(
-            c.background(true, Seconds::new(4_000)),
+            c.background(true, true, Seconds::new(4_000)),
             Some(BackgroundStep::Open(vod_open("audio_only", 4_000)))
         );
         assert_eq!(
