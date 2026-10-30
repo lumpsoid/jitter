@@ -1043,6 +1043,38 @@ fn a_paused_player_stays_as_it_is_in_the_background_and_back() {
     }
 }
 
+#[test]
+fn played_again_away_a_paused_player_carries_on_audio_only() {
+    let mut c = ready_with_audio(PlaybackTarget::Vod(vod()));
+    c.background(true, false, Seconds::new(600));
+    assert_eq!(
+        c.play_away(true, Seconds::new(610)),
+        Some(open("audio_only", 610, false))
+    );
+    assert_eq!(c.play_away(true, Seconds::new(620)), None);
+    assert_eq!(
+        foreground(&mut c, 900, &no_resume()),
+        Some(open("1080p60", 900, false))
+    );
+}
+
+#[test]
+fn played_again_away_without_background_audio_plays_on_as_it_is() {
+    let mut c = ready_with_audio(PlaybackTarget::Vod(vod()));
+    c.background(false, false, Seconds::new(600));
+    assert_eq!(c.play_away(false, Seconds::new(610)), None);
+    assert!(!c.stopped_away());
+    assert_eq!(foreground(&mut c, 900, &no_resume()), None);
+}
+
+#[test]
+fn playing_away_changes_nothing_unless_paused_away() {
+    let mut c = ready_with_audio(live("a"));
+    assert_eq!(c.play_away(true, Seconds::ZERO), None);
+    c.background(true, true, Seconds::ZERO);
+    assert_eq!(c.play_away(true, Seconds::ZERO), None);
+}
+
 /// A page still resolving reports a player not playing; it is not one
 /// the user paused.
 #[test]

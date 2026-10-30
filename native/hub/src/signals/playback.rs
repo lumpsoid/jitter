@@ -98,6 +98,14 @@ pub struct AppBackgrounded {
     pub playing: bool,
 }
 
+/// The player started playing at `position_s` while the app is in the
+/// background (the media notification, a headset or media key). Rust
+/// decides whether it switches to audio only.
+#[derive(Deserialize, DartSignal)]
+pub struct PlayerStartedAway {
+    pub position_s: u32,
+}
+
 /// The app is back in front, with the player at `position_s`.
 #[derive(Deserialize, DartSignal)]
 pub struct AppForegrounded {

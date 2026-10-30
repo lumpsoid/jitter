@@ -76,7 +76,8 @@ enum Away {
     /// The player carries on with the audio-only quality.
     Listening,
     /// The user had paused the player: it stays as it was, on the
-    /// selected quality.
+    /// selected quality, also when played again away without background
+    /// audio.
     Paused,
     /// The player stopped; `at` is where it carries on from, `None` when
     /// nothing was playing yet.
@@ -264,6 +265,21 @@ impl PlaybackController {
             (Some(before), Some(open)) if open.url != before => Some(BackgroundStep::Open(open)),
             _ => None,
         }
+    }
+
+    /// The player started playing at `position` while the app is away.
+    /// One the user had paused ([`Self::background`]) now carries on as
+    /// one that went away playing: with `audio` on the audio-only quality,
+    /// what to open; without, on the selected one as it plays. `None` when
+    /// the player has nothing to change.
+    pub fn play_away(&mut self, audio: bool, position: Seconds) -> Option<Open> {
+        if self.away != Some(Away::Paused) || !audio {
+            return None;
+        }
+        let before = self.playing_url();
+        self.away = Some(Away::Listening);
+        self.open_at(position)
+            .filter(|open| Some(&open.url) != before.as_ref())
     }
 
     /// The app is back in front with the player at `position`: what to

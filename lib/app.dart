@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
@@ -80,6 +81,9 @@ const _stopForExitFor = Duration(milliseconds: 500);
 class _JitterAppState extends State<JitterApp> {
   late final AppLifecycleListener _lifecycle;
 
+  /// The player's starts while the app is out of sight; `null` in front.
+  StreamSubscription<bool>? _startsAway;
+
   @override
   void initState() {
     super.initState();
@@ -95,18 +99,34 @@ class _JitterAppState extends State<JitterApp> {
         return AppExitResponse.exit;
       },
       // Rust decides what the player does while the app is out of sight.
-      onHide: () => AppBackgrounded(
-        positionS: widget.player.position.inSeconds,
-        playing: widget.player.isPlaying,
-      ).sendSignalToRust(),
-      onShow: () =>
-          AppForegrounded(positionS: widget.player.position.inSeconds)
-              .sendSignalToRust(),
+      onHide: () {
+        AppBackgrounded(
+          positionS: widget.player.position.inSeconds,
+          playing: widget.player.isPlaying,
+        ).sendSignalToRust();
+        // The first event is the state now, already reported above.
+        _startsAway = widget.player.playing
+            .skip(1)
+            .where((playing) => playing)
+            .listen(
+              (_) => PlayerStartedAway(
+                positionS: widget.player.position.inSeconds,
+              ).sendSignalToRust(),
+            );
+      },
+      onShow: () {
+        unawaited(_startsAway?.cancel());
+        _startsAway = null;
+        AppForegrounded(
+          positionS: widget.player.position.inSeconds,
+        ).sendSignalToRust();
+      },
     );
   }
 
   @override
   void dispose() {
+    unawaited(_startsAway?.cancel());
     _lifecycle.dispose();
     super.dispose();
   }
