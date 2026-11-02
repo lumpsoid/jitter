@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:jitter/player/faded_volume.dart';
@@ -6,6 +7,21 @@ import 'package:jitter/player/player_engine.dart';
 import 'package:jitter/player/video_zoom.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+
+/// The mpv `hwdec` to decode with under the [environment]; `null` keeps
+/// media_kit's `auto`.
+///
+/// Under gamescope (SteamOS game mode), `auto` tries Vulkan decoding, and
+/// gamescope's WSI layer aborts the process when FFmpeg 9 creates its
+/// Vulkan device: the layer's vkroots fetches the device's queues with
+/// `vkGetDeviceQueue`, which gives none for queues FFmpeg creates
+/// internally synchronized (misyltoad/vkroots#17). VA-API decodes the
+/// same streams there; `vaapi-copy` keeps it when the video is drawn
+/// without EGL.
+String? hwdecFor(Map<String, String> environment) =>
+    environment.containsKey('GAMESCOPE_WAYLAND_DISPLAY')
+    ? 'vaapi,vaapi-copy'
+    : null;
 
 /// [PlayerEngine] on `media_kit` (libmpv). One for the app's lifetime; the
 /// player page shows [controller]. The player is created on first use, so
@@ -18,7 +34,12 @@ class MediaKitEngine implements PlayerEngine {
   Player? _created;
 
   /// What the player page's `Video` renders.
-  late final VideoController controller = VideoController(_player);
+  late final VideoController controller = VideoController(
+    _player,
+    configuration: VideoControllerConfiguration(
+      hwdec: hwdecFor(Platform.environment),
+    ),
+  );
 
   final _volume = FadedVolume();
 
