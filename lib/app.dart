@@ -109,17 +109,16 @@ class _JitterAppState extends State<JitterApp> {
             .skip(1)
             .where((playing) => playing)
             .listen(
-              (_) => PlayerStartedAway(
-                positionS: widget.player.position.inSeconds,
-              ).sendSignalToRust(),
+              (_) =>
+                  PlayerStartedAway(positionS: widget.player.position.inSeconds)
+                      .sendSignalToRust(),
             );
       },
       onShow: () {
         unawaited(_startsAway?.cancel());
         _startsAway = null;
-        AppForegrounded(
-          positionS: widget.player.position.inSeconds,
-        ).sendSignalToRust();
+        AppForegrounded(positionS: widget.player.position.inSeconds)
+            .sendSignalToRust();
       },
     );
   }
