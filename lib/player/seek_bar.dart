@@ -31,7 +31,8 @@ const _rest = Duration(milliseconds: 150);
 /// away from the bar ([ScrubSpeed]); the slower of the two wins. A slowed
 /// press does not jump: the drag starts from where it plays. A finger's
 /// drag ends where it was held, not where its lift rolled it. Over the bar
-/// a bubble shows the time under the pointer, or the drag's and its speed.
+/// a bubble shows the time under the pointer, or the drag's and its speed;
+/// a drag also tells the tree above where it is ([ScrubNotification]).
 ///
 /// A drag seeks the player itself, where it rests and where it ends, so
 /// its frame shows. Twitch also publishes preview images along each VOD
@@ -96,6 +97,10 @@ class _SeekBarState extends State<SeekBar> {
   /// not seek there again.
   Duration? _sought;
 
+  /// Where it played as the drag began, for the [ScrubNotification]'s
+  /// offset.
+  Duration _from = Duration.zero;
+
   @override
   void initState() {
     super.initState();
@@ -125,8 +130,21 @@ class _SeekBarState extends State<SeekBar> {
   /// Redraws a drag's speed as Shift or Ctrl goes down or up; the key
   /// goes on to whatever else handles it.
   bool _onKey(KeyEvent event) {
-    if (_scrub != null) setState(() {});
+    if (_scrub != null) {
+      setState(() {});
+      _tell();
+    }
     return false;
+  }
+
+  /// Tells the tree above where the drag is, or that it ended.
+  void _tell() {
+    final scrub = _scrub;
+    ScrubNotification(
+      scrub == null
+          ? null
+          : ScrubReading(target: scrub.target, from: _from, speed: _speed),
+    ).dispatch(context);
   }
 
   double _fraction(Duration at) => _duration > Duration.zero
@@ -141,7 +159,9 @@ class _SeekBarState extends State<SeekBar> {
       position: _position,
       speed: _speed,
     );
+    _from = _position;
     setState(() => _scrub = scrub);
+    _tell();
     _trail = _mouse ? null : ScrubTrail(_downAt, scrub);
     _seek(scrub.target);
   }
@@ -157,10 +177,15 @@ class _SeekBarState extends State<SeekBar> {
     if (_mouse) _hoverUnder(details.globalPosition);
     final y = details.localPosition.dy;
     final away = ScrubSpeed.away(y < 0 ? y : math.max(0, y - seekBarHeight));
-    if (away != _away) setState(() => _away = away);
+    final slowed = away != _away;
+    if (slowed) setState(() => _away = away);
     final scrub = _scrub?.moveTo(details.localPosition.dx, _speed);
-    if (scrub == null || scrub.target == _scrub?.target) return;
+    if (scrub == null || scrub.target == _scrub?.target) {
+      if (slowed) _tell();
+      return;
+    }
     setState(() => _scrub = scrub);
+    _tell();
     _trail?.add(details.sourceTimeStamp ?? _downAt, scrub);
     _resting?.cancel();
     _resting = Timer(_rest, () => _seek(scrub.target));
@@ -184,6 +209,7 @@ class _SeekBarState extends State<SeekBar> {
       _scrub = null;
       _away = ScrubSpeed.normal;
     });
+    _tell();
   }
 
   /// media_kit's desktop controls hide a while after the mouse last hovered
@@ -311,6 +337,34 @@ String clock(Duration at) {
   final m = at.inMinutes % 60;
   final s = at.inSeconds % 60;
   return h > 0 ? '$h:${two(m)}:${two(s)}' : '$m:${two(s)}';
+}
+
+/// [by] as a signed [clock]: `+2:15`, `−1:02:03`.
+String signedClock(Duration by) =>
+    '${by.isNegative ? '−' : '+'}${clock(by.abs())}';
+
+/// Where a drag along a [SeekBar] is: the [target] it would seek to, the
+/// spot it played [from] as the drag began, and its [speed].
+@immutable
+class ScrubReading {
+  const new({required this.target, required this.from, required this.speed});
+
+  final Duration target;
+  final Duration from;
+  final ScrubSpeed speed;
+
+  /// How far the drag has gone from where it played.
+  Duration get offset => target - from;
+}
+
+/// Told up the tree as a [SeekBar]'s drag starts and moves, with its
+/// [reading], and once more as it ends, with none: a finger covers the
+/// bar's own bubble, so the controls around it can show the drag clear of
+/// the finger.
+class ScrubNotification extends Notification {
+  new(this.reading);
+
+  final ScrubReading? reading;
 }
 
 /// The track, filled to [buffered] and [played] (fractions of it), and

@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:jitter/player/scrub.dart';
+import 'package:jitter/player/seek_bar.dart';
 import 'package:jitter/player/vod_keys.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
@@ -13,6 +15,11 @@ const _fade = Duration(milliseconds: 300);
 /// How long a double tap's `−10 s` or `+10 s` shows.
 const _flashFor = Duration(milliseconds: 700);
 
+/// The least room kept from a fullscreen's edges, notch or none: a phone's
+/// rounded corners cut into its sides and bottom, and a thumb at its very
+/// edge reaches the bar badly.
+const _fullscreenMargin = EdgeInsets.fromLTRB(32, 0, 32, 16);
+
 const _backdrop = Color(0x66000000);
 const _white = Color(0xFFFFFFFF);
 
@@ -22,6 +29,9 @@ const _white = Color(0xFFFFFFFF);
 /// slow drag on the [bar] keeps it, where media_kit's hide 3 s after the
 /// tap that showed them, drag or not. A double tap on the left or right
 /// third goes [vodSeekStep] back or on, shown or not, and flashes it.
+/// While a finger drags the [bar], its time shows big over the picture,
+/// clear of the finger, with how far it has gone and how slowed it is
+/// ([ScrubNotification]).
 ///
 /// The parts are given: media_kit's [playPause] and [fullscreen] buttons,
 /// the page's [readout], seek [bar] and, for a rewound live stream, its
@@ -80,6 +90,9 @@ class _VodPhoneControlsState extends State<VodPhoneControls> {
   /// The step a double tap just went, shown on its side; null when none.
   Duration? _flash;
   Timer? _flashing;
+
+  /// The bar's drag under way, or null.
+  ScrubReading? _scrub;
 
   @override
   void initState() {
@@ -164,9 +177,23 @@ class _VodPhoneControlsState extends State<VodPhoneControls> {
                 opacity: _visible ? 1 : 0,
                 duration: _fade,
                 onEnd: () {
-                  if (!_visible) setState(() => _built = false);
+                  if (!_visible) {
+                    setState(() {
+                      _built = false;
+                      _scrub = null;
+                    });
+                  }
                 },
-                child: IgnorePointer(ignoring: !_visible, child: _controls()),
+                child: IgnorePointer(
+                  ignoring: !_visible,
+                  child: NotificationListener<ScrubNotification>(
+                    onNotification: (notification) {
+                      setState(() => _scrub = notification.reading);
+                      return true;
+                    },
+                    child: _controls(),
+                  ),
+                ),
               ),
             if (_buffering)
               const IgnorePointer(
@@ -195,14 +222,25 @@ class _VodPhoneControlsState extends State<VodPhoneControls> {
         child: IgnorePointer(child: ColoredBox(color: _backdrop)),
       ),
       if (!_buffering) Center(child: widget.playPause),
+      if (_scrub case final scrub?)
+        // Up, away from the finger on the bar and from the spinner.
+        IgnorePointer(
+          child: Align(
+            alignment: const Alignment(0, -0.6),
+            child: _ScrubReadout(scrub),
+          ),
+        ),
       Positioned(
         left: 0,
         right: 0,
         bottom: 0,
         child: Padding(
-          // Clear of the screen's notches and bars in fullscreen.
+          // Clear of the screen's notches, bars and corners in fullscreen.
           padding: isFullscreen(context)
-              ? MediaQuery.paddingOf(context)
+              ? MediaQuery.paddingOf(context).clamp(
+                  _fullscreenMargin,
+                  const EdgeInsets.all(double.infinity),
+                )
               : EdgeInsets.zero,
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -228,6 +266,53 @@ class _VodPhoneControlsState extends State<VodPhoneControls> {
       ),
     ],
   );
+}
+
+/// A drag's time, big; under it how far it has gone, and how slowed it is
+/// or how to slow it.
+class _ScrubReadout extends StatelessWidget {
+  const new(this.scrub);
+
+  final ScrubReading scrub;
+
+  @override
+  Widget build(BuildContext context) {
+    final speed = scrub.speed == ScrubSpeed.normal
+        ? 'slide up for finer'
+        : scrub.speed.label;
+    const figures = [FontFeature.tabularFigures()];
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _backdrop,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              clock(scrub.target),
+              style: const TextStyle(
+                color: _white,
+                fontSize: 32,
+                fontWeight: FontWeight.w500,
+                fontFeatures: figures,
+              ),
+            ),
+            Text(
+              '${signedClock(scrub.offset)}  ·  $speed',
+              style: const TextStyle(
+                color: _white,
+                fontSize: 14,
+                fontFeatures: figures,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// A double tap's step on its side: `−10 s` or `+10 s`.

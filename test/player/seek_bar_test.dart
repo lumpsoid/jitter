@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/player/live.dart';
+import 'package:jitter/player/scrub.dart';
 import 'package:jitter/player/seek_bar.dart';
 
 const _vod = Duration(hours: 6);
@@ -11,30 +12,40 @@ const _vod = Duration(hours: 6);
 const _rest = Duration(milliseconds: 150);
 
 /// Pumps the bar 1000 wide at the top-left of the screen, over a 6-hour
-/// VOD playing at an hour in; each seek is added to the list returned.
-Future<List<Duration>> pumpBar(WidgetTester tester) async {
+/// VOD playing at an hour in; each seek is added to the list returned, and
+/// each [ScrubNotification]'s reading to [scrubs].
+Future<List<Duration>> pumpBar(
+  WidgetTester tester, {
+  List<ScrubReading?>? scrubs,
+}) async {
   final seeks = <Duration>[];
   tester.view
     ..physicalSize = const Size(1200, 600)
     ..devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
-    Directionality(
-      textDirection: TextDirection.ltr,
-      child: Align(
-        alignment: Alignment.topLeft,
-        child: Padding(
-          padding: const EdgeInsets.only(top: 100),
-          child: SizedBox(
-            width: 1000,
-            child: SeekBar(
-              positions: Live(
-                now: () => const Duration(hours: 1),
-                changes: Stream.empty,
+    NotificationListener<ScrubNotification>(
+      onNotification: (notification) {
+        scrubs?.add(notification.reading);
+        return true;
+      },
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 100),
+            child: SizedBox(
+              width: 1000,
+              child: SeekBar(
+                positions: Live(
+                  now: () => const Duration(hours: 1),
+                  changes: Stream.empty,
+                ),
+                durations: Live(now: () => _vod, changes: Stream.empty),
+                buffers: Live(now: () => Duration.zero, changes: Stream.empty),
+                onSeek: seeks.add,
               ),
-              durations: Live(now: () => _vod, changes: Stream.empty),
-              buffers: Live(now: () => Duration.zero, changes: Stream.empty),
-              onSeek: seeks.add,
             ),
           ),
         ),
@@ -259,6 +270,31 @@ void main() {
     await tester.pump();
 
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a drag tells where it is, how far it went, and its end', (
+    tester,
+  ) async {
+    final scrubs = <ScrubReading?>[];
+    await pumpBar(tester, scrubs: scrubs);
+
+    final drag = await tester.startGesture(_at(250));
+    await drag.moveTo(_at(250) - const Offset(0, 80));
+    await drag.moveTo(_at(350) - const Offset(0, 80));
+    final moved = scrubs.last;
+    await drag.up();
+    await tester.pump(_rest);
+
+    expect(scrubs.first?.target, const Duration(hours: 1, minutes: 30));
+    expect(moved?.target, const Duration(hours: 1, minutes: 33, seconds: 36));
+    expect(moved?.offset, const Duration(minutes: 33, seconds: 36));
+    expect(moved?.speed, ScrubSpeed.fine);
+    expect(scrubs.last, isNull);
+  });
+
+  test('a signed clock reads +m:ss or −h:mm:ss', () {
+    expect(signedClock(const Duration(minutes: 2, seconds: 15)), '+2:15');
+    expect(signedClock(const Duration(hours: -1, minutes: -2)), '−1:02:00');
   });
 
   test('a clock reads h:mm:ss, or m:ss under an hour', () {

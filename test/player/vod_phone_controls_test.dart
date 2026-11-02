@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jitter/player/scrub.dart';
+import 'package:jitter/player/seek_bar.dart';
 import 'package:jitter/player/vod_phone_controls.dart';
 
 /// Long enough for a lone tap to be no double tap.
@@ -14,6 +16,7 @@ Future<void> pumpControls(
   List<Duration>? seeks,
   Stream<bool>? bufferings,
   Widget? mode,
+  Widget? bar,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -27,11 +30,13 @@ Future<void> pumpControls(
               playPause: const Text('play'),
               readout: const Text('readout'),
               fullscreen: const Text('fullscreen'),
-              bar: const SizedBox(
-                key: Key('bar'),
-                height: 36,
-                child: ColoredBox(color: Color(0xFF00FF00)),
-              ),
+              bar:
+                  bar ??
+                  const SizedBox(
+                    key: Key('bar'),
+                    height: 36,
+                    child: ColoredBox(color: Color(0xFF00FF00)),
+                  ),
               bufferings: () => bufferings ?? Stream.value(false),
               onSeekBy: (by) => seeks?.add(by),
               mode: mode,
@@ -144,6 +149,47 @@ void main() {
     await tester.pump();
     expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(find.text('play'), findsOneWidget);
+  });
+
+  testWidgets("the bar's drag shows big, with its offset, until it ends", (
+    tester,
+  ) async {
+    late BuildContext bar;
+    await pumpControls(
+      tester,
+      bar: Builder(
+        builder: (context) {
+          bar = context;
+          return const SizedBox(height: 36);
+        },
+      ),
+    );
+    await tapVideo(tester);
+
+    ScrubNotification(
+      const ScrubReading(
+        target: Duration(hours: 1, minutes: 30),
+        from: Duration(hours: 1),
+        speed: ScrubSpeed.normal,
+      ),
+    ).dispatch(bar);
+    await tester.pump();
+    expect(find.text('1:30:00'), findsOneWidget);
+    expect(find.text('+30:00  ·  slide up for finer'), findsOneWidget);
+
+    ScrubNotification(
+      const ScrubReading(
+        target: Duration(minutes: 55),
+        from: Duration(hours: 1),
+        speed: ScrubSpeed.fine,
+      ),
+    ).dispatch(bar);
+    await tester.pump();
+    expect(find.text('−5:00  ·  ×1/10'), findsOneWidget);
+
+    ScrubNotification(null).dispatch(bar);
+    await tester.pump();
+    expect(find.text('55:00'), findsNothing);
   });
 
   testWidgets('without a mode the readout row is readout, then fullscreen', (
