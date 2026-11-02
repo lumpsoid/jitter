@@ -54,6 +54,22 @@ static void my_application_activate(GApplication* application) {
 
   gtk_window_set_default_size(window, 1280, 720);
 
+  // gamescope (SteamOS game mode) has no window manager to size the window:
+  // it shows it as it is and scales it to the output, blurring it. Open it at
+  // the output's size so it is drawn 1:1.
+  if (g_getenv("GAMESCOPE_WAYLAND_DISPLAY") != nullptr) {
+    GdkDisplay* display = gtk_widget_get_display(GTK_WIDGET(window));
+    GdkMonitor* monitor = gdk_display_get_primary_monitor(display);
+    if (monitor == nullptr && gdk_display_get_n_monitors(display) > 0) {
+      monitor = gdk_display_get_monitor(display, 0);
+    }
+    if (monitor != nullptr) {
+      GdkRectangle geometry;
+      gdk_monitor_get_geometry(monitor, &geometry);
+      gtk_window_set_default_size(window, geometry.width, geometry.height);
+    }
+  }
+
   // The bundle keeps data/ next to the executable. Wayland compositors ignore
   // this and take the icon from the .desktop file matching APPLICATION_ID.
   g_autofree gchar* exe = g_file_read_link("/proc/self/exe", nullptr);
