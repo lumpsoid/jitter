@@ -74,6 +74,11 @@ pub struct ChatLine {
     /// user's lines by it.
     pub sender: String,
     pub name: String,
+    /// The sender's name as `mentions` holds it, so the GUI can gather the
+    /// lines that mention a user by it.
+    pub handle: String,
+    /// Whom the line `@` mentions, as their `handle`s.
+    pub mentions: Vec<String>,
     /// The name's colour, `0xAARRGGBB`, readable on the theme last set.
     pub color: u32,
     /// A `/me` message: the body is drawn in the name's colour.

@@ -346,10 +346,11 @@ class _Message extends StatelessWidget {
   }
 }
 
-/// What one user wrote in the chat as it stands, oldest at the top: their
-/// name, then their messages (user notices with their text among them),
-/// drawn as in the panel. Follows the chat while open: new lines of theirs
-/// join, deleted ones show as such, and those the chat drops leave.
+/// One user's part in the chat as it stands, oldest at the top: their name,
+/// then their messages (user notices with their text among them) and the
+/// others' that mention them, drawn as in the panel. Follows the chat while
+/// open: new such lines join, deleted ones show as such, and those the chat
+/// drops leave.
 class _ChatterSheet extends StatelessWidget {
   const new({required this.chat, required this.tapped});
 
@@ -365,10 +366,16 @@ class _ChatterSheet extends StatelessWidget {
     return ListenableBuilder(
       listenable: chat,
       builder: (context, _) {
-        final messages = chat.messagesFrom(tapped.sender);
-        // The latest line has the name as it now reads, in the colour for
+        final messages = chat.messagesAbout(tapped.sender, tapped.handle);
+        // Their latest line has the name as it now reads, in the colour for
         // the theme last set.
-        final latest = messages.lastOrNull?.line ?? tapped;
+        final latest =
+            messages
+                .map((entry) => entry.line)
+                .whereType<ChatLine>()
+                .where((line) => line.sender == tapped.sender)
+                .lastOrNull ??
+            tapped;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

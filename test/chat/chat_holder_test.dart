@@ -3,21 +3,31 @@ import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/chat/chat_mode.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 
-ChatItem line(String id, {bool deleted = false, String sender = '1'}) =>
-    ChatItemMessage(
-      line: said(id, deleted: deleted, sender: sender),
-    );
+ChatItem line(
+  String id, {
+  bool deleted = false,
+  String sender = '1',
+  List<String> mentions = const [],
+}) => ChatItemMessage(
+  line: said(id, deleted: deleted, sender: sender, mentions: mentions),
+);
 
-ChatLine said(String id, {bool deleted = false, String sender = '1'}) =>
-    ChatLine(
-      id: id,
-      sender: sender,
-      name: 'user$id',
-      color: 0xFFFF0000,
-      action: false,
-      deleted: deleted,
-      fragments: [ChatFragmentText(text: 'hi $id')],
-    );
+ChatLine said(
+  String id, {
+  bool deleted = false,
+  String sender = '1',
+  List<String> mentions = const [],
+}) => ChatLine(
+  id: id,
+  sender: sender,
+  name: 'user$id',
+  handle: 'user$id',
+  mentions: mentions,
+  color: 0xFFFF0000,
+  action: false,
+  deleted: deleted,
+  fragments: [ChatFragmentText(text: 'hi $id')],
+);
 
 const connecting = ChatStatus(banner: 'Connecting to chat…', modes: []);
 const connected = ChatStatus(modes: ['Slow mode (30s)']);
@@ -195,27 +205,31 @@ void main() {
     expect(sent, ['hide', 'show']);
   });
 
-  test("one sender's lines are the chat's own entries, in order", () {
-    holder
-      ..apply(
-        ChatUpdateSnapshot(
-          messages: [
-            line('a', sender: '7'),
-            line('b'),
-            const ChatItemNotice(system: 'A raid!'),
-            ChatItemNotice(
-              system: 'Subscribed!',
-              line: said('c', sender: '7'),
-            ),
-          ],
-          status: connected,
-        ),
-      )
-      ..apply(const ChatUpdateMarked(ids: ['a']));
+  test(
+    "a user's and mentioning lines are the chat's own entries, in order",
+    () {
+      holder
+        ..apply(
+          ChatUpdateSnapshot(
+            messages: [
+              line('a', sender: '7'),
+              line('b'),
+              line('m', mentions: ['user7']),
+              const ChatItemNotice(system: 'A raid!'),
+              ChatItemNotice(
+                system: 'Subscribed!',
+                line: said('c', sender: '7'),
+              ),
+            ],
+            status: connected,
+          ),
+        )
+        ..apply(const ChatUpdateMarked(ids: ['a']));
 
-    final from = holder.messagesFrom('7');
-    expect([for (final m in from) m.line?.id], ['a', 'c']);
-    expect(from.first.deleted, isTrue);
-    expect(holder.messagesFrom('9'), isEmpty);
-  });
+      final about = holder.messagesAbout('7', 'user7');
+      expect([for (final m in about) m.line?.id], ['a', 'm', 'c']);
+      expect(about.first.deleted, isTrue);
+      expect(holder.messagesAbout('9', 'user9'), isEmpty);
+    },
+  );
 }

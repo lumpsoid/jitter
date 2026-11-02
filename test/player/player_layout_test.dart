@@ -18,6 +18,8 @@ ChatHolder _chat() => ChatHolder(sendTheme: (_) {})
             id: 'a',
             sender: '1',
             name: 'alice',
+            handle: 'alice',
+            mentions: [],
             color: 0xFFFF0000,
             action: false,
             deleted: false,
