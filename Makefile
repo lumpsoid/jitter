@@ -19,9 +19,11 @@ flutter-check: gen
 gen:
 	rinf gen
 
+# dart format has no exclude option; listing the files git sees skips
+# the gitignored bindings.
 fmt:
 	cargo fmt
-	dart format lib test
+	git ls-files -z --cached --others --exclude-standard -- 'lib/*.dart' 'test/*.dart' | xargs -0 dart format
 
 run: gen
 	flutter run -d linux
