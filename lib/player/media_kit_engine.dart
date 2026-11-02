@@ -18,6 +18,10 @@ import 'package:media_kit_video/media_kit_video.dart';
 /// internally synchronized (misyltoad/vkroots#17). VA-API decodes the
 /// same streams there; `vaapi-copy` keeps it when the video is drawn
 /// without EGL.
+///
+/// Workaround: remove it, and its test, once SteamOS ships a gamescope
+/// whose vkroots has that fix (ValveSoftware/gamescope#2261). How to
+/// check, and the full trail: `docs/gamescope-vulkan-hwdec.md`.
 String? hwdecFor(Map<String, String> environment) =>
     environment.containsKey('GAMESCOPE_WAYLAND_DISPLAY')
     ? 'vaapi,vaapi-copy'

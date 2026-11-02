@@ -1,3 +1,5 @@
+// Remove with `hwdecFor`: see docs/gamescope-vulkan-hwdec.md.
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 
