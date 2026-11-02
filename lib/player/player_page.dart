@@ -30,6 +30,7 @@ import 'package:jitter/player/zoom_reset.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/widgets/escape_goes_back.dart';
 import 'package:jitter/widgets/last_pointer.dart';
+import 'package:jitter/widgets/refresh_key.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 /// How often the page reports the player's position; Rust throttles saves.
@@ -102,6 +103,16 @@ class _PlayerPageState extends State<PlayerPage> {
   /// or on the sleep timer's Resume; Rust answers with `PlaybackUpdate`,
   /// loading first.
   void _play() => Play(target: widget.target).sendSignalToRust();
+
+  /// Ctrl+R: a page playing shows what plays afresh, the player and the
+  /// chat left as they are; a failed page tries again, as its Retry does.
+  void _refresh() => switch (widget.playback.state) {
+    PlaybackUpdateReady() => RefreshPlayback(
+      target: widget.target,
+    ).sendSignalToRust(),
+    PlaybackUpdateFailed() => _play(),
+    _ => null,
+  };
 
   void _reportPosition() => PlayerPosition(
     target: widget.target,
@@ -229,76 +240,79 @@ class _PlayerPageState extends State<PlayerPage> {
 
   @override
   Widget build(BuildContext context) {
-    return PlayerShortcuts(
-      onToggleChat: widget.chat.toggle,
-      onToggleMute: () => unawaited(widget.player.toggleMute()),
-      onToggleFullscreen: _toggleFullscreen,
-      onTogglePlay: () => unawaited(widget.player.togglePlaying()),
-      onToggleTheatre: _toggleTheatre,
-      onZoomIn: () => _zoomBy(zoomStep),
-      onZoomOut: () => _zoomBy(1 / zoomStep),
-      onResetZoom: () => _zoom.value = VideoZoom.none,
-      child: ListenableBuilder(
-        listenable: Listenable.merge([widget.playback, widget.chat]),
-        builder: (context, _) {
-          final state = widget.playback.state;
-          final details = switch (state) {
-            PlaybackUpdateReady(:final details) => details,
-            _ => null,
-          };
-          return Scaffold(
-            appBar: _theatre
-                ? null
-                : AppBar(
-                    title: PlaybackTitle(
-                      title: widget.title,
-                      onOpenChannel: widget.onOpenChannel,
-                      details: details,
+    return RefreshKey(
+      onRefresh: _refresh,
+      child: PlayerShortcuts(
+        onToggleChat: widget.chat.toggle,
+        onToggleMute: () => unawaited(widget.player.toggleMute()),
+        onToggleFullscreen: _toggleFullscreen,
+        onTogglePlay: () => unawaited(widget.player.togglePlaying()),
+        onToggleTheatre: _toggleTheatre,
+        onZoomIn: () => _zoomBy(zoomStep),
+        onZoomOut: () => _zoomBy(1 / zoomStep),
+        onResetZoom: () => _zoom.value = VideoZoom.none,
+        child: ListenableBuilder(
+          listenable: Listenable.merge([widget.playback, widget.chat]),
+          builder: (context, _) {
+            final state = widget.playback.state;
+            final details = switch (state) {
+              PlaybackUpdateReady(:final details) => details,
+              _ => null,
+            };
+            return Scaffold(
+              appBar: _theatre
+                  ? null
+                  : AppBar(
+                      title: PlaybackTitle(
+                        title: widget.title,
+                        onOpenChannel: widget.onOpenChannel,
+                        details: details,
+                      ),
+                      actions: [
+                        PlayerOptions(
+                          playback: widget.playback,
+                          chat: widget.chat,
+                          onSelectQuality: _selectQuality,
+                          onArmSleep: _armSleep,
+                          onTurnOffSleep: _turnOffSleep,
+                          onToggleTheatre: _toggleTheatre,
+                        ),
+                      ],
                     ),
-                    actions: [
-                      PlayerOptions(
-                        playback: widget.playback,
-                        chat: widget.chat,
-                        onSelectQuality: _selectQuality,
-                        onArmSleep: _armSleep,
-                        onTurnOffSleep: _turnOffSleep,
-                        onToggleTheatre: _toggleTheatre,
-                      ),
-                    ],
+              body: Theatre(
+                on: _theatre,
+                onExit: _exitTheatre,
+                child: PlayerLayout(
+                  // Theatre leaves the video alone, as it does the app bar.
+                  // Shown from the open, so the video stays put when the
+                  // details come.
+                  nowPlaying: _theatre
+                      ? null
+                      : NowPlaying(
+                          title: details?.title,
+                          game: details?.game,
+                          chapters: details?.chapters ?? const [],
+                          onGoToChapter: _goToChapter,
+                        ),
+                  video: VideoFrame(
+                    // The video, the failure's Retry or the sleep timer's
+                    // Resume; not the spinner.
+                    childTakesFocus: switch (state) {
+                      PlaybackUpdateReady() ||
+                      PlaybackUpdateFailed() ||
+                      PlaybackUpdateSlept() => true,
+                      _ => false,
+                    },
+                    child: _video(state),
                   ),
-            body: Theatre(
-              on: _theatre,
-              onExit: _exitTheatre,
-              child: PlayerLayout(
-                // Theatre leaves the video alone, as it does the app bar.
-                // Shown from the open, so the video stays put when the
-                // details come.
-                nowPlaying: _theatre
-                    ? null
-                    : NowPlaying(
-                        title: details?.title,
-                        game: details?.game,
-                        chapters: details?.chapters ?? const [],
-                        onGoToChapter: _goToChapter,
-                      ),
-                video: VideoFrame(
-                  // The video, the failure's Retry or the sleep timer's
-                  // Resume; not the spinner.
-                  childTakesFocus: switch (state) {
-                    PlaybackUpdateReady() ||
-                    PlaybackUpdateFailed() ||
-                    PlaybackUpdateSlept() => true,
-                    _ => false,
-                  },
-                  child: _video(state),
+                  chat: widget.chat.mode == ChatMode.shown
+                      ? ChatPanel(chat: widget.chat)
+                      : null,
                 ),
-                chat: widget.chat.mode == ChatMode.shown
-                    ? ChatPanel(chat: widget.chat)
-                    : null,
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

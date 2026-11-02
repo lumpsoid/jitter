@@ -5,6 +5,7 @@ import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/stream_grid.dart';
 import 'package:jitter/widgets/escape_goes_back.dart';
 import 'package:jitter/widgets/next_page_footer.dart';
+import 'package:jitter/widgets/refresh_key.dart';
 import 'package:jitter/widgets/retry_failure.dart';
 
 /// One category's live streams: the favorites playing it first, then the
@@ -48,12 +49,15 @@ class CategoryPage extends StatelessWidget {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => EscapeGoesBack(
-          child: CategoryPage(
-            name: name,
-            category: category,
-            favorites: favorites,
-            onOpenStream: onOpenStream,
-            onOpenChannel: onOpenChannel,
+          child: RefreshKey(
+            onRefresh: category.refresh,
+            child: CategoryPage(
+              name: name,
+              category: category,
+              favorites: favorites,
+              onOpenStream: onOpenStream,
+              onOpenChannel: onOpenChannel,
+            ),
           ),
         ),
       ),

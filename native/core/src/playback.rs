@@ -420,6 +420,43 @@ impl PlaybackController {
         }
     }
 
+    /// Applies details loaded afresh for `stream`, what page `target`
+    /// streamed when they were asked for ([`Self::streaming`]): the page
+    /// shows them in place of its own, and the player plays on as it was.
+    /// A live page whose rewind is offered or unavailable offers what the
+    /// fresh details call for; one loading, failed, rewound or returning
+    /// keeps its rewind. Details that failed to load keep the ones shown.
+    /// Returns whether they applied: `false` unless `target` still streams
+    /// `stream`, so a result arriving after leaving, a rewind or a return
+    /// is ignored.
+    pub fn refresh_details(
+        &mut self,
+        target: &PlaybackTarget,
+        stream: &PlaybackTarget,
+        details: Result<PlaybackDetails, String>,
+    ) -> bool {
+        if self.streaming(target).as_ref() != Some(stream) {
+            return false;
+        }
+        let offer = RewindPolicy::offer(&details, self.refused.as_ref());
+        let Ok(details) = details else {
+            return false;
+        };
+        let PlaybackState::Ready {
+            details: shown,
+            rewind,
+            ..
+        } = &mut self.state
+        else {
+            return false;
+        };
+        if let Some(rewind @ (Rewind::Available { .. } | Rewind::Unavailable(_))) = rewind {
+            *rewind = offer;
+        }
+        **shown = details;
+        true
+    }
+
     /// The player showing `target` was left: back to idle, unless a later
     /// [`Self::begin`] replaced `target` (its page opened before this one
     /// closed). Returns whether it left, i.e. whether the player stops.

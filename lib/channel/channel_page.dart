@@ -6,6 +6,7 @@ import 'package:jitter/favorites/favorite_star.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/widgets/escape_goes_back.dart';
+import 'package:jitter/widgets/refresh_key.dart';
 
 /// Scrolled this close to the end, the list asks for the next page.
 const double _nextPageExtent = 800;
@@ -92,12 +93,15 @@ class ChannelPage extends StatefulWidget {
     ValueChanged<String>? onOpenLive,
   }) => MaterialPageRoute<void>(
     builder: (context) => EscapeGoesBack(
-      child: ChannelPage(
-        login: login,
-        channel: channel,
-        favorites: favorites,
-        onOpenVod: onOpenVod,
-        onOpenLive: onOpenLive,
+      child: RefreshKey(
+        onRefresh: channel.refresh,
+        child: ChannelPage(
+          login: login,
+          channel: channel,
+          favorites: favorites,
+          onOpenVod: onOpenVod,
+          onOpenLive: onOpenLive,
+        ),
       ),
     ),
   );

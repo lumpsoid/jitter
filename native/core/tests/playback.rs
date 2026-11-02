@@ -1907,3 +1907,74 @@ fn chat_replay_follows_the_recording_by_what_the_page_streams() {
             .is_some()
     );
 }
+
+// Refreshing what the page shows, the player left as it plays.
+
+fn fresh_live(viewers: u32) -> Result<PlaybackDetails, String> {
+    Ok(PlaybackDetails {
+        title: Some("fresh title".to_owned()),
+        live: Some(LiveDetails {
+            viewers,
+            started_at: Some(Timestamp::from_unix(STARTED)),
+            archive: Some(archive()),
+        }),
+        ..PlaybackDetails::default()
+    })
+}
+
+#[test]
+fn refreshed_details_replace_the_shown_ones_and_leave_the_player_alone() {
+    let mut c = live_page();
+    let before = opened(&c);
+    assert!(c.refresh_details(&live("a"), &live("a"), fresh_live(99)));
+    assert_eq!(details(&c), fresh_live(99).ok().as_ref());
+    assert_eq!(opened(&c), before);
+    assert_eq!(selected(&c), Some("1080p60"));
+}
+
+#[test]
+fn refreshed_details_that_failed_keep_the_shown_ones_and_the_rewind() {
+    let mut c = live_page();
+    assert!(!c.refresh_details(&live("a"), &live("a"), Err("offline".to_owned())));
+    assert_eq!(details(&c), recording(archive()).ok().as_ref());
+    assert_eq!(rewind_of(&c), Some(&Rewind::Available { video: archive() }));
+}
+
+#[test]
+fn a_refresh_offers_the_rewind_the_fresh_details_call_for() {
+    let mut c = live_page_with(Ok(live_details(None, Some(Timestamp::from_unix(STARTED)))));
+    assert_eq!(
+        rewind_of(&c),
+        Some(&Rewind::Unavailable(NoRewind::NoRecording))
+    );
+    assert!(c.refresh_details(&live("a"), &live("a"), fresh_live(10)));
+    assert_eq!(rewind_of(&c), Some(&Rewind::Available { video: archive() }));
+}
+
+#[test]
+fn a_refresh_keeps_a_rewind_in_progress() {
+    let mut c = loading();
+    assert!(c.refresh_details(&live("a"), &live("a"), fresh_live(10)));
+    assert!(matches!(rewind_of(&c), Some(Rewind::Loading { .. })));
+}
+
+#[test]
+fn a_rewound_page_refreshes_its_recording_s_details_only() {
+    let recording_stream = PlaybackTarget::Vod(archive());
+    let mut c = rewound();
+    // Asked for while live, answered after the rewind: stale.
+    assert!(!c.refresh_details(&live("a"), &live("a"), fresh_live(10)));
+    assert_eq!(details(&c), Some(&chaptered()));
+    assert!(c.refresh_details(&live("a"), &recording_stream, Ok(gta())));
+    assert_eq!(details(&c), Some(&gta()));
+    assert!(matches!(rewind_of(&c), Some(Rewind::Rewound { .. })));
+}
+
+#[test]
+fn a_refresh_for_a_page_left_or_replaced_changes_nothing() {
+    let mut c = live_page();
+    assert!(!c.refresh_details(&live("b"), &live("b"), fresh_live(10)));
+    assert!(c.leave(&live("a")));
+    assert!(!c.refresh_details(&live("a"), &live("a"), fresh_live(10)));
+    assert_eq!(c.state(), &PlaybackState::Idle);
+}
