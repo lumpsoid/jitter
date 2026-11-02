@@ -12,8 +12,13 @@ const _hideAfter = Duration(seconds: 3);
 
 const _fade = Duration(milliseconds: 300);
 
-/// How long a double tap's `−10 s` or `+10 s` shows.
+/// How long a double tap's `−10s` or `+10s` shows, and how long after
+/// it, or after each tap of its streak, a lone tap on a side goes on.
 const _flashFor = Duration(milliseconds: 700);
+
+/// How far the flash's outer edge sits from its side, as a share of the
+/// width: about where a thumb double taps.
+const _flashInset = 0.12;
 
 /// The least room kept from a fullscreen's edges, notch or none: a phone's
 /// rounded corners cut into its sides and bottom, and a thumb at its very
@@ -28,7 +33,10 @@ const _white = Color(0xFFFFFFFF);
 /// last finger lifts. A finger down anywhere on them holds them: a long,
 /// slow drag on the [bar] keeps it, where media_kit's hide 3 s after the
 /// tap that showed them, drag or not. A double tap on the left or right
-/// third goes [vodSeekStep] back or on, shown or not, and flashes it.
+/// third goes [vodSeekStep] back or on, shown or not, and flashes it;
+/// while the flash shows, each lone tap on a side goes another step at
+/// once, the flash adding them up (`+30s`), and a tap on the other side
+/// starts its own total.
 /// While a finger drags the [bar], its time shows big over the picture,
 /// clear of the finger, with how far it has gone and how slowed it is
 /// ([ScrubNotification]).
@@ -61,7 +69,7 @@ class VodPhoneControls extends StatefulWidget {
   /// a new stream each call. The spinner shows in place of [playPause].
   final Stream<bool> Function() bufferings;
 
-  /// Moves the VOD by a double tap's step.
+  /// Moves the VOD by a double tap's step, or a streak tap's.
   final ValueChanged<Duration> onSeekBy;
 
   @override
@@ -87,7 +95,8 @@ class _VodPhoneControlsState extends State<VodPhoneControls> {
   /// Where the last double tap went down.
   Offset? _doubleTapAt;
 
-  /// The step a double tap just went, shown on its side; null when none.
+  /// How far a double tap and the taps of its streak just went, shown on
+  /// its side; null when none, and then no streak goes on.
   Duration? _flash;
   Timer? _flashing;
 
@@ -139,18 +148,41 @@ class _VodPhoneControlsState extends State<VodPhoneControls> {
     _hideLater();
   }
 
+  /// The step a tap at [x] goes: back on the left third, on on the right,
+  /// none in the middle.
+  static Duration? _stepAt(double x, double width) => width <= 0
+      ? null
+      : x < width / 3
+      ? -vodSeekStep
+      : x > width * 2 / 3
+      ? vodSeekStep
+      : null;
+
   void _onDoubleTap(double width) {
     final x = _doubleTapAt?.dx;
-    if (x == null || width <= 0) return;
-    final step = x < width / 3
-        ? -vodSeekStep
-        : x > width * 2 / 3
-        ? vodSeekStep
-        : null;
-    if (step == null) return;
+    if (x == null) return;
+    if (_stepAt(x, width) case final step?) _go(step);
+  }
+
+  /// A lone tap while the flash shows: a side's goes on at once; the
+  /// middle's ends the streak and is a tap as any other.
+  void _onStreakTap(double x, double width) {
+    if (_stepAt(x, width) case final step?) return _go(step);
+    _flashing?.cancel();
+    setState(() => _flash = null);
+    _visible ? _hideNow() : _show();
+  }
+
+  /// Goes [step], added to the flash's total when that went the same way.
+  void _go(Duration step) {
     widget.onSeekBy(step);
     _flashing?.cancel();
-    setState(() => _flash = step);
+    final total = _flash;
+    setState(
+      () => _flash = total != null && total.isNegative == step.isNegative
+          ? total + step
+          : step,
+    );
     _flashing = Timer(_flashFor, () => setState(() => _flash = null));
   }
 
@@ -165,13 +197,24 @@ class _VodPhoneControlsState extends State<VodPhoneControls> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _visible ? _hideNow() : _show(),
-              onDoubleTapDown: (details) =>
-                  _doubleTapAt = details.localPosition,
-              onDoubleTap: () => _onDoubleTap(constraints.maxWidth),
-            ),
+            // In a streak a lone tap goes at once: no double tap to wait
+            // for.
+            if (flash == null)
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _visible ? _hideNow() : _show(),
+                onDoubleTapDown: (details) =>
+                    _doubleTapAt = details.localPosition,
+                onDoubleTap: () => _onDoubleTap(constraints.maxWidth),
+              )
+            else
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapDown: (details) => _onStreakTap(
+                  details.localPosition.dx,
+                  constraints.maxWidth,
+                ),
+              ),
             if (_built)
               AnimatedOpacity(
                 opacity: _visible ? 1 : 0,
@@ -200,12 +243,20 @@ class _VodPhoneControlsState extends State<VodPhoneControls> {
                 child: Center(child: CircularProgressIndicator(color: _white)),
               ),
             if (flash != null)
+              // Held by its outer edge, so a total grown longer
+              // (`+50s`, `+1m 00s`) widens it toward the middle and its
+              // side's end stays put.
               IgnorePointer(
                 child: Align(
                   alignment: flash.isNegative
-                      ? const Alignment(-0.6, 0)
-                      : const Alignment(0.6, 0),
-                  child: _Flash(step: flash),
+                      ? Alignment.centerLeft
+                      : Alignment.centerRight,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: constraints.maxWidth * _flashInset,
+                    ),
+                    child: _Flash(step: flash),
+                  ),
                 ),
               ),
           ],
@@ -315,15 +366,24 @@ class _ScrubReadout extends StatelessWidget {
   }
 }
 
-/// A double tap's step on its side: `−10 s` or `+10 s`.
+/// How far a double tap and its streak went, on its side: `−10s`, `+1m 30s`.
 class _Flash extends StatelessWidget {
   const new({required this.step});
 
   final Duration step;
 
+  /// `30s` under a minute, then `1m 00s`, `1m 30s`: from a minute on it
+  /// keeps one width as the seconds go round.
+  String get _amount {
+    final minutes = step.inMinutes.abs();
+    final seconds = step.inSeconds.abs() % 60;
+    return minutes == 0
+        ? '${seconds}s'
+        : '${minutes}m ${seconds.toString().padLeft(2, '0')}s';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final seconds = step.inSeconds.abs();
     return DecoratedBox(
       decoration: BoxDecoration(
         color: _backdrop,
@@ -332,8 +392,12 @@ class _Flash extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         child: Text(
-          step.isNegative ? '−$seconds s' : '+$seconds s',
-          style: const TextStyle(color: _white, fontSize: 16),
+          step.isNegative ? '−$_amount' : '+$_amount',
+          style: const TextStyle(
+            color: _white,
+            fontSize: 16,
+            fontFeatures: [FontFeature.tabularFigures()],
+          ),
         ),
       ),
     );

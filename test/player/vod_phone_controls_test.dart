@@ -118,18 +118,104 @@ void main() {
     await pumpControls(tester, seeks: seeks);
 
     await doubleTap(tester, const Offset(50, 150));
-    expect(find.text('−10 s'), findsOneWidget);
+    expect(find.text('−10s'), findsOneWidget);
+    // The flash goes after a while.
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('−10s'), findsNothing);
     await doubleTap(tester, const Offset(550, 150));
-    expect(find.text('+10 s'), findsOneWidget);
+    expect(find.text('+10s'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
     // The middle third is not a side.
     await doubleTap(tester, const Offset(300, 150));
-    // The flash goes after a while.
     await tester.pump(const Duration(seconds: 1));
 
     expect(seeks, const [Duration(seconds: -10), Duration(seconds: 10)]);
-    expect(find.text('+10 s'), findsNothing);
+    expect(find.text('+10s'), findsNothing);
     // A double tap is not a tap: the controls stayed hidden.
     expect(find.text('play'), findsNothing);
+  });
+
+  testWidgets('lone taps after a double tap go on at once and add up', (
+    tester,
+  ) async {
+    final seeks = <Duration>[];
+    await pumpControls(tester, seeks: seeks);
+
+    await doubleTap(tester, const Offset(550, 150));
+    for (var i = 0; i < 2; i++) {
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tapAt(const Offset(550, 150));
+      await tester.pump();
+    }
+    expect(find.text('+30s'), findsOneWidget);
+
+    // The other side starts its own total.
+    await tester.tapAt(const Offset(50, 150));
+    await tester.pump();
+    expect(find.text('−10s'), findsOneWidget);
+
+    expect(seeks, const [
+      Duration(seconds: 10),
+      Duration(seconds: 10),
+      Duration(seconds: 10),
+      Duration(seconds: -10),
+    ]);
+    // Streak taps are not taps: the controls stayed hidden.
+    expect(find.text('play'), findsNothing);
+  });
+
+  testWidgets('a streak of a minute or more says it in minutes', (
+    tester,
+  ) async {
+    await pumpControls(tester);
+
+    await doubleTap(tester, const Offset(50, 150));
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tapAt(const Offset(50, 150));
+      await tester.pump();
+    }
+    expect(find.text('−1m 00s'), findsOneWidget);
+    final minute = tester.getRect(find.text('−1m 00s'));
+
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tapAt(const Offset(50, 150));
+    await tester.pump();
+    expect(find.text('−1m 10s'), findsOneWidget);
+    // The seconds go round in one width: it stays still.
+    expect(tester.getRect(find.text('−1m 10s')), minute);
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('a tap in the middle ends the streak and shows them', (
+    tester,
+  ) async {
+    final seeks = <Duration>[];
+    await pumpControls(tester, seeks: seeks);
+
+    await doubleTap(tester, const Offset(550, 150));
+    await tester.tapAt(const Offset(300, 150));
+    await tester.pump();
+    expect(find.text('+10s'), findsNothing);
+    expect(find.text('play'), findsOneWidget);
+
+    // A lone tap on a side is a tap again.
+    await tapVideo(tester, const Offset(550, 150));
+    expect(seeks, const [Duration(seconds: 10)]);
+  });
+
+  testWidgets('once the flash goes, a lone tap on a side is a tap', (
+    tester,
+  ) async {
+    final seeks = <Duration>[];
+    await pumpControls(tester, seeks: seeks);
+
+    await doubleTap(tester, const Offset(550, 150));
+    await tester.pump(const Duration(seconds: 1));
+    await tapVideo(tester, const Offset(550, 150));
+
+    expect(seeks, const [Duration(seconds: 10)]);
+    expect(find.text('play'), findsOneWidget);
   });
 
   testWidgets('while it buffers a spinner shows in place of play', (
