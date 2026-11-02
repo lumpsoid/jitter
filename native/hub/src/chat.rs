@@ -627,6 +627,8 @@ fn line(chat: &ChatController, message: &ChatMessage, look: Look) -> ChatLine {
         id: message.id.clone(),
         sender: sender.user_id.as_str().to_owned(),
         name: sender.display_name.clone(),
+        handle: sender.handle(),
+        mentions: message.mentions(),
         color: 0xFF00_0000
             | u32::from(color.r) << 16
             | u32::from(color.g) << 8

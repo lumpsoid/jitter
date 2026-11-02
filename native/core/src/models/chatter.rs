@@ -9,3 +9,15 @@ pub struct Chatter {
     pub color: Option<Rgb>,
     pub badges: Vec<Badge>,
 }
+
+impl Chatter {
+    /// The name as an `@` mention of this chatter matches it: the display
+    /// name, case folded, as Twitch names are matched regardless of case.
+    pub fn handle(&self) -> String {
+        handle(&self.display_name)
+    }
+}
+
+pub(super) fn handle(name: &str) -> String {
+    name.to_lowercase()
+}

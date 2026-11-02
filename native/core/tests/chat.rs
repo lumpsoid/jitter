@@ -337,3 +337,16 @@ fn clear_all_removes_user_notices_too() {
     chat.apply(ChatEvent::ClearAll);
     assert_eq!(chat.entries().count(), 0);
 }
+
+#[test]
+fn mentions_are_the_at_words_case_folded_once_each() {
+    let m = message("a", "1", "@Bob, ask @alice: hi @bob @ me@x @日本_語!");
+    assert_eq!(m.mentions(), ["bob", "alice", "日本_語"]);
+}
+
+#[test]
+fn a_chatter_handle_is_the_case_folded_display_name() {
+    let mut m = message("a", "1", "hi");
+    m.sender.display_name = "BoB_1".to_owned();
+    assert_eq!(m.sender.handle(), "bob_1");
+}

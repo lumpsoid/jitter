@@ -18,6 +18,8 @@ void main() {
                 id: 'a',
                 sender: '1',
                 name: 'alice',
+                handle: 'alice',
+                mentions: [],
                 color: 0xFFFF0000,
                 action: false,
                 deleted: false,
@@ -60,6 +62,8 @@ void main() {
                 id: 'a',
                 sender: '1',
                 name: 'alice',
+                handle: 'alice',
+                mentions: [],
                 color: 0xFFFF0000,
                 action: false,
                 deleted: false,
@@ -101,6 +105,8 @@ void main() {
                 id: 'a',
                 sender: '1',
                 name: 'alice',
+                handle: 'alice',
+                mentions: [],
                 color: 0xFFFF0000,
                 action: false,
                 deleted: false,
@@ -165,6 +171,8 @@ void main() {
                 id: 'a',
                 sender: '1',
                 name: 'alice',
+                handle: 'alice',
+                mentions: [],
                 color: 0xFFFF0000,
                 action: false,
                 deleted: false,
@@ -225,6 +233,8 @@ void main() {
                 id: 'b',
                 sender: '1',
                 name: 'riamot',
+                handle: 'riamot',
+                mentions: [],
                 color: 0xFF0000FF,
                 action: false,
                 deleted: false,
@@ -315,6 +325,8 @@ void main() {
                 id: 'a',
                 sender: '1',
                 name: 'alice',
+                handle: 'alice',
+                mentions: [],
                 color: 0xFFFF0000,
                 action: false,
                 deleted: false,
@@ -326,6 +338,8 @@ void main() {
                 id: 'b',
                 sender: '1',
                 name: 'bob',
+                handle: 'bob',
+                mentions: [],
                 color: 0xFF0000FF,
                 action: false,
                 deleted: false,
@@ -558,69 +572,75 @@ void main() {
     expect(tester.widget<FocusRing>(find.byType(FocusRing)).shown, isFalse);
   });
 
-  testWidgets("tapping a message opens its sender's lines, kept current", (
-    tester,
-  ) async {
-    final chat = ChatHolder(sendTheme: (_) {})
-      ..apply(
-        ChatUpdateSnapshot(
-          messages: [
-            _line('a', 'first', sender: '7', name: 'bob'),
-            _line('b', 'from alice'),
-            _line('c', 'second', sender: '7', name: 'bob'),
-          ],
-          status: const ChatStatus(modes: []),
+  testWidgets(
+    "tapping a message opens its sender's part in the chat, kept current",
+    (tester) async {
+      final chat = ChatHolder(sendTheme: (_) {})
+        ..apply(
+          ChatUpdateSnapshot(
+            messages: [
+              _line('a', 'first', sender: '7', name: 'bob'),
+              _line('b', 'from alice'),
+              _line('m', '@bob hey', mentions: ['bob']),
+              _line('c', 'second', sender: '7', name: 'bob'),
+            ],
+            status: const ChatStatus(modes: []),
+          ),
+        );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: ChatPanel(chat: chat)),
         ),
       );
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: ChatPanel(chat: chat)),
-      ),
-    );
 
-    await tester.tap(find.textContaining('second'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('second'));
+      await tester.pumpAndSettle();
 
-    final sheet = find.byType(BottomSheet);
-    expect(sheet, findsOneWidget);
-    expect(
-      find.descendant(of: sheet, matching: find.textContaining('first')),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: sheet, matching: find.textContaining('from alice')),
-      findsNothing,
-    );
+      final sheet = find.byType(BottomSheet);
+      expect(sheet, findsOneWidget);
+      expect(
+        find.descendant(of: sheet, matching: find.textContaining('first')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: sheet, matching: find.textContaining('from alice')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: sheet, matching: find.textContaining('@bob hey')),
+        findsOneWidget,
+      );
 
-    chat
-      ..apply(
-        ChatUpdateAppended(
-          messages: [_line('d', 'third', sender: '7', name: 'bob')],
+      chat
+        ..apply(
+          ChatUpdateAppended(
+            messages: [_line('d', 'third', sender: '7', name: 'bob')],
+          ),
+        )
+        ..apply(const ChatUpdateMarked(ids: ['a']));
+      await tester.pump();
+
+      expect(
+        find.descendant(of: sheet, matching: find.textContaining('third')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: sheet, matching: find.textContaining('(deleted)')),
+        findsOneWidget,
+      );
+
+      chat.apply(const ChatUpdateCleared());
+      await tester.pump();
+
+      expect(
+        find.descendant(
+          of: sheet,
+          matching: find.text('No messages from bob in the chat now.'),
         ),
-      )
-      ..apply(const ChatUpdateMarked(ids: ['a']));
-    await tester.pump();
-
-    expect(
-      find.descendant(of: sheet, matching: find.textContaining('third')),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: sheet, matching: find.textContaining('(deleted)')),
-      findsOneWidget,
-    );
-
-    chat.apply(const ChatUpdateCleared());
-    await tester.pump();
-
-    expect(
-      find.descendant(
-        of: sheet,
-        matching: find.text('No messages from bob in the chat now.'),
-      ),
-      findsOneWidget,
-    );
-  });
+        findsOneWidget,
+      );
+    },
+  );
 }
 
 ChatHolder _chatWith(List<ChatFragment> fragments) {
@@ -632,6 +652,8 @@ ChatHolder _chatWith(List<ChatFragment> fragments) {
             id: 'a',
             sender: '1',
             name: 'alice',
+            handle: 'alice',
+            mentions: const [],
             color: 0xFFFF0000,
             action: false,
             deleted: false,
@@ -649,11 +671,14 @@ ChatItem _line(
   String text, {
   String sender = '1',
   String name = 'alice',
+  List<String> mentions = const [],
 }) => ChatItemMessage(
   line: ChatLine(
     id: id,
     sender: sender,
     name: name,
+    handle: name,
+    mentions: mentions,
     color: 0xFFFF0000,
     action: false,
     deleted: false,

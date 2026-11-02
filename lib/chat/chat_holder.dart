@@ -32,11 +32,14 @@ class ChatHolder extends ChangeNotifier {
   List<ChatEntry> get messages => _messages;
   var _messages = <ChatEntry>[];
 
-  /// The entries with a line by [sender] (Rust's `ChatLine.sender`), oldest
-  /// first: the same entries as [messages], so a deletion shows in both.
-  List<ChatEntry> messagesFrom(String sender) => [
+  /// The entries with a line by [sender] (Rust's `ChatLine.sender`) or one
+  /// that mentions [handle] (Rust's `ChatLine.handle`), oldest first: the
+  /// same entries as [messages], so a deletion shows in both.
+  List<ChatEntry> messagesAbout(String sender, String handle) => [
     for (final entry in _messages)
-      if (entry.line?.sender == sender) entry,
+      if (entry.line case final line?
+          when line.sender == sender || line.mentions.contains(handle))
+        entry,
   ];
 
   ChatStatus get status => _status;
