@@ -49,8 +49,8 @@ use crate::signals::{ClearHistory, HistoryReady, RemoveFromHistory, RemoveVisit}
 use crate::playback;
 use crate::signals::{
     AppBackgrounded, AppForegrounded, ArmSleepTimer, BackToLive, GoToChapter, GoToTime,
-    LeavePlayer, Play, PlayerPosition, PlayerStartedAway, RewindStream, SelectQuality,
-    TurnOffSleepTimer,
+    LeavePlayer, Play, PlayerPosition, PlayerStartedAway, RefreshPlayback, RewindStream,
+    SelectQuality, TurnOffSleepTimer,
 };
 // Channel
 use crate::channel::{self, ChannelFetched, ChannelPage};
@@ -160,6 +160,13 @@ pub enum Fetched {
         details: Result<PlaybackDetails, TwitchError>,
     },
     PlaybackTimedOut(Attempt),
+    /// Page `target`'s details loaded afresh for `stream`, what it played
+    /// when asked; a timeout arrives as a failure.
+    PlaybackDetails {
+        target: PlaybackTarget,
+        stream: PlaybackTarget,
+        details: Result<PlaybackDetails, String>,
+    },
     /// Live page `target`'s recording `video` resolved for a rewind; a
     /// timeout arrives as a failure.
     Rewound {
@@ -233,6 +240,7 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
     let player_started_away = PlayerStartedAway::get_dart_signal_receiver();
     let rewind_stream = RewindStream::get_dart_signal_receiver();
     let back_to_live = BackToLive::get_dart_signal_receiver();
+    let refresh_playback = RefreshPlayback::get_dart_signal_receiver();
     // Channel
     let open_channel = OpenChannel::get_dart_signal_receiver();
     let refresh_channel = RefreshChannel::get_dart_signal_receiver();
@@ -360,6 +368,9 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
             Some(pack) = back_to_live.recv() => {
                 playback::back_to_live(&mut c.playback, &twitch, &fetch, pack.message);
             }
+            Some(pack) = refresh_playback.recv() => {
+                playback::refresh(&c.playback, &twitch, &fetch, pack.message);
+            }
             // The same sleep as the chat batch's: pending while no timer is armed.
             () = chat::until(sleep_wake) => {
                 // Chat: closes when the sleep timer stops the player.
@@ -461,6 +472,11 @@ fn on_fetched(
             );
         }
         Fetched::PlaybackTimedOut(attempt) => playback::timed_out(&mut c.playback, attempt),
+        Fetched::PlaybackDetails {
+            target,
+            stream,
+            details,
+        } => playback::refreshed(&mut c.playback, &target, &stream, details),
         Fetched::Rewound {
             target,
             video,

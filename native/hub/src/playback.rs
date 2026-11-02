@@ -25,7 +25,8 @@ use crate::signals::{
     AppBackgrounded, AppForegrounded, ArmSleepTimer, BackToLive, GoToChapter, GoToTime,
     GoToTimeAnswer, LeavePlayer, PlaybackChannel, PlaybackChapter, PlaybackDetails, PlaybackLive,
     PlaybackRewind, PlaybackSleep, PlaybackTarget, PlaybackUpdate, PlayerCommand, PlayerPosition,
-    PlayerStartedAway, QualityOption, RewindAnswer, RewindStream, SelectQuality, SleepPreset,
+    PlayerStartedAway, QualityOption, RefreshPlayback, RewindAnswer, RewindStream, SelectQuality,
+    SleepPreset,
 };
 
 /// `Play`: starts resolving `target` through twitch, and loading what it
@@ -252,6 +253,54 @@ pub fn returned(
             answer(message);
             None
         }
+    }
+}
+
+/// `RefreshPlayback`: loads the details of the stream the page plays (its
+/// recording while rewound), within core's `RESOLVE_TIMEOUT`; they come
+/// back as [`Fetched::PlaybackDetails`], tagged with that stream. Nothing
+/// resolves again, so the player and the chat carry on. A page not ready
+/// changes nothing.
+pub fn refresh(
+    playback: &PlaybackController,
+    twitch: &Twitch,
+    fetch: &UnboundedSender<Fetched>,
+    signal: RefreshPlayback,
+) {
+    let Some(target) = report(playback::PlaybackTarget::try_from(signal.target)) else {
+        return;
+    };
+    // Read before the load, so its result answers this stream only.
+    let Some(stream) = playback.streaming(&target) else {
+        return;
+    };
+    let (twitch, fetch) = (twitch.clone(), fetch.clone());
+    tokio::spawn(async move {
+        let limit = Duration::from_secs(u64::from(playback::RESOLVE_TIMEOUT.get()));
+        let details = match tokio::time::timeout(limit, twitch.playback_details(&stream)).await {
+            Ok(details) => details.map_err(|e| e.to_string()),
+            Err(_) => Err(playback::TIMED_OUT.to_owned()),
+        };
+        let _ = fetch.send(Fetched::PlaybackDetails {
+            target,
+            stream,
+            details,
+        });
+    });
+}
+
+/// A refresh's details came back for `stream`: core decides whether the
+/// page shows them, and it goes out again when it does. A failure is
+/// logged; the page keeps what it shows.
+pub fn refreshed(
+    playback: &mut PlaybackController,
+    target: &playback::PlaybackTarget,
+    stream: &playback::PlaybackTarget,
+    details: Result<models::PlaybackDetails, String>,
+) {
+    let details = details.inspect_err(|e| debug_print!("refreshing the playback details: {e}"));
+    if playback.refresh_details(target, stream, details) {
+        send_state(playback);
     }
 }
 

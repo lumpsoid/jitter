@@ -69,6 +69,16 @@ pub struct RewindStream {
     pub target: PlaybackTarget,
 }
 
+/// The user asked page `target` to show what plays afresh (Ctrl+R): its
+/// title, game, viewers and uptime come again in a [`PlaybackUpdate`]; the
+/// player and the chat carry on as they are. Tagged with the page like
+/// [`RewindStream`]; a page not ready, or a refresh that fails, changes
+/// nothing.
+#[derive(Deserialize, DartSignal)]
+pub struct RefreshPlayback {
+    pub target: PlaybackTarget,
+}
+
 /// The user asked the rewound live page `target` to play live again.
 /// Tagged with the page like [`RewindStream`]; a return that fails is
 /// answered with [`RewindAnswer`].

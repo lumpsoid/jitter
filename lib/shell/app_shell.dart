@@ -24,6 +24,7 @@ import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:jitter/top/top_page.dart';
 import 'package:jitter/widgets/escape_goes_back.dart';
+import 'package:jitter/widgets/refresh_key.dart';
 
 /// Below this width the destinations sit in a bottom bar, from it in a
 /// side rail (Material's compact window class).
@@ -35,6 +36,8 @@ typedef _Destination = ({
   IconData icon,
   IconData selectedIcon,
   Widget page,
+  // What Ctrl+R refreshes on the page; `null`: nothing.
+  VoidCallback? refresh,
 });
 
 /// The booted app: top-level pages behind a bottom bar (narrow) or a side
@@ -104,6 +107,7 @@ class _AppShellState extends State<AppShell> {
         onOpenStream: _openLive,
         onOpenChannel: _openChannel,
       ),
+      refresh: widget.browse.refresh,
     ),
     (
       label: 'Categories',
@@ -113,6 +117,7 @@ class _AppShellState extends State<AppShell> {
         categories: widget.categories,
         onOpenCategory: _openCategory,
       ),
+      refresh: widget.categories.refresh,
     ),
     (
       label: 'Favorites',
@@ -123,6 +128,7 @@ class _AppShellState extends State<AppShell> {
         onOpenChannel: _openChannel,
         onOpenLive: _openLive,
       ),
+      refresh: () => unawaited(widget.favorites.refresh()),
     ),
     (
       label: 'History',
@@ -134,6 +140,7 @@ class _AppShellState extends State<AppShell> {
         onOpenVod: _openVod,
         onOpenChannel: _openChannel,
       ),
+      refresh: null,
     ),
     (
       label: 'Search',
@@ -144,12 +151,14 @@ class _AppShellState extends State<AppShell> {
         onOpenChannel: _openChannel,
         onOpenCategory: _openCategory,
       ),
+      refresh: null,
     ),
     (
       label: 'Settings',
       icon: Icons.settings_outlined,
       selectedIcon: Icons.settings,
       page: SettingsPage(settings: widget.settings),
+      refresh: null,
     ),
   ];
 
@@ -222,10 +231,14 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final destinations = _destinations;
-    // Keeps each page alive, so switching back keeps its scroll position.
-    final pages = IndexedStack(
-      index: _selected,
-      children: [for (final d in destinations) d.page],
+    // Keeps each page alive, so switching back keeps its scroll position;
+    // Ctrl+R refreshes the one shown.
+    final pages = RefreshKey(
+      onRefresh: destinations[_selected].refresh,
+      child: IndexedStack(
+        index: _selected,
+        children: [for (final d in destinations) d.page],
+      ),
     );
     return LayoutBuilder(
       builder: (context, constraints) {
