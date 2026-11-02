@@ -296,9 +296,10 @@ The four ABIs built in about 7 minutes on 24 cores. Each jar holds
 
 - `third_party/media_kit_libs_android_video/` is the 1.3.8 plugin,
   vendored. Its `android/build.gradle` differs from upstream's in one
-  respect: instead of downloading jars it uses `android/libs/default-*.jar`,
-  and a `verifyLibmpvJars` task (run before `preBuild`) fails the build if
-  a jar is missing or its MD5 does not match:
+  respect: instead of downloading jars it uses the locally built,
+  gitignored `dist/libmpv-android/default-*.jar`, and a
+  `verifyLibmpvJars` task (run before `preBuild`) fails the build if a jar
+  is missing or its MD5 does not match:
 
   | Jar                       | MD5                                |
   |---------------------------|------------------------------------|

@@ -1,6 +1,6 @@
 #!/bin/bash
-# Rebuilds android/libs/default-*.jar: media-kit's libmpv-android-video-build
-# at v1.1.7 (the release media_kit_libs_android_video 1.3.8 pins) plus
+# Builds dist/libmpv-android/default-*.jar (gitignored): media-kit's
+# libmpv-android-video-build at v1.1.7 (the release media_kit_libs_android_video 1.3.8 pins) plus
 # our numbered FFmpeg patches (03-*.patch, 04-*.patch). Prints the MD5s to
 # pin in android/build.gradle.
 #
@@ -43,5 +43,7 @@ ln -sfn "$ANDROID_HOME" sdk/android-sdk-linux
 ./bundle_default.sh
 
 out=deps/media-kit-android-helper/app/build/outputs/apk/release
-cp "$out"/default-*.jar "$here/../android/libs/"
-cd "$here/../android/libs" && md5sum default-*.jar
+dest="$here/../../../dist/libmpv-android"
+mkdir -p "$dest"
+cp "$out"/default-*.jar "$dest/"
+cd "$dest" && md5sum default-*.jar

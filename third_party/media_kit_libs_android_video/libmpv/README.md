@@ -2,8 +2,9 @@
 
 `media_kit_libs_android_video` 1.3.8, vendored. Upstream's `android/build.gradle`
 downloads media-kit's [libmpv-android-video-build] v1.1.7 jars; this copy uses
-the jars in `android/libs/`, which are that release rebuilt with two FFmpeg
-patches. Everything else in the package is upstream's.
+the jars in `dist/libmpv-android/` at the repo root, which are that release
+rebuilt with two FFmpeg patches. They are gitignored: build them once per
+checkout. Everything else in the package is upstream's.
 
 ## Why
 
@@ -40,8 +41,9 @@ appears.
 
 ## Rebuilding
 
-`./build.sh [workdir]`, then paste the printed MD5s into
-`android/build.gradle`. See the script header for prerequisites.
+`./build.sh [workdir]` writes the jars to `dist/libmpv-android/`; paste the
+printed MD5s into `android/build.gradle`. See the script header for
+prerequisites.
 
 [libmpv-android-video-build]: https://github.com/media-kit/libmpv-android-video-build
 [trac #7359]: https://trac.ffmpeg.org/ticket/7359

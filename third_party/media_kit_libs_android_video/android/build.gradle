@@ -24,6 +24,9 @@ rootProject.allprojects {
 
 apply plugin: 'com.android.library'
 
+// Jitter: built locally by ../libmpv/build.sh, kept out of git.
+def libmpvJars = file("../../../dist/libmpv-android")
+
 android {
     // Conditional for compatibility with AGP <4.2.
     if (project.android.hasProperty("namespace")) {
@@ -42,14 +45,14 @@ android {
     }
 
     dependencies {
-        implementation fileTree(dir: "libs", include: "*.jar")
+        implementation fileTree(dir: libmpvJars, include: "*.jar")
     }
 }
 
 // Jitter: upstream downloads media-kit's libmpv-android-video-build v1.1.7
 // jars here. These are that release rebuilt with two FFmpeg backports (see
-// ../libmpv/README.md), committed under libs/ and pinned by MD5 like
-// upstream's.
+// ../libmpv/README.md), read from dist/libmpv-android/ at the repo root and
+// pinned by MD5 like upstream's.
 task verifyLibmpvJars {
     def jars = [
         "default-arm64-v8a.jar"  : "6c12e38dfa56756c310e37f92b414a11",
@@ -59,9 +62,9 @@ task verifyLibmpvJars {
     ]
     doLast {
         jars.each { name, md5 ->
-            def jar = file("libs/$name")
+            def jar = new File(libmpvJars, name)
             if (!jar.exists()) {
-                throw new GradleException("Missing ${jar}")
+                throw new GradleException("Missing ${jar}; build it with third_party/media_kit_libs_android_video/libmpv/build.sh")
             }
             def actual = MessageDigest.getInstance("MD5").digest(Files.readAllBytes(jar.toPath())).encodeHex().toString()
             if (actual != md5) {
