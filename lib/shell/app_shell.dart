@@ -12,6 +12,7 @@ import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/favorites/favorites_page.dart';
 import 'package:jitter/history/history_holder.dart';
 import 'package:jitter/history/history_page.dart';
+import 'package:jitter/logs/logs_holder.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/player/player_page.dart';
@@ -65,6 +66,7 @@ class AppShell extends StatefulWidget {
     required this.search,
     // Settings
     required this.settings,
+    required this.logs,
     super.key,
   });
 
@@ -88,6 +90,7 @@ class AppShell extends StatefulWidget {
   final SearchHolder search;
   // Settings
   final SettingsHolder settings;
+  final LogsHolder logs;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -157,7 +160,7 @@ class _AppShellState extends State<AppShell> {
       label: 'Settings',
       icon: Icons.settings_outlined,
       selectedIcon: Icons.settings,
-      page: SettingsPage(settings: widget.settings),
+      page: SettingsPage(settings: widget.settings, logs: widget.logs),
       refresh: null,
     ),
   ];

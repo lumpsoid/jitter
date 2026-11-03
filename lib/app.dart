@@ -10,6 +10,7 @@ import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/history/history_holder.dart';
+import 'package:jitter/logs/logs_holder.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/search/search_holder.dart';
@@ -46,6 +47,7 @@ class JitterApp extends StatefulWidget {
     required this.search,
     // Settings
     required this.settings,
+    required this.logs,
     super.key,
   });
 
@@ -70,6 +72,9 @@ class JitterApp extends StatefulWidget {
   final SearchHolder search;
   // Settings: the theme here, the rest on the settings page.
   final SettingsHolder settings;
+
+  /// The logs page's, opened from the settings page.
+  final LogsHolder logs;
 
   @override
   State<JitterApp> createState() => _JitterAppState();
@@ -176,6 +181,7 @@ class _JitterAppState extends State<JitterApp> {
               search: widget.search,
               // Settings
               settings: widget.settings,
+              logs: widget.logs,
             ),
           },
         ),

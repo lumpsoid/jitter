@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +11,8 @@ import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/history/history_holder.dart';
+import 'package:jitter/logs/logs_holder.dart';
+import 'package:jitter/logs/rust_log.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/media_session.dart';
 import 'package:jitter/player/playback_holder.dart';
@@ -27,6 +30,7 @@ import 'package:rinf/rinf.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeRust(assignRustSignal);
+  _logErrors();
   MediaKit.ensureInitialized();
 
   // Playback
@@ -53,6 +57,7 @@ Future<void> main() async {
   final search = SearchHolder()..connect();
   // Settings
   final settings = SettingsHolder()..connect();
+  final logs = LogsHolder()..connect();
 
   final boot = BootHolder();
   unawaited(boot.connect());
@@ -80,8 +85,26 @@ Future<void> main() async {
       search: search,
       // Settings
       settings: settings,
+      logs: logs,
     ),
   );
+}
+
+/// Sends every uncaught error to this run's log, and still reports it as
+/// Flutter would.
+void _logErrors() {
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    logToRust(
+      DartLogLevel.error,
+      'flutter',
+      '${details.exceptionAsString()}\n${details.stack}',
+    );
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    logToRust(DartLogLevel.error, 'dart', '$error\n$stack');
+    return false;
+  };
 }
 
 /// Shows the playing stream to the system (a no-op on Linux and Windows).
@@ -106,6 +129,6 @@ Future<void> _startMediaSession(
     );
     session.connect();
   } on Object catch (error) {
-    debugPrint('media session: $error');
+    logToRust(DartLogLevel.warning, 'media session', '$error');
   }
 }

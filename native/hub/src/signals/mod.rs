@@ -15,6 +15,8 @@ mod chat;
 mod favorites;
 // History
 mod history;
+// Logs
+mod logs;
 // Playback
 mod playback;
 // Channel
@@ -49,6 +51,10 @@ pub use favorites::{
 pub use history::{
     ClearHistory, HistoryDay, HistoryEntry, HistoryReady, HistoryUpdate, RemoveFromHistory,
     RemoveVisit,
+};
+// Logs
+pub use logs::{
+    DartLogLevel, LogFromDart, LogSession, LogsReady, LogsUpdate, OpenLog, PlayerBuffering,
 };
 // Playback
 pub use playback::{

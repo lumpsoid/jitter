@@ -8,6 +8,7 @@ import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/history/history_holder.dart';
+import 'package:jitter/logs/logs_holder.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/search/search_holder.dart';
@@ -28,6 +29,7 @@ JitterApp _app(BootHolder boot, {SettingsHolder? settings}) => JitterApp(
   chat: ChatHolder(),
   search: SearchHolder(),
   settings: settings ?? SettingsHolder(),
+  logs: LogsHolder(),
 );
 
 SettingsUpdateSnapshot _settings(AppTheme theme) => SettingsUpdateSnapshot(

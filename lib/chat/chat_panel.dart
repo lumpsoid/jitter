@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:jitter/chat/chat_entry.dart';
 import 'package:jitter/chat/chat_holder.dart';
+import 'package:jitter/logs/rust_log.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/widgets/focus_ring.dart';
 import 'package:url_launcher/url_launcher_string.dart';
@@ -498,6 +499,6 @@ Future<void> _open(String url) async {
   try {
     await launchUrlString(url, mode: LaunchMode.externalApplication);
   } on Exception catch (error) {
-    debugPrint('Could not open $url: $error');
+    logToRust(DartLogLevel.warning, 'chat', 'Could not open $url: $error');
   }
 }

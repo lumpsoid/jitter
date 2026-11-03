@@ -24,6 +24,7 @@ rinf = "8.11.0"
 serde = { version = "1.0.219", features = ["derive"] }
 tokio = { version = "1.45.0", features = ["rt", "sync", "time", "macros"] }
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+log = { version = "0.4.34", features = ["std"] }
 
 [dev-dependencies]
 # The fake resume store, for the VOD tiles' resume progress.

@@ -11,7 +11,7 @@ use chrono::NaiveDate;
 use jitter_core::history::{HistoryChange, HistoryController};
 use jitter_core::models::{Visit, VisitId};
 use jitter_core::playback::{self, PlaybackController};
-use rinf::{RustSignal, debug_print};
+use rinf::RustSignal;
 
 use crate::format::{
     clock_label, day_label, day_time_label, local_time, streamed_label, today, watched_label,
@@ -43,7 +43,7 @@ pub fn heard(
     match change {
         Ok(HistoryChange::Listed) => send_snapshot(history),
         Ok(HistoryChange::Unchanged | HistoryChange::Touched) => {}
-        Err(e) => debug_print!("{e}"),
+        Err(e) => log::warn!("{e}"),
     }
 }
 
@@ -66,7 +66,7 @@ pub fn leave(
     match change {
         Ok(HistoryChange::Unchanged) => {}
         Ok(HistoryChange::Touched | HistoryChange::Listed) => send_snapshot(history),
-        Err(e) => debug_print!("{e}"),
+        Err(e) => log::warn!("{e}"),
     }
 }
 
