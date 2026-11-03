@@ -1,17 +1,20 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:jitter/logs/logs_holder.dart';
+import 'package:jitter/logs/logs_page.dart';
 import 'package:jitter/settings/settings_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 
 /// The user's settings: the theme, how chat loads and draws emotes, and
 /// the quality a player opens at. Each control sends its change to Rust
 /// and shows the setting as Rust answers; a change Rust could not store
-/// shows as a snackbar.
+/// shows as a snackbar. The app's logs open from here.
 class SettingsPage extends StatefulWidget {
-  const new({required this.settings, super.key});
+  const new({required this.settings, required this.logs, super.key});
 
   final SettingsHolder settings;
+  final LogsHolder logs;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -132,6 +135,16 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               value: settings.backgroundAudio,
               onChanged: (on) => holder.setBackgroundAudio(on: on),
+            ),
+            const _Header(label: 'Troubleshooting'),
+            ListTile(
+              leading: const Icon(Icons.article_outlined),
+              title: const Text('Logs'),
+              subtitle: const Text(
+                'What the app recorded on each run, to attach to a bug '
+                'report.',
+              ),
+              onTap: () => unawaited(LogsPage.push(context, logs: widget.logs)),
             ),
           ],
         );

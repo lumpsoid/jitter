@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:jitter/logs/rust_log.dart';
 import 'package:jitter/player/faded_volume.dart';
 import 'package:jitter/player/live.dart';
 import 'package:jitter/player/player_engine.dart';
 import 'package:jitter/player/video_zoom.dart';
+import 'package:jitter/src/bindings/bindings.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
@@ -27,15 +29,43 @@ String? hwdecFor(Map<String, String> environment) =>
     ? 'vaapi,vaapi-copy'
     : null;
 
+/// The log's level for an mpv message at [level] (`fatal`, `error`,
+/// `warn`).
+DartLogLevel _logLevel(String level) => switch (level) {
+  'fatal' || 'error' => DartLogLevel.error,
+  'warn' => DartLogLevel.warning,
+  _ => DartLogLevel.info,
+};
+
 /// [PlayerEngine] on `media_kit` (libmpv). One for the app's lifetime; the
 /// player page shows [controller]. The player is created on first use, so
 /// building this needs no libmpv.
 class MediaKitEngine implements PlayerEngine {
-  // `title` is what the OS volume mixer shows for our audio stream.
-  Player get _player => _created ??= Player(
-    configuration: const PlayerConfiguration(title: 'Jitter'),
-  );
+  Player get _player => _created ??= _create();
   Player? _created;
+
+  /// The player, reporting to this run's log: mpv's warnings and errors,
+  /// and each buffering wait with where it began and what was buffered.
+  Player _create() {
+    final player = Player(
+      configuration: const PlayerConfiguration(
+        // What the OS volume mixer shows for our audio stream.
+        title: 'Jitter',
+        logLevel: MPVLogLevel.warn,
+      ),
+    );
+    player.stream.log.listen(
+      (log) => logToRust(_logLevel(log.level), 'mpv/${log.prefix}', log.text),
+    );
+    player.stream.buffering.listen(
+      (buffering) => PlayerBuffering(
+        buffering: buffering,
+        positionMs: player.state.position.inMilliseconds,
+        bufferMs: player.state.buffer.inMilliseconds,
+      ).sendSignalToRust(),
+    );
+    return player;
+  }
 
   /// What the player page's `Video` renders.
   late final VideoController controller = VideoController(

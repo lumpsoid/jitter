@@ -12,7 +12,7 @@ use jitter_core::models::{
 use jitter_core::playback::{self, PlaybackController, PlaybackState, SLEEP_PRESETS};
 use jitter_core::resume::ResumeController;
 use jitter_twitch::{Twitch, TwitchError};
-use rinf::{RustSignal, debug_print};
+use rinf::RustSignal;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
 
@@ -43,10 +43,11 @@ pub fn play(
     let target = match playback::PlaybackTarget::try_from(target) {
         Ok(target) => target,
         Err(message) => {
-            PlaybackUpdate::Failed { message }.send_signal_to_dart();
+            send_failed(message);
             return None;
         }
     };
+    log::info!("play {}", describe(&target));
     let attempt = playback.begin(target.clone());
     send_state(playback);
     let (twitch, fetch, playing) = (twitch.clone(), fetch.clone(), target.clone());
@@ -154,7 +155,7 @@ pub fn rewound(
     details: Result<models::PlaybackDetails, String>,
     preferred: QualityPreference,
 ) -> Option<playback::PlaybackTarget> {
-    let details = details.inspect_err(|e| debug_print!("loading the recording's details: {e}"));
+    let details = details.inspect_err(|e| log::warn!("loading the recording's details: {e}"));
     match playback.apply_rewind(target, video, result, details, preferred)? {
         RewindOutcome::Rewound => {
             send_playing(playback, resume);
@@ -192,7 +193,7 @@ pub fn back_to_live(
     send_state(playback);
     // Read before the resolve, so its result answers this return only.
     let Some(playback::PlaybackTarget::Vod(video)) = playback.streaming(&target) else {
-        debug_print!("returning to live without a recording playing");
+        log::warn!("returning to live without a recording playing");
         return;
     };
     let (twitch, fetch) = (twitch.clone(), fetch.clone());
@@ -242,7 +243,7 @@ pub fn returned(
     details: Result<models::PlaybackDetails, String>,
     preferred: QualityPreference,
 ) -> Option<playback::PlaybackTarget> {
-    let details = details.inspect_err(|e| debug_print!("loading the playback details: {e}"));
+    let details = details.inspect_err(|e| log::warn!("loading the playback details: {e}"));
     match playback.apply_return(target, video, result, details, preferred)? {
         ReturnOutcome::Live => {
             send_playing(playback, resume);
@@ -298,7 +299,7 @@ pub fn refreshed(
     stream: &playback::PlaybackTarget,
     details: Result<models::PlaybackDetails, String>,
 ) {
-    let details = details.inspect_err(|e| debug_print!("refreshing the playback details: {e}"));
+    let details = details.inspect_err(|e| log::warn!("refreshing the playback details: {e}"));
     if playback.refresh_details(target, stream, details) {
         send_state(playback);
     }
@@ -312,10 +313,7 @@ fn send_playing(playback: &PlaybackController, resume: &ResumeController) {
             send_state(playback);
             send_open(open);
         }
-        Err(e) => PlaybackUpdate::Failed {
-            message: format!("Could not read the resume point: {e}"),
-        }
-        .send_signal_to_dart(),
+        Err(e) => send_failed(format!("Could not read the resume point: {e}")),
     }
 }
 
@@ -345,7 +343,7 @@ pub fn resolved(
 ) {
     let details = details
         .map_err(|e| e.to_string())
-        .inspect_err(|e| debug_print!("loading the playback details: {e}"));
+        .inspect_err(|e| log::warn!("loading the playback details: {e}"));
     if !playback.apply(
         target,
         result.map_err(|e| twitch_error(&e)),
@@ -359,16 +357,14 @@ pub fn resolved(
             send_state(playback);
             send_open(open);
         }
-        Err(e) => PlaybackUpdate::Failed {
-            message: format!("Could not read the resume point: {e}"),
-        }
-        .send_signal_to_dart(),
+        Err(e) => send_failed(format!("Could not read the resume point: {e}")),
     }
 }
 
 /// `SelectQuality`: switches mid-play, keeping the position; an unknown
 /// name changes nothing.
 pub fn select_quality(playback: &mut PlaybackController, signal: SelectQuality) {
+    log::info!("select quality {}", signal.name);
     let open = playback.switch_quality(&signal.name, Seconds::new(signal.position_s));
     send_state(playback);
     send_open(open);
@@ -396,6 +392,7 @@ pub fn go_to_time(signal: GoToTime) {
 /// `audio` (the user's background audio setting), stops, or, paused,
 /// stays as it is.
 pub fn background(playback: &mut PlaybackController, audio: bool, signal: AppBackgrounded) {
+    log::info!("app in the background, background audio {audio}");
     match playback.background(audio, signal.playing, Seconds::new(signal.position_s)) {
         None => {}
         Some(BackgroundStep::Open(open)) => send_open(Some(open)),
@@ -415,12 +412,10 @@ pub fn foreground(
     resume: &ResumeController,
     signal: AppForegrounded,
 ) {
+    log::info!("app in the foreground");
     match playback.foreground(Seconds::new(signal.position_s), resume) {
         Ok(open) => send_open(open),
-        Err(e) => PlaybackUpdate::Failed {
-            message: format!("Could not read the resume point: {e}"),
-        }
-        .send_signal_to_dart(),
+        Err(e) => send_failed(format!("Could not read the resume point: {e}")),
     }
 }
 
@@ -561,12 +556,38 @@ fn send_fade(level: FadeLevel) {
 /// Sends the page's state, a live stream's uptime as of now. A clock that
 /// cannot be read is logged, and the state goes out without the uptime.
 fn send_state(playback: &PlaybackController) {
+    if let PlaybackState::Failed { message } = playback.state() {
+        log::warn!("playback failed: {message}");
+    }
     update(playback.state(), report(now())).send_signal_to_dart();
 }
 
+/// Fails the page with `message`, which core has not seen.
+fn send_failed(message: String) {
+    log::warn!("playback failed: {message}");
+    PlaybackUpdate::Failed { message }.send_signal_to_dart();
+}
+
+/// Opens `open`, logging the server it plays from but not the URL: its
+/// query holds Twitch's access token, and users share their logs.
 fn send_open(open: Option<Open>) {
     if let Some(open) = open {
+        log::info!("opening {} at {} s", host(&open.url), open.start.get());
         PlayerCommand::from(open).send_signal_to_dart();
+    }
+}
+
+/// The server in `url`: `video-weaver.fra05.hls.ttvnw.net`.
+fn host(url: &str) -> &str {
+    let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
+    rest.split(['/', '?']).next().unwrap_or(rest)
+}
+
+/// How the log names a target: `live xqc`, `VOD 2290000000`.
+fn describe(target: &playback::PlaybackTarget) -> String {
+    match target {
+        playback::PlaybackTarget::Live(login) => format!("live {login}"),
+        playback::PlaybackTarget::Vod(id) => format!("VOD {id}"),
     }
 }
 
@@ -591,7 +612,7 @@ fn record(
 
 /// Logs a failure no view shows: the player page keeps playing.
 fn report<T>(result: Result<T, impl Display>) -> Option<T> {
-    result.map_err(|error| debug_print!("{error}")).ok()
+    result.map_err(|error| log::warn!("{error}")).ok()
 }
 
 /// Heads pass the clock to core; core never reads it.
@@ -766,6 +787,13 @@ mod tests {
     use jitter_core::models::{CategoryId, ChannelId, Chapter, Chapters, GameRef, NoRewind};
 
     use super::*;
+
+    #[test]
+    fn the_log_gets_the_server_without_the_token() {
+        let url = "https://usher.ttvnw.net/api/channel/hls/xqc.m3u8?sig=abc&token=secret";
+        assert_eq!(host(url), "usher.ttvnw.net");
+        assert_eq!(host("https://edge.test?token=secret"), "edge.test");
+    }
 
     #[test]
     fn details_send_the_title_game_name_and_the_streamed_day() -> Result<(), String> {

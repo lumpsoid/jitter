@@ -35,7 +35,7 @@ use jitter_core::name_color::{Theme, name_color};
 use jitter_core::playback::PlaybackTarget;
 use jitter_twitch::Twitch;
 use jitter_twitch::emotes::ProviderEmotes;
-use rinf::{RustSignal, debug_print};
+use rinf::RustSignal;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
@@ -362,7 +362,7 @@ fn spawn_page(
         let result = twitch
             .video_comments(&request.video, &request.from)
             .await
-            .inspect_err(|e| debug_print!("loading the chat replay: {e}"))
+            .inspect_err(|e| log::warn!("loading the chat replay: {e}"))
             .map_err(|e| format!("Couldn't load the chat. {}", twitch_error(&e)));
         let fetched = ChatFetched {
             session,
@@ -488,7 +488,7 @@ pub fn on_fetched(
                 match result {
                     Ok(emotes) => chat.set_emotes(scope, provider, emotes),
                     Err(e) => {
-                        debug_print!("{provider:?} {scope:?} emotes unavailable: {e}");
+                        log::warn!("{provider:?} {scope:?} emotes unavailable: {e}");
                         chat.provider_failed(provider);
                     }
                 }

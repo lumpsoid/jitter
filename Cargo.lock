@@ -878,6 +878,7 @@ dependencies = [
  "jitter_core",
  "jitter_store",
  "jitter_twitch",
+ "log",
  "rinf",
  "serde",
  "tokio",

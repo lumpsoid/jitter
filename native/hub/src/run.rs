@@ -45,6 +45,9 @@ use crate::signals::{AddFavorite, FavoritesReady, RefreshFavorites, RemoveFavori
 // History
 use crate::history;
 use crate::signals::{ClearHistory, HistoryReady, RemoveFromHistory, RemoveVisit};
+// Logs
+use crate::logs::{self, Buffering, Started};
+use crate::signals::{LogFromDart, LogsReady, OpenLog, PlayerBuffering};
 // Playback
 use crate::playback;
 use crate::signals::{
@@ -193,9 +196,15 @@ pub enum Fetched {
 
 /// Runs until the runtime shuts down. Holds the only receiver of every Dart
 /// signal: `boot` is handed over from boot, the rest are taken here.
+/// `log` is this run's log, or why it did not start.
 /// Signals sent before it starts are queued, not lost. `twitch` is cloned
 /// into each spawned call; clones share one connection pool.
-pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSignalPack<Boot>>) {
+pub async fn run(
+    mut c: Controllers,
+    twitch: Twitch,
+    boot: SignalReceiver<DartSignalPack<Boot>>,
+    log: Started,
+) {
     // Kept alive for the loop's lifetime: arms clone it into spawned calls.
     let (fetch, mut fetched) = mpsc::unbounded_channel::<Fetched>();
 
@@ -225,6 +234,13 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
     let remove_visit = RemoveVisit::get_dart_signal_receiver();
     let remove_from_history = RemoveFromHistory::get_dart_signal_receiver();
     let clear_history = ClearHistory::get_dart_signal_receiver();
+
+    // Logs
+    let logs_ready = LogsReady::get_dart_signal_receiver();
+    let open_log = OpenLog::get_dart_signal_receiver();
+    let log_from_dart = LogFromDart::get_dart_signal_receiver();
+    let player_buffering = PlayerBuffering::get_dart_signal_receiver();
+    let mut buffering = Buffering::default();
 
     // Playback
     let play = Play::get_dart_signal_receiver();
@@ -317,6 +333,14 @@ pub async fn run(mut c: Controllers, twitch: Twitch, boot: SignalReceiver<DartSi
                 history::remove_target(&mut c.history, pack.message);
             }
             Some(_) = clear_history.recv() => history::clear(&mut c.history),
+
+            // Logs
+            Some(_) = logs_ready.recv() => logs::ready(&log),
+            Some(pack) = open_log.recv() => logs::open(&log, pack.message),
+            Some(pack) = log_from_dart.recv() => logs::from_dart(pack.message),
+            Some(pack) = player_buffering.recv() => {
+                logs::buffering(&mut buffering, pack.message, std::time::Instant::now());
+            }
 
             // Playback
             Some(pack) = play.recv() => {

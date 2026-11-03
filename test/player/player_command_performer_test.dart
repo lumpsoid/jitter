@@ -37,10 +37,12 @@ class _FakeEngine implements PlayerEngine {
 void main() {
   late _FakeEngine engine;
   late PlayerCommandPerformer performer;
+  late List<String> logged;
 
   setUp(() {
     engine = _FakeEngine();
-    performer = PlayerCommandPerformer(engine);
+    logged = [];
+    performer = PlayerCommandPerformer(engine, log: logged.add);
   });
 
   test('each command is one engine call', () async {
@@ -79,11 +81,12 @@ void main() {
     expect(engine.calls, ['seek 5025']);
   });
 
-  test('a failed call does not hold up the next', () async {
+  test('a failed call is logged and does not hold up the next', () async {
     engine.failOpen = true;
     unawaited(performer.perform(const PlayerCommandOpen(url: 'a', startS: 0)));
     await performer.perform(const PlayerCommandStop());
 
     expect(engine.calls, ['stop']);
+    expect(logged, ['Bad state: no libmpv']);
   });
 }

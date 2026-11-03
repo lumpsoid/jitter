@@ -14,6 +14,8 @@ mod favorites;
 mod format;
 // History
 mod history;
+// Logs
+mod logs;
 // Playback
 mod playback;
 mod run;
@@ -31,6 +33,7 @@ use jitter_twitch::Twitch;
 use rinf::{DartSignal, RustSignal, dart_shutdown, write_interface};
 
 use crate::format::twitch_error;
+use crate::logs::{SessionLog, Started};
 use crate::run::Controllers;
 use crate::signals::{Boot, BootFailed, Booted};
 
@@ -43,21 +46,41 @@ async fn main() {
     dart_shutdown().await;
 }
 
-/// Waits for `Boot`, opens and loads the store, sends `Booted`, then runs
-/// the hub task. A failed boot sends `BootFailed` and waits for the next
-/// `Boot`. The hub task takes over the `Boot` receiver (rinf keeps one per
-/// type) and answers a later `Boot`, from a hot restart, with `Booted`.
+/// Waits for `Boot`, starts this run's log, opens and loads the store,
+/// sends `Booted`, then runs the hub task. A failed boot sends
+/// `BootFailed` and waits for the next `Boot`. The hub task takes over the
+/// `Boot` receiver (rinf keeps one per type) and answers a later `Boot`,
+/// from a hot restart, with `Booted`. A log that did not start does not
+/// stop the boot: the logs page says why.
 async fn boot_then_run() {
     let boot = Boot::get_dart_signal_receiver();
+    let mut log: Started = Err("no Boot yet".to_owned());
     while let Some(pack) = boot.recv().await {
-        match boot_at(&pack.message.dir) {
+        let dir = &pack.message.dir;
+        if log.is_err() {
+            log = start_log(dir);
+        }
+        match boot_at(dir) {
             Ok((controllers, twitch)) => {
                 Booted.send_signal_to_dart();
-                return run::run(controllers, twitch, boot).await;
+                return run::run(controllers, twitch, boot, log).await;
             }
-            Err(message) => BootFailed { message }.send_signal_to_dart(),
+            Err(message) => {
+                log::error!("boot failed: {message}");
+                BootFailed { message }.send_signal_to_dart();
+            }
         }
     }
+}
+
+/// Starts the log in `logs/` beside the database: on desktop in the data
+/// directory every head shares, on mobile in the one Dart gave.
+fn start_log(dir: &str) -> Started {
+    let db = db_path(dir).map_err(|e| e.to_string())?;
+    let data = db
+        .parent()
+        .ok_or_else(|| format!("{} has no parent directory", db.display()))?;
+    SessionLog::start(data.join("logs"))
 }
 
 /// Opens the store and builds the Twitch client; either failing is shown
