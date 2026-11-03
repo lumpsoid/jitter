@@ -6,8 +6,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use jitter_core::models::{
     self, BackgroundStep, Channel, ChannelLogin, FadeLevel, Open, Playback, Quality, QualityKind,
-    QualityPreference, ReturnOutcome, Rewind, RewindFailure, RewindOutcome, Seconds, SleepStep,
-    SleepTimer, Timestamp, VideoId,
+    QualityPreference, ReloadOutcome, ReturnOutcome, Rewind, RewindFailure, RewindOutcome,
+    STALL_LIMIT, Seconds, SleepStep, SleepTimer, Timestamp, VideoId,
 };
 use jitter_core::playback::{self, PlaybackController, PlaybackState, SLEEP_PRESETS};
 use jitter_core::resume::ResumeController;
@@ -74,15 +74,22 @@ type Resolved = Option<(
 /// Resolves `target` through twitch and loads what it plays beside it,
 /// both at once, within core's `RESOLVE_TIMEOUT`.
 async fn resolve_with_details(twitch: &Twitch, target: &playback::PlaybackTarget) -> Resolved {
-    let resolve = async {
-        match target {
-            playback::PlaybackTarget::Live(login) => twitch.live(login).await,
-            playback::PlaybackTarget::Vod(id) => twitch.vod(id).await,
-        }
-    };
-    let both = async { tokio::join!(resolve, twitch.playback_details(target)) };
-    let limit = Duration::from_secs(u64::from(playback::RESOLVE_TIMEOUT.get()));
-    tokio::time::timeout(limit, both).await.ok()
+    let both = async { tokio::join!(resolve(twitch, target), twitch.playback_details(target)) };
+    tokio::time::timeout(resolve_limit(), both).await.ok()
+}
+
+async fn resolve(
+    twitch: &Twitch,
+    target: &playback::PlaybackTarget,
+) -> Result<Playback, TwitchError> {
+    match target {
+        playback::PlaybackTarget::Live(login) => twitch.live(login).await,
+        playback::PlaybackTarget::Vod(id) => twitch.vod(id).await,
+    }
+}
+
+fn resolve_limit() -> Duration {
+    Duration::from_secs(u64::from(playback::RESOLVE_TIMEOUT.get()))
 }
 
 /// `RewindStream`: core starts loading the live page's recording VOD,
@@ -277,11 +284,11 @@ pub fn refresh(
     };
     let (twitch, fetch) = (twitch.clone(), fetch.clone());
     tokio::spawn(async move {
-        let limit = Duration::from_secs(u64::from(playback::RESOLVE_TIMEOUT.get()));
-        let details = match tokio::time::timeout(limit, twitch.playback_details(&stream)).await {
-            Ok(details) => details.map_err(|e| e.to_string()),
-            Err(_) => Err(playback::TIMED_OUT.to_owned()),
-        };
+        let details =
+            match tokio::time::timeout(resolve_limit(), twitch.playback_details(&stream)).await {
+                Ok(details) => details.map_err(|e| e.to_string()),
+                Err(_) => Err(playback::TIMED_OUT.to_owned()),
+            };
         let _ = fetch.send(Fetched::PlaybackDetails {
             target,
             stream,
@@ -546,6 +553,73 @@ pub fn sleep_tick(playback: &mut PlaybackController) -> bool {
             PlayerCommand::Stop.send_signal_to_dart();
             true
         }
+    }
+}
+
+/// `PlayerBuffering`: whether the player waits for data, for core's
+/// stall watch.
+pub fn buffering(playback: &mut PlaybackController, buffering: bool) {
+    playback.buffering(buffering, Instant::now().into_std());
+}
+
+/// When the stall watch next needs a tick; `None` unless the player waits
+/// on a live stream. Read afresh each loop.
+pub fn stall_wake(playback: &PlaybackController) -> Option<Instant> {
+    playback.stall_wake().map(Instant::from_std)
+}
+
+/// The stall watch's wake: when core says the live stream stalled, logs
+/// it as the app stepping in and resolves the page afresh within core's
+/// `RESOLVE_TIMEOUT`; it comes back as [`Fetched::Reloaded`]. The player
+/// keeps waiting meanwhile.
+pub fn stall_tick(
+    playback: &mut PlaybackController,
+    twitch: &Twitch,
+    fetch: &UnboundedSender<Fetched>,
+) {
+    let Some((target, waited)) = playback.stall_tick(Instant::now().into_std()) else {
+        return;
+    };
+    log::warn!(
+        "{} stalled: the player waited {:.0} s for data; reloading the stream from Twitch",
+        describe(&target),
+        waited.as_secs_f64(),
+    );
+    let (twitch, fetch) = (twitch.clone(), fetch.clone());
+    tokio::spawn(async move {
+        let result = match tokio::time::timeout(resolve_limit(), resolve(&twitch, &target)).await {
+            Ok(result) => result.map_err(|e| twitch_error(&e)),
+            Err(_) => Err(playback::TIMED_OUT.to_owned()),
+        };
+        let _ = fetch.send(Fetched::Reloaded { target, result });
+    });
+}
+
+/// A stalled live page's fresh resolve came back: core decides whether the
+/// player reopens it, keeping the quality it can. Each way it went is
+/// logged, as the end of the step the stall watch took.
+pub fn reloaded(
+    playback: &mut PlaybackController,
+    target: &playback::PlaybackTarget,
+    result: Result<Playback, String>,
+    preferred: QualityPreference,
+) {
+    let now = Instant::now().into_std();
+    match playback.apply_reload(target, result, preferred, now) {
+        None => log::info!(
+            "dropped the reload of {}: the stream recovered or the page changed",
+            describe(target)
+        ),
+        Some(ReloadOutcome::Reloaded(open)) => {
+            log::info!("reloaded {}", describe(target));
+            send_state(playback);
+            send_open(Some(open));
+        }
+        Some(ReloadOutcome::Failed(message)) => log::warn!(
+            "reloading {} failed: {message}; trying again if it still waits in {} s",
+            describe(target),
+            STALL_LIMIT.as_secs(),
+        ),
     }
 }
 

@@ -4,9 +4,9 @@ use jitter_core::chat_replay::ChatReplay;
 use jitter_core::fakes::FakeResumeStore;
 use jitter_core::models::{
     BackgroundStep, CategoryId, ChannelLogin, Chapter, Chapters, FadeLevel, GameRef, LiveDetails,
-    NoRewind, Open, Playback, PlaybackDetails, QualityKind, QualityPreference, Resolution,
-    ResumePoint, ReturnOutcome, Rewind, RewindFailure, RewindOutcome, SLEEP_FADE, Seconds,
-    SleepStep, Timestamp, Variant, VideoId,
+    NoRewind, Open, Playback, PlaybackDetails, QualityKind, QualityPreference, ReloadOutcome,
+    Resolution, ResumePoint, ReturnOutcome, Rewind, RewindFailure, RewindOutcome, SLEEP_FADE,
+    STALL_LIMIT, Seconds, SleepStep, Timestamp, Variant, VideoId,
 };
 use jitter_core::playback::{PlaybackController, PlaybackState, PlaybackTarget, TIMED_OUT};
 use jitter_core::resume::ResumeController;
@@ -1977,4 +1977,151 @@ fn a_refresh_for_a_page_left_or_replaced_changes_nothing() {
     assert!(c.leave(&live("a")));
     assert!(!c.refresh_details(&live("a"), &live("a"), fresh_live(10)));
     assert_eq!(c.state(), &PlaybackState::Idle);
+}
+
+/// Live page `a`, the player waiting on it since `since`.
+fn stalled(since: Instant) -> PlaybackController {
+    let mut c = ready(live("a"));
+    c.buffering(true, since);
+    c
+}
+
+/// A fresh resolve of live page `a`: only 720p60, from another server.
+fn reresolved() -> Result<Playback, String> {
+    Ok(Playback::from_variants(
+        "https://example.test/master.m3u8".to_owned(),
+        vec![Variant {
+            url: "https://other.test/720p60.m3u8".to_owned(),
+            ..variant("720p60", 720, QualityKind::Transcode)
+        }],
+    ))
+}
+
+fn reload(
+    c: &mut PlaybackController,
+    result: Result<Playback, String>,
+    now: Instant,
+) -> Option<ReloadOutcome> {
+    c.apply_reload(&live("a"), result, QualityPreference::Source, now)
+}
+
+#[test]
+fn a_live_wait_wakes_the_watch_at_the_limit_and_reloads_only_then() {
+    let t0 = Instant::now();
+    let mut c = stalled(t0);
+    assert_eq!(c.stall_wake(), Some(t0 + STALL_LIMIT));
+    assert_eq!(
+        c.stall_tick(t0 + STALL_LIMIT - Duration::from_secs(1)),
+        None
+    );
+    assert_eq!(
+        c.stall_tick(t0 + STALL_LIMIT),
+        Some((live("a"), STALL_LIMIT))
+    );
+    // One reload at a time.
+    assert_eq!(c.stall_wake(), None);
+    assert_eq!(c.stall_tick(t0 + STALL_LIMIT * 2), None);
+}
+
+#[test]
+fn a_wait_that_ends_is_not_watched_and_a_new_one_counts_afresh() {
+    let t0 = Instant::now();
+    let mut c = stalled(t0);
+    c.buffering(false, t0 + Duration::from_secs(5));
+    assert_eq!(c.stall_wake(), None);
+    let t1 = t0 + Duration::from_secs(10);
+    c.buffering(true, t1);
+    // A repeat does not restart the count.
+    c.buffering(true, t1 + Duration::from_secs(3));
+    assert_eq!(c.stall_wake(), Some(t1 + STALL_LIMIT));
+}
+
+#[test]
+fn a_reload_opens_the_fresh_playlist_at_the_live_edge_and_counts_afresh() {
+    let t0 = Instant::now();
+    let mut c = stalled(t0);
+    c.stall_tick(t0 + STALL_LIMIT);
+    let back = t0 + STALL_LIMIT + Duration::from_secs(1);
+    assert_eq!(
+        reload(&mut c, reresolved(), back),
+        Some(ReloadOutcome::Reloaded(Open {
+            url: "https://other.test/720p60.m3u8".to_owned(),
+            start: Seconds::ZERO,
+            live: true,
+        }))
+    );
+    // The selected 1080p60 is gone, so the preference picks again.
+    assert_eq!(selected(&c), Some("720p60"));
+    assert_eq!(c.stall_wake(), Some(back + STALL_LIMIT));
+}
+
+#[test]
+fn a_reload_keeps_the_selected_quality_when_the_fresh_playlist_has_it() {
+    let t0 = Instant::now();
+    let mut c = stalled(t0);
+    assert!(c.select("720p60"));
+    c.stall_tick(t0 + STALL_LIMIT);
+    let fresh = Ok(playback(vec![
+        variant("1080p60", 1080, QualityKind::Source),
+        variant("720p60", 720, QualityKind::Transcode),
+    ]));
+    assert_eq!(
+        reload(&mut c, fresh, t0 + STALL_LIMIT),
+        Some(ReloadOutcome::Reloaded(open("720p60", 0, true)))
+    );
+}
+
+#[test]
+fn a_failed_reload_keeps_the_stream_and_tries_again_after_another_limit() {
+    let t0 = Instant::now();
+    let mut c = stalled(t0);
+    c.stall_tick(t0 + STALL_LIMIT);
+    let back = t0 + STALL_LIMIT;
+    assert_eq!(
+        reload(&mut c, Err("offline".to_owned()), back),
+        Some(ReloadOutcome::Failed("offline".to_owned()))
+    );
+    assert_eq!(selected(&c), Some("1080p60"));
+    assert_eq!(c.stall_wake(), Some(back + STALL_LIMIT));
+    assert!(c.stall_tick(back + STALL_LIMIT).is_some());
+}
+
+#[test]
+fn a_reload_is_dropped_when_the_stream_recovered_or_the_page_changed() {
+    let t0 = Instant::now();
+    let mut c = stalled(t0);
+    c.stall_tick(t0 + STALL_LIMIT);
+    c.buffering(false, t0 + STALL_LIMIT);
+    assert_eq!(reload(&mut c, reresolved(), t0 + STALL_LIMIT), None);
+    assert_eq!(selected(&c), Some("1080p60"));
+
+    let mut c = stalled(t0);
+    c.stall_tick(t0 + STALL_LIMIT);
+    c.begin(live("b"));
+    assert_eq!(reload(&mut c, reresolved(), t0 + STALL_LIMIT), None);
+}
+
+#[test]
+fn only_a_live_stream_the_player_plays_is_watched() {
+    let t0 = Instant::now();
+    let mut vod_page = ready(PlaybackTarget::Vod(vod()));
+    vod_page.buffering(true, t0);
+    assert_eq!(vod_page.stall_wake(), None);
+    assert_eq!(vod_page.stall_tick(t0 + STALL_LIMIT), None);
+
+    let mut rewound = rewound();
+    rewound.buffering(true, t0);
+    assert_eq!(rewound.stall_wake(), None);
+
+    let mut stopped = stalled(t0);
+    stopped.background(false, true, Seconds::ZERO);
+    assert_eq!(stopped.stall_wake(), None);
+
+    let mut paused = stalled(t0);
+    paused.background(true, false, Seconds::ZERO);
+    assert_eq!(paused.stall_wake(), None);
+
+    let mut listening = stalled(t0);
+    listening.background(true, true, Seconds::ZERO);
+    assert_eq!(listening.stall_wake(), Some(t0 + STALL_LIMIT));
 }

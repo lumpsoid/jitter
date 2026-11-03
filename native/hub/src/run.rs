@@ -186,6 +186,12 @@ pub enum Fetched {
         result: Result<Playback, String>,
         details: Result<PlaybackDetails, String>,
     },
+    /// Stalled live page `target` resolved afresh; a timeout arrives as a
+    /// failure.
+    Reloaded {
+        target: PlaybackTarget,
+        result: Result<Playback, String>,
+    },
     // Channel
     Channel(ChannelFetched),
     // Chat
@@ -286,6 +292,9 @@ pub async fn run(
         // Playback: the sleep timer's next wake; none once it is off, left
         // or replaced, so no stale tick can reach it.
         let sleep_wake = playback::sleep_wake(&c.playback);
+        // Playback: when a live stream's wait reaches the stall limit; none
+        // unless the player waits on one.
+        let stall_wake = playback::stall_wake(&c.playback);
         tokio::select! {
             // Boot: already booted; a hot-restarted Dart side asks again.
             Some(_) = boot.recv() => Booted.send_signal_to_dart(),
@@ -339,6 +348,8 @@ pub async fn run(
             Some(pack) = open_log.recv() => logs::open(&log, pack.message),
             Some(pack) = log_from_dart.recv() => logs::from_dart(pack.message),
             Some(pack) = player_buffering.recv() => {
+                // Playback: watches a live stream for stalls.
+                playback::buffering(&mut c.playback, pack.message.buffering);
                 logs::buffering(&mut buffering, pack.message, std::time::Instant::now());
             }
 
@@ -402,6 +413,8 @@ pub async fn run(
                     chat::stop(&mut c.chat, &twitch, &fetch);
                 }
             }
+
+            () = chat::until(stall_wake) => playback::stall_tick(&mut c.playback, &twitch, &fetch),
 
             // Channel
             Some(pack) = open_channel.recv() => {
@@ -521,6 +534,10 @@ fn on_fetched(
             if let Some(stream) = stream {
                 chat::switch(&mut c.chat, twitch, fetch, &stream);
             }
+        }
+        Fetched::Reloaded { target, result } => {
+            let preferred = c.settings.state().start_quality;
+            playback::reloaded(&mut c.playback, &target, result, preferred);
         }
         Fetched::Returned {
             target,
