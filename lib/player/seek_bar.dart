@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:jitter/player/finger_slack.dart';
 import 'package:jitter/player/live.dart';
 import 'package:jitter/player/scrub.dart';
 import 'package:jitter/player/scrub_trail.dart';
@@ -30,9 +31,11 @@ const _rest = Duration(milliseconds: 150);
 /// hundredth, and so does taking the pointer or a finger a band or two
 /// away from the bar ([ScrubSpeed]); the slower of the two wins. A slowed
 /// press does not jump: the drag starts from where it plays. A finger's
-/// drag ends where it was held, not where its lift rolled it. Over the bar
-/// a bubble shows the time under the pointer, or the drag's and its speed;
-/// a drag also tells the tree above where it is ([ScrubNotification]).
+/// drag has a little slack, so a held finger's tremor does not move it
+/// ([FingerSlack]), and ends where it was held, not where its lift rolled
+/// it. Over the bar a bubble shows the time under the pointer, or the
+/// drag's and its speed; a drag also tells the tree above where it is
+/// ([ScrubNotification]).
 ///
 /// A drag seeks the player itself, where it rests and where it ends, so
 /// its frame shows. Twitch also publishes preview images along each VOD
@@ -81,6 +84,10 @@ class _SeekBarState extends State<SeekBar> {
 
   /// Where a finger's drag has been lately; null for a mouse's.
   ScrubTrail? _trail;
+
+  /// A finger's spot along the bar, its tremor taken out; null for a
+  /// mouse's.
+  FingerSlack? _slack;
 
   /// When the pointer went down and came up, by its events' clock; the up
   /// is null until it does, and for a drag cancelled without one.
@@ -163,6 +170,7 @@ class _SeekBarState extends State<SeekBar> {
     setState(() => _scrub = scrub);
     _tell();
     _trail = _mouse ? null : ScrubTrail(_downAt, scrub);
+    _slack = _mouse ? null : FingerSlack(x);
     _seek(scrub.target);
   }
 
@@ -179,7 +187,8 @@ class _SeekBarState extends State<SeekBar> {
     final away = ScrubSpeed.away(y < 0 ? y : math.max(0, y - seekBarHeight));
     final slowed = away != _away;
     if (slowed) setState(() => _away = away);
-    final scrub = _scrub?.moveTo(details.localPosition.dx, _speed);
+    final x = details.localPosition.dx;
+    final scrub = _scrub?.moveTo(_slack?.follow(x) ?? x, _speed);
     if (scrub == null || scrub.target == _scrub?.target) {
       if (slowed) _tell();
       return;
@@ -201,6 +210,7 @@ class _SeekBarState extends State<SeekBar> {
       (final scrub, _, _) => scrub,
     };
     _trail = null;
+    _slack = null;
     if (scrub == null) return;
     _resting?.cancel();
     if (scrub.target != _sought) _seek(scrub.target);

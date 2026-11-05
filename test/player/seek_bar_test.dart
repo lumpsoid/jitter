@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jitter/player/finger_slack.dart';
 import 'package:jitter/player/live.dart';
 import 'package:jitter/player/scrub.dart';
 import 'package:jitter/player/seek_bar.dart';
@@ -136,13 +137,13 @@ void main() {
     await tester.pump(_rest);
     expect(find.text('1:30:00  ×1/10'), findsOneWidget);
 
-    // 100 pixels of 21.6 s, at a tenth.
-    await drag.moveTo(_at(350) - const Offset(0, 80));
+    // 100 pixels of 21.6 s, at a tenth, past the slack.
+    await drag.moveTo(_at(350 + fingerSlack) - const Offset(0, 80));
     await tester.pump(_rest);
     expect(seeks.last, const Duration(hours: 1, minutes: 33, seconds: 36));
 
     // Two bands up, at a hundredth.
-    await drag.moveTo(_at(450) - const Offset(0, 150));
+    await drag.moveTo(_at(450 + fingerSlack) - const Offset(0, 150));
     await tester.pump(_rest);
     expect(
       seeks.last,
@@ -151,7 +152,7 @@ void main() {
     expect(find.text('1:33:57  ×1/100'), findsOneWidget);
 
     // Back down on the bar, at its own pace again.
-    await drag.moveTo(_at(550));
+    await drag.moveTo(_at(550 + fingerSlack));
     await tester.pump(_rest);
     expect(
       seeks.last,
@@ -160,12 +161,14 @@ void main() {
     await drag.up();
   });
 
-  /// A slowed drag held at 350, then rolled 20 pixels on as it lifts.
+  /// A slowed drag held at 350, then rolled 20 pixels on as it lifts; a
+  /// finger's moves go its slack further, to be taken up.
   Future<List<Duration>> heldThenLifted(
     WidgetTester tester,
     PointerDeviceKind kind,
   ) async {
     final seeks = await pumpBar(tester);
+    final slack = kind == PointerDeviceKind.touch ? fingerSlack : 0.0;
     final drag = await tester.createGesture(kind: kind);
     await drag.down(_at(250));
     await drag.moveTo(
@@ -173,12 +176,12 @@ void main() {
       timeStamp: const Duration(milliseconds: 100),
     );
     await drag.moveTo(
-      _at(350) - const Offset(0, 80),
+      _at(350 + slack) - const Offset(0, 80),
       timeStamp: const Duration(milliseconds: 500),
     );
     await tester.pump(_rest);
     await drag.moveTo(
-      _at(370) - const Offset(0, 80),
+      _at(370 + slack) - const Offset(0, 80),
       timeStamp: const Duration(milliseconds: 960),
     );
     await drag.up(timeStamp: const Duration(milliseconds: 1000));
@@ -280,7 +283,7 @@ void main() {
 
     final drag = await tester.startGesture(_at(250));
     await drag.moveTo(_at(250) - const Offset(0, 80));
-    await drag.moveTo(_at(350) - const Offset(0, 80));
+    await drag.moveTo(_at(350 + fingerSlack) - const Offset(0, 80));
     final moved = scrubs.last;
     await drag.up();
     await tester.pump(_rest);
