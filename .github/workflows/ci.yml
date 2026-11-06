@@ -30,7 +30,7 @@ jobs:
         run: >-
           pacman -Syu --noconfirm --needed
           base-devel git gtk4 libadwaita mpv rustup
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # The container's user does not own the checkout; core's build.rs asks
       # git for the commit.
       - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -45,7 +45,7 @@ jobs:
     name: Flutter gates
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
