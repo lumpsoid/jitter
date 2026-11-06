@@ -1,11 +1,12 @@
 # Build environment for the Linux AppImage. Ubuntu 24.04 is the oldest base
 # that ships libmpv.so.2, and its glibc (2.39) is the floor the AppImage
-# runs on. Versions are pinned to match the dev toolchain.
+# runs on. Versions are pinned to match the dev toolchain and CI
+# (.github/workflows); RINF_VERSION must match the rinf crate.
 FROM ubuntu:24.04
 
-ARG FLUTTER_VERSION=3.47.7
+ARG FLUTTER_VERSION=3.47.8
 ARG RUST_VERSION=1.93.1
-ARG RINF_VERSION=8.10.0
+ARG RINF_VERSION=8.11.0
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
