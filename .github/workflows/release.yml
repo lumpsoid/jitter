@@ -1,0 +1,185 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+# Keep in step with ci.yml and packaging/appimage/Containerfile.
+env:
+  RUST_VERSION: 1.93.1
+  FLUTTER_VERSION: 3.47.8
+  RINF_VERSION: 8.11.0
+  # The release holding the patched libmpv jars the Android build needs
+  # (third_party/media_kit_libs_android_video/libmpv/README.md). Gradle
+  # checks them against the MD5s pinned in that package's build.gradle.
+  LIBMPV_ANDROID_RELEASE: deps-libmpv-android-1.1.7-1
+
+jobs:
+  version:
+    name: Check the tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        run: |
+          full=$(scripts/version.sh show)
+          version=${full%+*}
+          if [[ "v$version" != "$GITHUB_REF_NAME" ]]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match version $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  android:
+    name: Android APK
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the signing secrets
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        # The release build fails without the key anyway; this names the
+        # missing secret before the long build starts.
+        run: |
+          for name in KEYSTORE STORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [[ -z ${!name} ]]; then
+              echo "::error::signing secret $name is missing (docs/maintaining.md)"
+              exit 1
+            fi
+          done
+          echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.jks"
+          cat > android/key.properties <<PROPERTIES
+          storeFile=$RUNNER_TEMP/release.jks
+          storePassword=$STORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          PROPERTIES
+      - name: Fetch the patched libmpv jars
+        run: |
+          gh release download "$LIBMPV_ANDROID_RELEASE" -R "$GITHUB_REPOSITORY" \
+            -p 'default-*.jar' -D dist/libmpv-android
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install rinf_cli --version "$RINF_VERSION" --locked
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: rinf gen
+      - run: flutter build apk --release
+      - name: Check the signature
+        run: |
+          apk=build/app/outputs/flutter-apk/app-release.apk
+          apksigner=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner
+          "$apksigner" verify --print-certs "$apk" | tee certs.txt
+          if grep -q 'CN=Android Debug' certs.txt; then
+            echo "::error::the APK is signed with the debug key"
+            exit 1
+          fi
+          mkdir -p out
+          cp "$apk" "out/jitter-$VERSION-android.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: out/
+          if-no-files-found: error
+
+  linux:
+    name: Linux AppImage
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Builds in podman from packaging/appimage/Containerfile.
+      - run: packaging/appimage/build.sh
+      - run: |
+          mkdir -p out
+          cp dist/Jitter-${{ needs.version.outputs.version }}-x86_64.AppImage \
+            out/jitter-${{ needs.version.outputs.version }}-x86_64.AppImage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: out/
+          if-no-files-found: error
+
+  windows:
+    name: Windows
+    needs: version
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install rinf_cli --version "$RINF_VERSION" --locked
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: rinf gen
+      - run: flutter build windows --release
+      - name: Zip the bundle
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          Compress-Archive -Path build/windows/x64/runner/Release/* `
+            -DestinationPath "out/jitter-${{ needs.version.outputs.version }}-windows-x64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: out/
+          if-no-files-found: error
+
+  publish:
+    name: Publish the release
+    needs: [version, android, linux, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Checksums
+        run: cd out && sha256sum * > SHA256SUMS && cat SHA256SUMS
+      # checkout leaves the tag lightweight; fetch it again to read the
+      # changelog section release.sh put in its annotation.
+      - name: Release notes
+        run: |
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          git tag -l --format='%(contents:body)' "$GITHUB_REF_NAME" > notes.md
+          cat notes.md
+          test -s notes.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Jitter ${{ needs.version.outputs.version }}
+          body_path: notes.md
+          files: out/*
+          fail_on_unmatched_files: true

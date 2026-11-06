@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Keep in step with release.yml and packaging/appimage/Containerfile.
+# RINF_VERSION must match the rinf crate and Dart package (docs/maintaining.md).
+env:
+  RUST_VERSION: 1.93.1
+  FLUTTER_VERSION: 3.47.8
+  RINF_VERSION: 8.11.0
+
+jobs:
+  rust:
+    name: Rust gates
+    runs-on: ubuntu-latest
+    # The GTK head needs libadwaita 1.6, newer than Ubuntu 24.04's.
+    container: archlinux:latest
+    steps:
+      - name: Install system packages
+        run: >-
+          pacman -Syu --noconfirm --needed
+          base-devel git gtk4 libadwaita mpv rustup
+      - uses: actions/checkout@v4
+      # The container's user does not own the checkout; core's build.rs asks
+      # git for the commit.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install Rust
+        run: |
+          rustup toolchain install "$RUST_VERSION" --profile minimal -c clippy,rustfmt
+          rustup default "$RUST_VERSION"
+      - uses: Swatinem/rust-cache@v2
+      - run: scripts/check.sh rust
+
+  flutter:
+    name: Flutter gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      - name: Cache rinf_cli
+        id: rinf
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/rinf
+          key: rinf-cli-${{ env.RINF_VERSION }}-${{ runner.os }}
+      - if: steps.rinf.outputs.cache-hit != 'true'
+        run: cargo install rinf_cli --version "$RINF_VERSION" --locked
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: scripts/check.sh flutter
