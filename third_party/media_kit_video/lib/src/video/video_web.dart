@@ -114,6 +114,9 @@ class Video extends StatefulWidget {
   /// FocusNode for keyboard input.
   final FocusNode? focusNode;
 
+  /// Wraps the picture alone; unused on the web.
+  final Widget Function(Widget picture)? pictureBuilder;
+
   /// {@macro video}
   const Video({
     super.key,
@@ -133,6 +136,7 @@ class Video extends StatefulWidget {
     this.onEnterFullscreen = defaultEnterNativeFullscreen,
     this.onExitFullscreen = defaultExitNativeFullscreen,
     this.focusNode,
+    this.pictureBuilder,
   });
 
   @override

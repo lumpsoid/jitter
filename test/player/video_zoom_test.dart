@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/player/video_zoom.dart';
 
@@ -60,5 +61,24 @@ void main() {
 
   test('a drag does nothing to the whole picture', () {
     expect(VideoZoom.none.panBy(const Offset(0.3, 0.3)), VideoZoom.none);
+  });
+
+  test('none draws the picture as it is', () {
+    expect(
+      VideoZoom.none.transformIn(const Size(200, 100)),
+      Matrix4.identity(),
+    );
+  });
+
+  test('a zoom draws its center at the frame middle, scaled', () {
+    final zoom = VideoZoom.none.zoomBy(2, focus: const Offset(0.75, 0.25));
+    final transform = zoom.transformIn(const Size(200, 100));
+    final center = Offset(zoom.center.dx * 200, zoom.center.dy * 100);
+
+    expect(
+      MatrixUtils.transformPoint(transform, center),
+      const Offset(100, 50),
+    );
+    expect(transform.getMaxScaleOnAxis(), 2);
   });
 }

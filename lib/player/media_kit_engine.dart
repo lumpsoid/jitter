@@ -1,11 +1,9 @@
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:jitter/logs/rust_log.dart';
 import 'package:jitter/player/faded_volume.dart';
 import 'package:jitter/player/live.dart';
 import 'package:jitter/player/player_engine.dart';
-import 'package:jitter/player/video_zoom.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -170,18 +168,6 @@ class MediaKitEngine implements PlayerEngine {
   /// Moves the volume by [by] (of 0–100); mid-fade, under the fade.
   Future<void> nudgeVolume(double by) =>
       _player.setVolume(_volume.nudge(by, current: _player.state.volume));
-
-  /// Shows the picture zoomed by [zoom]. libmpv draws it, so media_kit's
-  /// controls stay unzoomed over it; it holds across `open`s until reset.
-  Future<void> setZoom(VideoZoom zoom) async {
-    if (_player.platform case final NativePlayer mpv) {
-      // `video-zoom` is the scale's base-2 log; `video-pan-*` shifts the
-      // picture by fractions of its zoomed size.
-      await mpv.setProperty('video-zoom', '${math.log(zoom.scale) / math.ln2}');
-      await mpv.setProperty('video-pan-x', '${0.5 - zoom.center.dx}');
-      await mpv.setProperty('video-pan-y', '${0.5 - zoom.center.dy}');
-    }
-  }
 
   Future<void> _setVolume(double? volume) async {
     if (volume != null) await _player.setVolume(volume);

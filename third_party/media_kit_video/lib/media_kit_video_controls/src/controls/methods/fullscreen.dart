@@ -71,6 +71,8 @@ Future<void> enterFullscreen(BuildContext context) {
                                 .value.subtitleViewConfiguration,
                         focusNode:
                             videoViewParametersNotifierValue.value.focusNode,
+                        pictureBuilder: videoViewParametersNotifierValue
+                            .value.pictureBuilder,
                         onEnterFullscreen: stateValue.widget.onEnterFullscreen,
                         onExitFullscreen: stateValue.widget.onExitFullscreen,
                       ),

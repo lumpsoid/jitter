@@ -46,6 +46,14 @@ class VideoZoom {
   VideoZoom panBy(Offset delta) =>
       VideoZoom._clamped(scale, center - delta / scale);
 
+  /// What draws a [frame]-sized picture zoomed: scaled by [scale], its
+  /// [center] moved to the frame's middle.
+  Matrix4 transformIn(Size frame) => Matrix4.translationValues(
+    (0.5 - center.dx * scale) * frame.width,
+    (0.5 - center.dy * scale) * frame.height,
+    0,
+  )..scaleByDouble(scale, scale, 1, 1);
+
   @override
   bool operator ==(Object other) =>
       other is VideoZoom && other.scale == scale && other.center == center;

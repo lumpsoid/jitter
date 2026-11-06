@@ -27,6 +27,7 @@ import 'package:jitter/player/vod_keys.dart';
 import 'package:jitter/player/vod_phone_controls.dart';
 import 'package:jitter/player/zoom_gestures.dart';
 import 'package:jitter/player/zoom_reset.dart';
+import 'package:jitter/player/zoomed_picture.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/widgets/escape_goes_back.dart';
 import 'package:jitter/widgets/last_pointer.dart';
@@ -87,14 +88,12 @@ class _PlayerPageState extends State<PlayerPage> {
   /// The page's own layout, not Rust's: it is gone when the page closes.
   bool _theatre = false;
 
-  /// The zoom into the picture; the page's own, like theatre. Each change
-  /// goes to the player, and the page leaves it unzoomed.
+  /// The zoom into the picture; the page's own, like theatre.
   final ValueNotifier<VideoZoom> _zoom = ValueNotifier(VideoZoom.none);
 
   @override
   void initState() {
     super.initState();
-    _zoom.addListener(_showZoom);
     _play();
     _reporter = Timer.periodic(_reportEvery, (_) => _reportPosition());
   }
@@ -166,6 +165,11 @@ class _PlayerPageState extends State<PlayerPage> {
     fontSize: fontSize,
   );
 
+  /// The video's picture under the zoom; a tear-off, equal at each build,
+  /// so the video's parameters do not change with it.
+  Widget _zoomedPicture(Widget picture) =>
+      ZoomedPicture(zoom: _zoom, child: picture);
+
   /// [controls] under the zoom's gestures and reset, and the rewind's
   /// messages over them: within media_kit's controls, so its fullscreen
   /// route, which builds only the controls anew, has them too.
@@ -221,15 +225,12 @@ class _PlayerPageState extends State<PlayerPage> {
 
   void _exitTheatre() => setState(() => _theatre = false);
 
-  void _showZoom() => unawaited(widget.player.setZoom(_zoom.value));
-
   void _zoomBy(double factor) => _zoom.value = _zoom.value.zoomBy(factor);
 
   @override
   void dispose() {
     _reporter.cancel();
     _zoom.dispose();
-    unawaited(widget.player.setZoom(VideoZoom.none));
     LeavePlayer(
       target: widget.target,
       positionS: widget.player.position.inSeconds,
@@ -321,6 +322,7 @@ class _PlayerPageState extends State<PlayerPage> {
     PlaybackUpdateReady(:final live, :final rewind) => Video(
       key: _videoKey,
       controller: widget.player.controller,
+      pictureBuilder: _zoomedPicture,
       // The theme sits inside the controls, not around the video:
       // media_kit's fullscreen route copies the theme around the video
       // once, on entering, but builds the controls anew at each change,
