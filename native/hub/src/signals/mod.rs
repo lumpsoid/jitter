@@ -54,7 +54,8 @@ pub use history::{
 };
 // Logs
 pub use logs::{
-    DartLogLevel, LogFromDart, LogSession, LogsReady, LogsUpdate, OpenLog, PlayerBuffering,
+    DartLogLevel, DisplayFacts, DisplaysProbe, LogFromDart, LogSession, LogsReady, LogsUpdate,
+    MpvVersions, OpenLog, PlaybackDrops, PlaybackProbe, PlayerBuffering,
 };
 // Playback
 pub use playback::{

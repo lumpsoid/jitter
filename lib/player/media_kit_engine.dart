@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:jitter/logs/rust_log.dart';
 import 'package:jitter/player/faded_volume.dart';
 import 'package:jitter/player/live.dart';
+import 'package:jitter/player/mpv_probes.dart';
 import 'package:jitter/player/player_engine.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:media_kit/media_kit.dart';
@@ -28,11 +30,12 @@ String? hwdecFor(Map<String, String> environment) =>
     : null;
 
 /// The log's level for an mpv message at [level] (`fatal`, `error`,
-/// `warn`).
+/// `warn`, `info`, `v`). Rust keeps only the probes' lines of the verbose
+/// ones.
 DartLogLevel _logLevel(String level) => switch (level) {
   'fatal' || 'error' => DartLogLevel.error,
   'warn' => DartLogLevel.warning,
-  _ => DartLogLevel.info,
+  _ => DartLogLevel.verbose,
 };
 
 /// [PlayerEngine] on `media_kit` (libmpv). One for the app's lifetime; the
@@ -41,15 +44,19 @@ DartLogLevel _logLevel(String level) => switch (level) {
 class MediaKitEngine implements PlayerEngine {
   Player get _player => _created ??= _create();
   Player? _created;
+  MpvProbes? _probes;
 
   /// The player, reporting to this run's log: mpv's warnings and errors,
-  /// and each buffering wait with where it began and what was buffered.
+  /// each buffering wait with where it began and what was buffered, and
+  /// the probes: mpv's versions and GL context, and how it plays each
+  /// stream.
   Player _create() {
     final player = Player(
       configuration: const PlayerConfiguration(
         // What the OS volume mixer shows for our audio stream.
         title: 'Jitter',
-        logLevel: MPVLogLevel.warn,
+        // Verbose, for the GL context mpv names only there.
+        logLevel: MPVLogLevel.v,
       ),
     );
     player.stream.log.listen(
@@ -62,6 +69,11 @@ class MediaKitEngine implements PlayerEngine {
         bufferMs: player.state.buffer.inMilliseconds,
       ).sendSignalToRust(),
     );
+    if (player.platform case final NativePlayer mpv) {
+      final probes = _probes = MpvProbes(mpv);
+      unawaited(probes.versions());
+      player.stream.videoParams.listen(probes.videoParams);
+    }
     return player;
   }
 
@@ -79,6 +91,7 @@ class MediaKitEngine implements PlayerEngine {
   @override
   Future<void> open(String url, {required Duration start}) async {
     await _setVolume(_volume.end());
+    await _probes?.ended();
     await _player.open(Media(url, start: start));
   }
 
@@ -86,13 +99,17 @@ class MediaKitEngine implements PlayerEngine {
   /// after.
   @override
   Future<void> stop() async {
+    await _probes?.ended();
     await _player.stop();
     await _setVolume(_volume.end());
   }
 
   /// Stops what plays, if a player was ever created, so the exit does not
   /// wait on libmpv tearing down a live stream and its video output.
-  Future<void> stopForExit() async => await _created?.stop();
+  Future<void> stopForExit() async {
+    await _probes?.ended();
+    await _created?.stop();
+  }
 
   @override
   Future<void> setFade(double level) =>

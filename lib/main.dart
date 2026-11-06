@@ -11,6 +11,7 @@ import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/history/history_holder.dart';
+import 'package:jitter/logs/display_probe.dart';
 import 'package:jitter/logs/logs_holder.dart';
 import 'package:jitter/logs/rust_log.dart';
 import 'package:jitter/player/media_kit_engine.dart';
@@ -31,6 +32,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeRust(assignRustSignal);
   _logErrors();
+  sendDisplaysProbe(PlatformDispatcher.instance);
   MediaKit.ensureInitialized();
 
   // Playback

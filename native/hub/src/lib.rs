@@ -18,6 +18,7 @@ mod history;
 mod logs;
 // Playback
 mod playback;
+mod probes;
 mod run;
 // Search
 mod search;

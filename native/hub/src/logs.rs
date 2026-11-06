@@ -1,7 +1,7 @@
 //! The session log: one file per app run in `logs/` beside the database,
 //! named by when the run started; the newest [`KEEP`] are kept. Rust's
-//! `log` records, Dart's `LogFromDart` lines and the player's buffering
-//! waits all land in it, so a user can attach one file to an issue. The
+//! `log` records, Dart's `LogFromDart` lines, the player's buffering
+//! waits and the device and playback probes all land in it, so a user can attach one file to an issue. The
 //! logs page lists and reads the files.
 
 use std::fs::{self, File, OpenOptions};
@@ -14,6 +14,7 @@ use chrono::Local;
 use log::{Level, LevelFilter, Log, Metadata, Record};
 use rinf::RustSignal;
 
+use crate::probes;
 use crate::signals::{DartLogLevel, LogFromDart, LogSession, LogsUpdate, OpenLog, PlayerBuffering};
 
 /// Sessions kept, this one included.
@@ -60,6 +61,7 @@ impl SessionLog {
             std::env::consts::OS,
             std::env::consts::ARCH,
         );
+        probes::log_device();
         for failure in unremoved {
             log::warn!("removing an old log: {failure}");
         }
@@ -135,12 +137,15 @@ fn read(dir: &Path, name: &str) -> Result<(PathBuf, String), String> {
     Ok((path, String::from_utf8_lossy(&bytes).into_owned()))
 }
 
-/// `LogFromDart`: one line, under the source Dart gave.
+/// `LogFromDart`: one line, under the source Dart gave; a verbose one
+/// only if it is a probe's.
 pub fn from_dart(signal: LogFromDart) {
     let level = match signal.level {
         DartLogLevel::Error => Level::Error,
         DartLogLevel::Warning => Level::Warn,
         DartLogLevel::Info => Level::Info,
+        DartLogLevel::Verbose if probes::keeps_verbose(&signal.message) => Level::Info,
+        DartLogLevel::Verbose => return,
     };
     log::log!(target: "dart", level, "{}: {}", signal.source, signal.message);
 }

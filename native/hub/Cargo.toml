@@ -25,7 +25,16 @@ serde = { version = "1.0.219", features = ["derive"] }
 tokio = { version = "1.45.0", features = ["rt", "sync", "time", "macros"] }
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
 log = { version = "0.4.34", features = ["std"] }
+sysinfo = { version = "0.38.4", default-features = false, features = ["system"] }
 
 [dev-dependencies]
 # The fake resume store, for the VOD tiles' resume progress.
 jitter_core = { path = "../core", features = ["test-fakes"] }
+
+# The device probes in the session log: GPU adapters on Windows, the API
+# level on Android.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", features = ["Win32_Graphics_Dxgi"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+libc = "0.2.191"
