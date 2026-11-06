@@ -48,6 +48,7 @@ fn send_snapshot(settings: &Settings) {
             .collect(),
         third_party_emotes: settings.third_party_emotes,
         background_audio: settings.background_audio,
+        version: jitter_core::version::VERSION.to_owned(),
     }
     .send_signal_to_dart();
 }

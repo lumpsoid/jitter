@@ -37,6 +37,9 @@ pub enum SettingsUpdate {
         start_qualities: Vec<StartQualityChoice>,
         third_party_emotes: bool,
         background_audio: bool,
+        /// The app's version and commit, `0.1.0 (2391c1d)`; not a setting,
+        /// shown at the foot of the page.
+        version: String,
     },
     /// A change could not be stored; the settings are as last sent. A
     /// one-shot notice for a snackbar, not state.

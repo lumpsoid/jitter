@@ -15,7 +15,11 @@ use commands::play::PlayArgs;
 use commands::settings::SettingsCommand;
 
 #[derive(Parser)]
-#[command(name = "jitter", about = "Watch Twitch without an account")]
+#[command(
+    name = "jitter",
+    about = "Watch Twitch without an account",
+    version = jitter_core::version::VERSION
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -144,5 +148,25 @@ async fn run(command: Command) -> commands::Result<()> {
         } => commands::resume::run(&id, position_s, duration_s),
         Command::Settings { command } => commands::settings::run(command),
         Command::History { command } => commands::history::run(command),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::error::ErrorKind;
+
+    use super::*;
+
+    #[test]
+    fn version_flag_prints_the_core_version() -> Result<(), String> {
+        let Err(error) = Cli::try_parse_from(["jitter", "--version"]) else {
+            return Err("--version parsed as a command".to_owned());
+        };
+        assert_eq!(error.kind(), ErrorKind::DisplayVersion);
+        assert_eq!(
+            error.to_string(),
+            format!("jitter {}\n", jitter_core::version::VERSION)
+        );
+        Ok(())
     }
 }

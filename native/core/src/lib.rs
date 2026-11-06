@@ -26,4 +26,5 @@ pub mod rewind_policy;
 pub mod search;
 pub mod settings;
 pub mod tokenize;
+pub mod version;
 pub mod vods;

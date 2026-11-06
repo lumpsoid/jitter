@@ -67,6 +67,14 @@ void main() {
     expect(switchValue(tester, 'Play audio in the background'), isTrue);
   });
 
+  testWidgets('shows the version Rust sent at the foot', (tester) async {
+    holder.apply(snapshot());
+    await pumpPage(tester, holder);
+
+    await tester.scrollUntilVisible(find.text('0.1.0 (2391c1d)'), 200);
+    expect(find.text('0.1.0 (2391c1d)'), findsOneWidget);
+  });
+
   testWidgets('choosing a theme sends it', (tester) async {
     holder.apply(snapshot());
     await pumpPage(tester, holder);
