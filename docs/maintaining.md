@@ -59,6 +59,27 @@ If it fails, fix it on `main`, delete the tag locally and on GitHub
 (`git push origin :refs/tags/vX.Y.Z`), and release again; nothing was
 published.
 
+## Windows test builds
+
+To check a fix on Windows before it ships, or to send it to the user who
+reported the bug: Actions > Windows > Run workflow, pick the branch. The
+same `.github/workflows/windows.yml` builds the release zip.
+
+With "Publish the zip" ticked (the default), it also publishes the zip as
+the prerelease `test-windows-<short commit>`, which anyone can download
+without a GitHub account; the run's summary links it. The zip is named
+`jitter-X.Y.Z-test.<short commit>-windows-x64.zip`. Without it, the zip is
+only the run's artifact, which needs a GitHub login.
+
+```sh
+gh workflow run windows.yml --ref <branch>       # the same, from a shell
+gh release delete test-windows-<commit> --cleanup-tag --yes   # once done
+```
+
+Delete a test prerelease once the fix has shipped. The workflow must be
+on `main` for the Run workflow button to appear; the branch you run it on
+must have it too.
+
 ## Android signing key
 
 One key signs every release. **If it is lost, installed apps can never be
@@ -144,11 +165,12 @@ These move together, by hand, in one commit:
 
 - **rinf**: the crate in `native/hub/Cargo.toml`, the Dart package in
   `pubspec.yaml`, and `RINF_VERSION` in `.github/workflows/ci.yml`,
-  `release.yml` and `packaging/appimage/Containerfile`. Then `rinf gen`
+  `release.yml`, `windows.yml` and `packaging/appimage/Containerfile`.
+  Then `rinf gen`
   and `make check`. Close Dependabot's pull request for one half and do
   it by hand.
 - **Flutter and Rust toolchains**: `FLUTTER_VERSION` and `RUST_VERSION` in
-  both workflows and the Containerfile.
+  the three workflows and the Containerfile.
 - **media_kit**: `third_party/` holds patched copies of
   `media_kit_video` and `media_kit_libs_android_video`; an update means
   re-applying the patches (`third_party/media_kit_video/PATCHED.md`, the

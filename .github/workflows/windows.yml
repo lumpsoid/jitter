@@ -1,0 +1,105 @@
+name: Windows
+
+# The Windows build. release.yml calls it for a release; run it by hand
+# (Actions > Windows > Run workflow, pick the branch) for a test build of any
+# branch, to check a fix on Windows or send it to the user who reported the
+# bug. See docs/maintaining.md#windows-test-builds.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: The release's version, X.Y.Z
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      share:
+        description: Publish the zip as a test prerelease anyone can download
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# Keep in step with ci.yml, release.yml and packaging/appimage/Containerfile.
+env:
+  RUST_VERSION: 1.93.1
+  FLUTTER_VERSION: 3.47.8
+  RINF_VERSION: 8.11.0
+
+jobs:
+  build:
+    name: Windows
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      zip: ${{ steps.name.outputs.zip }}
+    steps:
+      - uses: actions/checkout@v4
+      # A test build is named after its commit, so it can't pass for a release.
+      - name: Name the zip
+        id: name
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ -z $VERSION ]]; then
+            full=$(scripts/version.sh show)
+            VERSION="${full%+*}-test.${GITHUB_SHA::7}"
+          fi
+          echo "zip=jitter-$VERSION-windows-x64.zip" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install rinf_cli --version "$RINF_VERSION" --locked
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: rinf gen
+      - run: flutter build windows --release
+      - name: Zip the bundle
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          Compress-Archive -Path build/windows/x64/runner/Release/* `
+            -DestinationPath "out/${{ steps.name.outputs.zip }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: out/
+          if-no-files-found: error
+
+  share:
+    name: Publish a test prerelease
+    if: github.event_name == 'workflow_dispatch' && inputs.share
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ZIP: ${{ needs.build.outputs.zip }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows
+          path: out
+      # One prerelease per commit; a re-run replaces its zip.
+      - run: |
+          tag="test-windows-${GITHUB_SHA::7}"
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" -R "$GITHUB_REPOSITORY" --clobber "out/$ZIP"
+          else
+            gh release create "$tag" -R "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "Windows test build ${GITHUB_SHA::7} ($GITHUB_REF_NAME)" \
+              --notes "Not a release: a test build of $GITHUB_REF_NAME at $GITHUB_SHA, to check a fix before it ships. Unzip anywhere and run jitter.exe. It is not code-signed, so SmartScreen may warn the first time." \
+              "out/$ZIP"
+          fi
+          url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$tag"
+          echo "::notice::$url"
+          echo "Test build: $url" >> "$GITHUB_STEP_SUMMARY"
