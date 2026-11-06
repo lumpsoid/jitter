@@ -112,6 +112,9 @@ Jitter's own code is under the [0BSD license](./LICENSE). It does not cover:
   bundle them: the AppImage carries Ubuntu 24.04's packages, the Android
   build carries media-kit's libmpv-android-video-build rebuilt with the
   patches above by that directory's `build.sh`, and the Windows build carries
-  media-kit's libmpv-win32-video-build. They stay under their own licenses
-  (LGPL or GPL, depending on the build), and their source is available from
-  their upstream projects, plus those patches.
+  [shinchiro's mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake)
+  build, unchanged (GPLv3; see
+  [its README](./third_party/media_kit_libs_windows_video/libmpv/README.md)).
+  They stay under their own licenses (LGPL or GPL, depending on the build),
+  and their source is available from their upstream projects, plus those
+  patches.
