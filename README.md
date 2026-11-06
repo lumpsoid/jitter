@@ -65,3 +65,19 @@ please refer to Rinf's [documentation](https://rinf.cunarist.org).
 `make appimage` builds a self-contained AppImage in `dist/`. Building it and
 running it elsewhere, SteamOS Game Mode included, is covered in
 [Linux AppImage](./docs/linux-appimage.md).
+
+## License
+
+Jitter's own code is under the [0BSD license](./LICENSE). It does not cover:
+
+- `third_party/`: vendored, patched copies of media_kit packages, each under
+  its own `LICENSE` (MIT). The exception is the `*.patch` files in
+  [`third_party/media_kit_libs_android_video/libmpv/`](./third_party/media_kit_libs_android_video/libmpv/):
+  those are upstream FFmpeg commits backported to FFmpeg 6.0. They keep their
+  original authors and stay under FFmpeg's license.
+- libmpv and FFmpeg. They are not in this repository, but release builds
+  bundle them: the AppImage carries Ubuntu 24.04's packages, and the Android
+  build carries media-kit's libmpv-android-video-build rebuilt with the
+  patches above by that directory's `build.sh`. They stay under their own
+  licenses (LGPL or GPL, depending on the build), and their source is
+  available from their upstream projects, plus those patches.
