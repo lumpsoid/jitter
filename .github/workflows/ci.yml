@@ -51,7 +51,7 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
       - name: Cache rinf_cli
         id: rinf
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/bin/rinf
           key: rinf-cli-${{ env.RINF_VERSION }}-${{ runner.os }}
