@@ -29,6 +29,9 @@ class VideoViewParameters {
   final SubtitleViewConfiguration subtitleViewConfiguration;
   final FocusNode? focusNode;
 
+  /// Wraps the picture alone, under the subtitles and controls.
+  final Widget Function(Widget picture)? pictureBuilder;
+
   /// {@macro video_view_parameters}
   VideoViewParameters({
     required this.width,
@@ -41,6 +44,7 @@ class VideoViewParameters {
     required this.controls,
     required this.subtitleViewConfiguration,
     this.focusNode,
+    this.pictureBuilder,
   });
 
   VideoViewParameters copyWith({
@@ -58,6 +62,7 @@ class VideoViewParameters {
     Future<void> Function()? onEnterFullscreen,
     Future<void> Function()? onExitFullscreen,
     FocusNode? focusNode,
+    Widget Function(Widget picture)? pictureBuilder,
   }) {
     return VideoViewParameters(
       width: width ?? this.width,
@@ -71,6 +76,7 @@ class VideoViewParameters {
       subtitleViewConfiguration:
           subtitleViewConfiguration ?? this.subtitleViewConfiguration,
       focusNode: focusNode ?? this.focusNode,
+      pictureBuilder: pictureBuilder ?? this.pictureBuilder,
     );
   }
 
@@ -87,7 +93,8 @@ class VideoViewParameters {
           other.filterQuality == filterQuality &&
           other.controls == controls &&
           other.subtitleViewConfiguration == subtitleViewConfiguration &&
-          other.focusNode == focusNode;
+          other.focusNode == focusNode &&
+          other.pictureBuilder == pictureBuilder;
 
   @override
   int get hashCode =>
@@ -100,5 +107,6 @@ class VideoViewParameters {
       filterQuality.hashCode ^
       controls.hashCode ^
       subtitleViewConfiguration.hashCode ^
-      focusNode.hashCode;
+      focusNode.hashCode ^
+      pictureBuilder.hashCode;
 }

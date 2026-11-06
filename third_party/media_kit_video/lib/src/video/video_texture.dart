@@ -116,6 +116,9 @@ class Video extends StatefulWidget {
   /// FocusNode for keyboard input.
   final FocusNode? focusNode;
 
+  /// Wraps the picture alone, under the subtitles and controls.
+  final Widget Function(Widget picture)? pictureBuilder;
+
   /// {@macro video}
   const Video({
     super.key,
@@ -135,6 +138,7 @@ class Video extends StatefulWidget {
     this.onEnterFullscreen = defaultEnterNativeFullscreen,
     this.onExitFullscreen = defaultExitNativeFullscreen,
     this.focusNode,
+    this.pictureBuilder,
   });
 
   @override
@@ -225,6 +229,7 @@ class VideoState extends State<Video> with WidgetsBindingObserver {
                 controls: widget.controls,
                 subtitleViewConfiguration: widget.subtitleViewConfiguration,
                 focusNode: widget.focusNode,
+                pictureBuilder: widget.pictureBuilder,
               ),
             );
     _disposeNotifiers =
@@ -268,6 +273,9 @@ class VideoState extends State<Video> with WidgetsBindingObserver {
       focusNode: widget.focusNode != oldWidget.focusNode
           ? widget.focusNode
           : currentParams.focusNode,
+      pictureBuilder: widget.pictureBuilder != oldWidget.pictureBuilder
+          ? widget.pictureBuilder
+          : currentParams.pictureBuilder,
     );
 
     if (newParams != currentParams) {
@@ -369,6 +377,8 @@ class VideoState extends State<Video> with WidgetsBindingObserver {
 
   void refreshView() {}
 
+  static Widget _bare(Widget picture) => picture;
+
   @override
   Widget build(BuildContext context) {
     return media_kit_video_controls.VideoStateInheritedWidget(
@@ -386,7 +396,7 @@ class VideoState extends State<Video> with WidgetsBindingObserver {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                ClipRect(
+                (videoViewParameters.pictureBuilder ?? _bare)(ClipRect(
                   child: FittedBox(
                     fit: videoViewParameters.fit,
                     alignment: videoViewParameters.alignment,
@@ -446,7 +456,7 @@ class VideoState extends State<Video> with WidgetsBindingObserver {
                             ),
                     ),
                   ),
-                ),
+                )),
                 if (videoViewParameters.subtitleViewConfiguration.visible &&
                     !(widget.controller.player.platform?.configuration.libass ??
                         false))
