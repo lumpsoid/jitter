@@ -10,8 +10,8 @@ rinf gen                                             # bindings are gitignored
 make check
 ```
 
-For Android, fetch the patched libmpv jars into `dist/libmpv-android/` (see
-[CONTRIBUTING](../CONTRIBUTING.md#android)), and put `android/key.properties`
+For Android, `scripts/libmpv-android.sh fetch` gets the patched libmpv jars
+(see [below](#patched-libmpv-for-android)), and put `android/key.properties`
 back (see [Signing key](#android-signing-key)).
 
 ## Everyday
@@ -100,30 +100,40 @@ gh secret set ANDROID_KEY_ALIAS -R lumpsoid/jitter
 gh secret set ANDROID_KEY_PASSWORD -R lumpsoid/jitter
 ```
 
-The release workflow stops early, naming the missing secret. A password with `\`, `=` or `:` in it needs escaping in
+The release workflow stops early, naming the missing secret. A password
+with `\`, `=` or `:` in it needs escaping in
 `key.properties`; avoid them.
 
 ## Patched libmpv for Android
 
-The Android build needs `dist/libmpv-android/default-*.jar`, built by
-`third_party/media_kit_libs_android_video/libmpv/build.sh` (an hour or so;
-see its README). They are gitignored and CI does not build them: the
-release workflow downloads them from the GitHub release named in
-`LIBMPV_ANDROID_RELEASE` (`deps-libmpv-android-1.1.7-1`), and Gradle checks
-them against the MD5s pinned in that package's `android/build.gradle`.
+The Android build needs the patched libmpv jars in
+`dist/libmpv-android/` (gitignored). `scripts/libmpv-android.sh` handles
+them; the release workflow and contributors only ever `fetch`.
 
-To publish them the first time, or after rebuilding:
+- `third_party/media_kit_libs_android_video/libmpv/jars.md5` pins them.
+  Gradle refuses jars that don't match.
+- They are stored as assets of a GitHub release named
+  `libmpv-android-<hash of jars.md5>`. New jars get a new release, and old
+  app versions keep theirs. `scripts/libmpv-android.sh name` prints it.
+
+First time, with the jars you already have:
 
 ```sh
-gh release create deps-libmpv-android-1.1.7-1 -R lumpsoid/jitter \
-  --title "libmpv for Android (build dependency)" --latest=false \
-  --notes "media-kit libmpv-android-video-build v1.1.7 with the FFmpeg patches in third_party/media_kit_libs_android_video/libmpv. Not an app release." \
-  dist/libmpv-android/default-*.jar
+scripts/libmpv-android.sh verify    # they match the pins
+scripts/libmpv-android.sh publish
 ```
 
-After a rebuild, use a new name (`-2`), update `LIBMPV_ANDROID_RELEASE` in
-`release.yml` and the download command in CONTRIBUTING, and paste the new
-MD5s into `build.gradle`, all in one commit.
+After changing the patches or the upstream version:
+
+```sh
+scripts/libmpv-android.sh build     # an hour or more; writes jars.md5
+scripts/libmpv-android.sh publish   # before pushing the new pins
+git commit third_party/media_kit_libs_android_video/libmpv/jars.md5 -m "..."
+```
+
+Publish before pushing: a pushed pin with no release behind it fails the
+next app release. `publish` does nothing if that release already exists.
+The build's prerequisites are in the header of `libmpv/build.sh`.
 
 ## Dependency updates
 

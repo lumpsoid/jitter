@@ -24,7 +24,8 @@ rootProject.allprojects {
 
 apply plugin: 'com.android.library'
 
-// Jitter: built locally by ../libmpv/build.sh, kept out of git.
+// Jitter: built by ../libmpv/build.sh, kept out of git; see
+// scripts/libmpv-android.sh.
 def libmpvJars = file("../../../dist/libmpv-android")
 
 android {
@@ -52,23 +53,22 @@ android {
 // Jitter: upstream downloads media-kit's libmpv-android-video-build v1.1.7
 // jars here. These are that release rebuilt with two FFmpeg backports (see
 // ../libmpv/README.md), read from dist/libmpv-android/ at the repo root and
-// pinned by MD5 like upstream's.
+// checked against the MD5s in ../libmpv/jars.md5, the pins
+// scripts/libmpv-android.sh writes and fetches by.
+def libmpvPins = file("../libmpv/jars.md5")
+
 task verifyLibmpvJars {
-    def jars = [
-        "default-arm64-v8a.jar"  : "6c12e38dfa56756c310e37f92b414a11",
-        "default-armeabi-v7a.jar": "3fafc94e47ee3a018b0f7e185915ece7",
-        "default-x86_64.jar"     : "3ea724c13852964537b8e82129a861f4",
-        "default-x86.jar"        : "ff6eb6c7f9d15ba4a35da3f3adaab9e3",
-    ]
+    inputs.file(libmpvPins)
     doLast {
-        jars.each { name, md5 ->
+        libmpvPins.readLines().findAll { it.trim() }.each { line ->
+            def (md5, name) = line.split(/\s+/, 2)
             def jar = new File(libmpvJars, name)
             if (!jar.exists()) {
-                throw new GradleException("Missing ${jar}; build it with third_party/media_kit_libs_android_video/libmpv/build.sh")
+                throw new GradleException("Missing ${jar}; run scripts/libmpv-android.sh fetch")
             }
             def actual = MessageDigest.getInstance("MD5").digest(Files.readAllBytes(jar.toPath())).encodeHex().toString()
             if (actual != md5) {
-                throw new GradleException("MD5 mismatch for ${jar}: ${actual}, expected ${md5}")
+                throw new GradleException("MD5 mismatch for ${jar}: ${actual}, expected ${md5}; run scripts/libmpv-android.sh fetch")
             }
         }
     }

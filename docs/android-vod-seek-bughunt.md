@@ -329,8 +329,8 @@ fragmented-MP4 VOD.
 
 ## Maintenance
 
-- **Rebuilding:** `third_party/media_kit_libs_android_video/libmpv/build.sh
-  [workdir]`, then paste the printed MD5s into `android/build.gradle`.
+- **Rebuilding:** `scripts/libmpv-android.sh build [workdir]`, then
+  `publish`; see [maintaining](./maintaining.md#patched-libmpv-for-android).
 - **Upgrading media_kit:** if `media_kit_libs_android_video` moves past
   1.3.8, re-vendor it and redo the `build.gradle` change. If it pins a new
   libmpv-android-video-build release, rebuild from that tag with the patch.

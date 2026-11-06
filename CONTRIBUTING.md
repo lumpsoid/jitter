@@ -38,14 +38,12 @@ libadwaita 1.6+, so `cargo test` for the whole workspace needs those too.
 
 The Android build uses libmpv jars rebuilt with two FFmpeg patches
 ([why](./third_party/media_kit_libs_android_video/libmpv/README.md)). They
-are not in git. Download the ones the release builds use:
+are not in git. Download the ones the release builds use (needs the
+[GitHub CLI](https://cli.github.com/)):
 
 ```sh
-gh release download deps-libmpv-android-1.1.7-1 -R lumpsoid/jitter \
-  -p 'default-*.jar' -D dist/libmpv-android
+scripts/libmpv-android.sh fetch
 ```
-
-or build them with `third_party/media_kit_libs_android_video/libmpv/build.sh`.
 
 ## Where a change goes
 

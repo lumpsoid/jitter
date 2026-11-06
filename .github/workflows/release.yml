@@ -12,10 +12,6 @@ env:
   RUST_VERSION: 1.93.1
   FLUTTER_VERSION: 3.47.8
   RINF_VERSION: 8.11.0
-  # The release holding the patched libmpv jars the Android build needs
-  # (third_party/media_kit_libs_android_video/libmpv/README.md). Gradle
-  # checks them against the MD5s pinned in that package's build.gradle.
-  LIBMPV_ANDROID_RELEASE: deps-libmpv-android-1.1.7-1
 
 jobs:
   version:
@@ -66,10 +62,9 @@ jobs:
           keyAlias=$KEY_ALIAS
           keyPassword=$KEY_PASSWORD
           PROPERTIES
+      # Built locally and published by the same script (docs/maintaining.md).
       - name: Fetch the patched libmpv jars
-        run: |
-          gh release download "$LIBMPV_ANDROID_RELEASE" -R "$GITHUB_REPOSITORY" \
-            -p 'default-*.jar' -D dist/libmpv-android
+        run: scripts/libmpv-android.sh fetch
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
