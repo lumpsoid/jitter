@@ -1,4 +1,4 @@
-package dev.jitter.jitter
+package io.github.lumpsoid.jitter
 
 import android.os.Process
 import com.ryanheise.audioservice.AudioServiceActivity

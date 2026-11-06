@@ -40,6 +40,7 @@ SettingsUpdateSnapshot _settings(AppTheme theme) => SettingsUpdateSnapshot(
   startQualities: const [],
   thirdPartyEmotes: true,
   backgroundAudio: true,
+  version: '0.1.0',
 );
 
 void main() {

@@ -1,0 +1,52 @@
+name: Bug report
+description: Something does not work as it should.
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: From Settings → About, e.g. `0.1.0 (2391c1d)`.
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Android
+        - Linux (AppImage)
+        - Linux (built from source)
+        - SteamOS / Steam Deck
+        - Windows
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and OS version
+      placeholder: Pixel 7, Android 15 / Arch Linux, KDE Wayland / Windows 11
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: And what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The channel or VOD, if it happens with a particular one.
+      placeholder: |
+        1. Open …
+        2. Tap …
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: >-
+        From Settings → Logs, the run where it happened. Stream URLs in the
+        log have their access tokens removed.
+      render: text

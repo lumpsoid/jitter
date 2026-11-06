@@ -14,6 +14,7 @@ SettingsUpdateSnapshot snapshot({
   StartQuality startQuality = StartQuality.source,
   bool thirdPartyEmotes = true,
   bool backgroundAudio = true,
+  String version = '0.1.0 (2391c1d)',
 }) => SettingsUpdateSnapshot(
   theme: theme,
   animatedEmotes: animatedEmotes,
@@ -22,4 +23,5 @@ SettingsUpdateSnapshot snapshot({
   startQualities: qualities,
   thirdPartyEmotes: thirdPartyEmotes,
   backgroundAudio: backgroundAudio,
+  version: version,
 );

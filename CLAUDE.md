@@ -19,6 +19,7 @@ native/twitch (jitter_twitch)  Twitch access; returns core types.
 native/store  (jitter_store)   SQLite; implements core's storage ports.
 native/hub    (hub)            rinf bridge — the Flutter head's Rust side.
 native/cli    (jitter_cli)     CLI head.
+native/gtk    (jitter_gtk)     Experimental native GTK head.
 lib/                           Flutter GUI head.
 ```
 
@@ -38,9 +39,17 @@ from those to core, never back.
 
 ## Gates
 
-`make check` runs all of them in order. Individually:
+`make check` (`scripts/check.sh`, which CI runs too) runs all of them in
+order, and checks that `Cargo.toml` and `pubspec.yaml` agree on the
+version. Individually:
 
 - `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test`
 - `rinf gen` after changing any signal struct, and on a fresh checkout
   before `flutter analyze` (the generated bindings are gitignored)
 - `flutter analyze` / `flutter test` for the GUI
+
+Commits and branches follow Conventional Commits (`feat`, `fix`, `test`,
+`docs`, `ci`, `chore`); when to use which is in
+[CONTRIBUTING](./CONTRIBUTING.md#commits).
+
+Releasing and the rest of the maintainer's jobs: [maintaining](./docs/maintaining.md).

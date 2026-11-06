@@ -9,7 +9,8 @@ import 'package:jitter/src/bindings/bindings.dart';
 /// The user's settings: the theme, how chat loads and draws emotes, and
 /// the quality a player opens at. Each control sends its change to Rust
 /// and shows the setting as Rust answers; a change Rust could not store
-/// shows as a snackbar. The app's logs open from here.
+/// shows as a snackbar. The app's logs open from here, and its version
+/// shows at the foot.
 class SettingsPage extends StatefulWidget {
   const new({required this.settings, required this.logs, super.key});
 
@@ -145,6 +146,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 'report.',
               ),
               onTap: () => unawaited(LogsPage.push(context, logs: widget.logs)),
+            ),
+            const _Header(label: 'About'),
+            ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('Version'),
+              subtitle: SelectableText(settings.version),
             ),
           ],
         );

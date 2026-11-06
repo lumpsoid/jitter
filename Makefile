@@ -3,18 +3,15 @@
 
 .PHONY: check rust-check flutter-check gen fmt run cli appimage appimage-host
 
-# The full gate. Run before committing.
-check: rust-check flutter-check
+# The full gate, as CI runs it (scripts/check.sh). Run before committing.
+check:
+	scripts/check.sh
 
 rust-check:
-	cargo fmt --check
-	cargo clippy --all-targets -- -D warnings
-	cargo test
+	scripts/check.sh rust
 
-# Bindings are gitignored, so regenerate before analyzing.
-flutter-check: gen
-	flutter analyze
-	flutter test
+flutter-check:
+	scripts/check.sh flutter
 
 gen:
 	rinf gen

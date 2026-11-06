@@ -19,7 +19,7 @@ use adw::prelude::*;
 use gtk::glib;
 use jitter_core::models::ChannelLogin;
 
-const APP_ID: &str = "dev.jitter.Jitter";
+const APP_ID: &str = "io.github.lumpsoid.Jitter";
 
 /// `jitter-gtk [login]`: with a channel login, its stream opens at start.
 fn main() -> glib::ExitCode {
