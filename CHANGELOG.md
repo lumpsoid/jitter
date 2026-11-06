@@ -6,6 +6,8 @@ All notable changes to Jitter are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-06
+
 The first release: Android, Linux (AppImage) and Windows.
 
 ### Added
@@ -27,4 +29,5 @@ The first release: Android, Linux (AppImage) and Windows.
 - The version and commit under Settings and in `jitter --version`.
 - A command-line head, `jitter`, on the same core.
 
-[Unreleased]: https://github.com/lumpsoid/jitter/commits/main
+[Unreleased]: https://github.com/lumpsoid/jitter/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/lumpsoid/jitter/releases/tag/v0.1.0
