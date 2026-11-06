@@ -1,0 +1,28 @@
+name: Proposal
+description: Suggest a feature or a change, before writing code for it.
+labels: [proposal]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What you are trying to do, and what gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Idea
+      description: How Jitter could solve it. Alternatives you considered are welcome.
+    validations:
+      required: true
+  - type: dropdown
+    id: implement
+    attributes:
+      label: Would you implement it?
+      options:
+        - Yes, with a pull request once we agree
+        - Maybe, with some guidance
+        - No
+    validations:
+      required: true

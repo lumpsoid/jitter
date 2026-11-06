@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: How to contribute
+    url: https://github.com/lumpsoid/jitter/blob/main/CONTRIBUTING.md
+    about: Please read this before opening a pull request.
