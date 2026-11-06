@@ -37,7 +37,7 @@ jobs:
     outputs:
       zip: ${{ steps.name.outputs.zip }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # A test build is named after its commit, so it can't pass for a release.
       - name: Name the zip
         id: name
