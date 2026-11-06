@@ -156,6 +156,34 @@ Publish before pushing: a pushed pin with no release behind it fails the
 next app release. `publish` does nothing if that release already exists.
 The build's prerequisites are in the header of `libmpv/build.sh`.
 
+## libmpv for Windows
+
+The Windows build downloads shinchiro's prebuilt libmpv (current mpv and
+FFmpeg, no patches needed) itself; `scripts/libmpv-windows.sh` only keeps
+a copy for it. Why, and the license: the
+[libmpv README](../third_party/media_kit_libs_windows_video/libmpv/README.md).
+
+- `third_party/media_kit_libs_windows_video/libmpv/archive.md5` pins the
+  archive. CMake refuses one that doesn't match.
+- It is stored as an asset of a GitHub release named
+  `libmpv-windows-<first 8 of its MD5>`, copied from shinchiro's
+  SourceForge mirror, which keeps builds longer than shinchiro's GitHub
+  releases. `scripts/libmpv-windows.sh name` prints it.
+
+To update to a newer build:
+
+```sh
+scripts/libmpv-windows.sh latest            # the newest build on SourceForge
+scripts/libmpv-windows.sh update [YYYYMMDD] # default: the newest; writes archive.md5
+scripts/libmpv-windows.sh publish           # before pushing the new pin
+git commit third_party/media_kit_libs_windows_video/libmpv/archive.md5 -m "..."
+```
+
+`update` checks the download against SourceForge's MD5 and that it has the
+files the build needs. Then test the Windows build from the pushed branch:
+live, a VOD seek outside the buffer, a VOD still recording, a quality switch.
+As with Android, publish before pushing.
+
 ## Dependency updates
 
 Dependabot opens weekly pull requests for Cargo, pub, Gradle and GitHub
@@ -172,9 +200,9 @@ These move together, by hand, in one commit:
 - **Flutter and Rust toolchains**: `FLUTTER_VERSION` and `RUST_VERSION` in
   the three workflows and the Containerfile.
 - **media_kit**: `third_party/` holds patched copies of
-  `media_kit_video` and `media_kit_libs_android_video`; an update means
-  re-applying the patches (`third_party/media_kit_video/PATCHED.md`, the
-  libmpv README).
+  `media_kit_video`, `media_kit_libs_android_video` and
+  `media_kit_libs_windows_video`; an update means re-applying the patches
+  (`third_party/media_kit_video/PATCHED.md`, the libmpv READMEs).
 
 ## One-time GitHub settings
 
