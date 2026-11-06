@@ -93,7 +93,7 @@ jobs:
           fi
           mkdir -p out
           cp "$apk" "out/jitter-$VERSION-android.apk"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: android
           path: out/
@@ -111,7 +111,7 @@ jobs:
           mkdir -p out
           cp dist/Jitter-${{ needs.version.outputs.version }}-x86_64.AppImage \
             out/jitter-${{ needs.version.outputs.version }}-x86_64.AppImage
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux
           path: out/
