@@ -117,7 +117,7 @@ Future<void> _startMediaSession(
     final session = await AudioService.init(
       builder: () => MediaSession(playback, player),
       config: const AudioServiceConfig(
-        androidNotificationChannelId: 'dev.jitter.jitter.channel.playback',
+        androidNotificationChannelId: 'io.github.lumpsoid.jitter.channel.playback',
         androidNotificationChannelName: 'Playback',
         // The default, the launcher icon, is opaque and renders as a blank
         // disc: Android draws a notification icon from its alpha only.

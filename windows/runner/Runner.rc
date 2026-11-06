@@ -89,11 +89,11 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "dev.jitter" "\0"
+            VALUE "CompanyName", "lumpsoid" "\0"
             VALUE "FileDescription", "jitter" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "jitter" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 dev.jitter. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 lumpsoid" "\0"
             VALUE "OriginalFilename", "jitter.exe" "\0"
             VALUE "ProductName", "jitter" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
