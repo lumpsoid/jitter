@@ -47,7 +47,11 @@ use crate::history;
 use crate::signals::{ClearHistory, HistoryReady, RemoveFromHistory, RemoveVisit};
 // Logs
 use crate::logs::{self, Buffering, Started};
-use crate::signals::{LogFromDart, LogsReady, OpenLog, PlayerBuffering};
+use crate::probes;
+use crate::signals::{
+    DisplaysProbe, LogFromDart, LogsReady, MpvVersions, OpenLog, PlaybackDrops, PlaybackProbe,
+    PlayerBuffering,
+};
 // Playback
 use crate::playback;
 use crate::signals::{
@@ -246,6 +250,10 @@ pub async fn run(
     let open_log = OpenLog::get_dart_signal_receiver();
     let log_from_dart = LogFromDart::get_dart_signal_receiver();
     let player_buffering = PlayerBuffering::get_dart_signal_receiver();
+    let displays_probe = DisplaysProbe::get_dart_signal_receiver();
+    let mpv_versions = MpvVersions::get_dart_signal_receiver();
+    let playback_probe = PlaybackProbe::get_dart_signal_receiver();
+    let playback_drops = PlaybackDrops::get_dart_signal_receiver();
     let mut buffering = Buffering::default();
 
     // Playback
@@ -347,6 +355,10 @@ pub async fn run(
             Some(_) = logs_ready.recv() => logs::ready(&log),
             Some(pack) = open_log.recv() => logs::open(&log, pack.message),
             Some(pack) = log_from_dart.recv() => logs::from_dart(pack.message),
+            Some(pack) = displays_probe.recv() => probes::displays(&pack.message),
+            Some(pack) = mpv_versions.recv() => probes::mpv_versions(&pack.message),
+            Some(pack) = playback_probe.recv() => probes::playback(&pack.message),
+            Some(pack) = playback_drops.recv() => probes::drops(&pack.message),
             Some(pack) = player_buffering.recv() => {
                 // Playback: watches a live stream for stalls.
                 playback::buffering(&mut c.playback, pack.message.buffering);
