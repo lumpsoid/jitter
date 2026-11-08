@@ -6,6 +6,28 @@ All notable changes to Jitter are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-08
+
+### Added
+
+- The log now names the device (OS and build, CPU, RAM, GPUs and their
+  drivers, screens) and how the player decodes each stream, so playback bug
+  reports can tell what went wrong. Nothing that identifies you is logged.
+
+### Changed
+
+- Windows builds play with a current mpv and FFmpeg.
+
+### Fixed
+
+- A VOD, or a live stream rewound into its recording, that stops loading
+  (for example after a seek hits a dead connection) is reloaded after 15
+  seconds where it was, instead of buffering until you leave. Live streams
+  already recovered this way.
+- Windows: seeking a VOD outside what has loaded no longer turns the
+  picture black, and the recording of a stream that is still live can be
+  rewound.
+
 ## [0.1.0] - 2026-11-06
 
 The first release: Android, Linux (AppImage) and Windows.
@@ -29,5 +51,6 @@ The first release: Android, Linux (AppImage) and Windows.
 - The version and commit under Settings and in `jitter --version`.
 - A command-line head, `jitter`, on the same core.
 
-[Unreleased]: https://github.com/lumpsoid/jitter/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/lumpsoid/jitter/compare/v0.1.1...HEAD
 [0.1.0]: https://github.com/lumpsoid/jitter/releases/tag/v0.1.0
+[0.1.1]: https://github.com/lumpsoid/jitter/compare/v0.1.0...v0.1.1
