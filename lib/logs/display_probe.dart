@@ -10,8 +10,8 @@ void sendDisplaysProbe(PlatformDispatcher dispatcher) {
     displays: [
       for (final display in dispatcher.displays)
         DisplayFacts(
-          width: display.size.width.round(),
-          height: display.size.height.round(),
+          width: display.size.width,
+          height: display.size.height,
           refreshHz: display.refreshRate,
           scale: display.devicePixelRatio,
           hasWindow: display.id == window,

@@ -52,9 +52,11 @@ pub struct DisplaysProbe {
 #[derive(Deserialize, SignalPiece)]
 pub struct DisplayFacts {
     /// As Flutter reports it: physical pixels, except on Linux under
-    /// Wayland fractional scaling, where GTK gives the logical size.
-    pub width: u32,
-    pub height: u32,
+    /// Wayland fractional scaling, where GTK gives the logical size. Each
+    /// value is Flutter's own, unchecked: Android's embedder gives `-1`
+    /// for what it does not know.
+    pub width: f64,
+    pub height: f64,
     pub refresh_hz: f64,
     /// Logical pixels to physical.
     pub scale: f64,
