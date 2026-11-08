@@ -563,13 +563,14 @@ pub fn buffering(playback: &mut PlaybackController, buffering: bool) {
 }
 
 /// When the stall watch next needs a tick; `None` unless the player waits
-/// on a live stream. Read afresh each loop.
+/// on the stream it plays. Read afresh each loop.
 pub fn stall_wake(playback: &PlaybackController) -> Option<Instant> {
     playback.stall_wake().map(Instant::from_std)
 }
 
-/// The stall watch's wake: when core says the live stream stalled, logs
-/// it as the app stepping in and resolves the page afresh within core's
+/// The stall watch's wake: when core says the stream the player plays
+/// stalled, logs it as the app stepping in and resolves that stream
+/// afresh within core's
 /// `RESOLVE_TIMEOUT`; it comes back as [`Fetched::Reloaded`]. The player
 /// keeps waiting meanwhile.
 pub fn stall_tick(
@@ -577,49 +578,52 @@ pub fn stall_tick(
     twitch: &Twitch,
     fetch: &UnboundedSender<Fetched>,
 ) {
-    let Some((target, waited)) = playback.stall_tick(Instant::now().into_std()) else {
+    let Some((stream, waited)) = playback.stall_tick(Instant::now().into_std()) else {
         return;
     };
     log::warn!(
         "{} stalled: the player waited {:.0} s for data; reloading the stream from Twitch",
-        describe(&target),
+        describe(&stream),
         waited.as_secs_f64(),
     );
     let (twitch, fetch) = (twitch.clone(), fetch.clone());
     tokio::spawn(async move {
-        let result = match tokio::time::timeout(resolve_limit(), resolve(&twitch, &target)).await {
+        let result = match tokio::time::timeout(resolve_limit(), resolve(&twitch, &stream)).await {
             Ok(result) => result.map_err(|e| twitch_error(&e)),
             Err(_) => Err(playback::TIMED_OUT.to_owned()),
         };
-        let _ = fetch.send(Fetched::Reloaded { target, result });
+        let _ = fetch.send(Fetched::Reloaded { stream, result });
     });
 }
 
-/// A stalled live page's fresh resolve came back: core decides whether the
-/// player reopens it, keeping the quality it can. Each way it went is
-/// logged, as the end of the step the stall watch took.
+/// A stalled stream's fresh resolve came back: core decides whether the
+/// player reopens it, keeping the quality it can and, on a VOD, the
+/// position. Each way it went is logged, as the end of the step the stall
+/// watch took.
 pub fn reloaded(
     playback: &mut PlaybackController,
-    target: &playback::PlaybackTarget,
+    resume: &ResumeController,
+    stream: &playback::PlaybackTarget,
     result: Result<Playback, String>,
     preferred: QualityPreference,
 ) {
     let now = Instant::now().into_std();
-    match playback.apply_reload(target, result, preferred, now) {
-        None => log::info!(
+    match playback.apply_reload(stream, result, preferred, resume, now) {
+        Ok(None) => log::info!(
             "dropped the reload of {}: the stream recovered or the page changed",
-            describe(target)
+            describe(stream)
         ),
-        Some(ReloadOutcome::Reloaded(open)) => {
-            log::info!("reloaded {}", describe(target));
+        Ok(Some(ReloadOutcome::Reloaded(open))) => {
+            log::info!("reloaded {}", describe(stream));
             send_state(playback);
             send_open(Some(open));
         }
-        Some(ReloadOutcome::Failed(message)) => log::warn!(
+        Ok(Some(ReloadOutcome::Failed(message))) => log::warn!(
             "reloading {} failed: {message}; trying again if it still waits in {} s",
-            describe(target),
+            describe(stream),
             STALL_LIMIT.as_secs(),
         ),
+        Err(e) => send_failed(format!("Could not read the resume point: {e}")),
     }
 }
 

@@ -96,8 +96,8 @@ pub struct PlaybackController {
     /// [`PlaybackState::Ready`], like `away`, so going back to live does
     /// not offer it again; the next broadcast has another id.
     refused: Option<VideoId>,
-    /// Whether the player waits for data, for reloading a stalled live
-    /// stream ([`Self::stall_tick`]).
+    /// Whether the player waits for data, for reloading a stalled stream
+    /// ([`Self::stall_tick`]).
     stall: Stall,
 }
 
@@ -679,79 +679,83 @@ impl PlaybackController {
         self.stall.report(buffering, now);
     }
 
-    /// When the player's wait on a live stream reaches
+    /// When the player's wait on the stream it plays reaches
     /// [`crate::models::STALL_LIMIT`]; `None` unless it waits on one
-    /// ([`Self::live_playing`]).
+    /// ([`Self::waited_on`]).
     pub fn stall_wake(&self) -> Option<Instant> {
-        self.live_playing()?;
+        self.waited_on()?;
         self.stall.wake()
     }
 
     /// Advances the stall watch to `now`. Once the player has waited
-    /// [`crate::models::STALL_LIMIT`] on a live stream, starts reloading
-    /// it: returns the page, for the head to resolve afresh and hand to
-    /// [`Self::apply_reload`], and how long the player waited. The player
-    /// keeps waiting on what it has meanwhile.
+    /// [`crate::models::STALL_LIMIT`] on the stream it plays, starts
+    /// reloading it: returns that stream ([`Self::streaming`]), for the
+    /// head to resolve afresh and hand to [`Self::apply_reload`], and how
+    /// long the player waited. The player keeps waiting on what it has
+    /// meanwhile.
     pub fn stall_tick(&mut self, now: Instant) -> Option<(PlaybackTarget, Duration)> {
-        let target = self.live_playing()?.clone();
+        let stream = self.waited_on()?;
         let waited = self.stall.reload(now)?;
-        Some((target, waited))
+        Some((stream, waited))
     }
 
-    /// Applies the fresh resolve of stalled live page `target`
-    /// ([`Self::stall_tick`]) at `now`. On success the page plays its new
-    /// playlist, keeping the selected quality if it has it, else the one
-    /// `preferred` asks for; on failure the player keeps waiting. Either
-    /// way the wait counts afresh from `now`. `None`, changing nothing,
-    /// unless the reload is still out and `target` still plays live: a
-    /// stream that recovered meanwhile, a rewind, leaving or another page
-    /// drop it.
+    /// Applies the fresh resolve of stalled `stream` ([`Self::stall_tick`])
+    /// at `now`. On success the page plays its new playlist, keeping the
+    /// selected quality if it has it, else the one `preferred` asks for: a
+    /// live stream at the live edge, a VOD where the player last reported
+    /// to be, or where [`Self::open`] starts it before it has. On failure
+    /// the player keeps waiting. Either way the wait counts afresh from
+    /// `now`. `None`, changing nothing, unless the reload is still out and
+    /// the player still plays `stream`: a stream that recovered meanwhile,
+    /// a rewind, a return to live, leaving or another page drop it.
     pub fn apply_reload(
         &mut self,
-        target: &PlaybackTarget,
+        stream: &PlaybackTarget,
         result: Result<Playback, String>,
         preferred: QualityPreference,
+        resume: &ResumeController,
         now: Instant,
-    ) -> Option<ReloadOutcome> {
-        if !self.stall.reloading() || self.live_playing() != Some(target) {
-            return None;
+    ) -> Result<Option<ReloadOutcome>, StoreError> {
+        if !self.stall.reloading() || self.waited_on().as_ref() != Some(stream) {
+            return Ok(None);
         }
         self.stall.reloaded(now);
         let playback = match result {
             Ok(playback) => playback,
-            Err(message) => return Some(ReloadOutcome::Failed(message)),
+            Err(message) => return Ok(Some(ReloadOutcome::Failed(message))),
         };
         let PlaybackState::Ready {
             playback: shown,
             selected,
+            at,
             ..
         } = &mut self.state
         else {
-            return None;
+            return Ok(None);
         };
         let Some(name) = carried_quality(&playback, selected, preferred) else {
-            return Some(ReloadOutcome::Failed(NO_PLAYABLE.to_owned()));
+            return Ok(Some(ReloadOutcome::Failed(NO_PLAYABLE.to_owned())));
         };
         *selected = name;
         *shown = playback;
-        self.open_at(Seconds::ZERO).map(ReloadOutcome::Reloaded)
+        let open = match *at {
+            Some(at) => self.open_at(at),
+            None => self.open(resume)?,
+        };
+        Ok(open.map(ReloadOutcome::Reloaded))
     }
 
-    /// The live page whose stream the player plays: ready, not rewound
-    /// into its recording, and in front or listening away. A player paused
-    /// or stopped away is not waiting on the stream.
-    fn live_playing(&self) -> Option<&PlaybackTarget> {
-        match &self.state {
-            PlaybackState::Ready {
-                target: target @ PlaybackTarget::Live(_),
-                ..
-            } if self.playing_vod().is_none()
-                && matches!(self.away, None | Some(Away::Listening)) =>
-            {
-                Some(target)
-            }
-            _ => None,
+    /// The stream the player plays for the page ready
+    /// ([`Self::streaming`]), while in front or listening away. A player
+    /// paused or stopped away is not waiting on the stream.
+    fn waited_on(&self) -> Option<PlaybackTarget> {
+        let PlaybackState::Ready { target, .. } = &self.state else {
+            return None;
+        };
+        if !matches!(self.away, None | Some(Away::Listening)) {
+            return None;
         }
+        self.streaming(target)
     }
 
     /// The stream the player shows for page `target`: the recording VOD

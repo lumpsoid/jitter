@@ -2002,7 +2002,20 @@ fn reload(
     result: Result<Playback, String>,
     now: Instant,
 ) -> Option<ReloadOutcome> {
-    c.apply_reload(&live("a"), result, QualityPreference::Source, now)
+    reload_of(c, &live("a"), result, &no_resume(), now)
+}
+
+fn reload_of(
+    c: &mut PlaybackController,
+    stream: &PlaybackTarget,
+    result: Result<Playback, String>,
+    resume: &ResumeController,
+    now: Instant,
+) -> Option<ReloadOutcome> {
+    let Ok(outcome) = c.apply_reload(stream, result, QualityPreference::Source, resume, now) else {
+        unreachable!("fake store does not fail");
+    };
+    outcome
 }
 
 #[test]
@@ -2102,17 +2115,8 @@ fn a_reload_is_dropped_when_the_stream_recovered_or_the_page_changed() {
 }
 
 #[test]
-fn only_a_live_stream_the_player_plays_is_watched() {
+fn only_a_stream_the_player_plays_is_watched() {
     let t0 = Instant::now();
-    let mut vod_page = ready(PlaybackTarget::Vod(vod()));
-    vod_page.buffering(true, t0);
-    assert_eq!(vod_page.stall_wake(), None);
-    assert_eq!(vod_page.stall_tick(t0 + STALL_LIMIT), None);
-
-    let mut rewound = rewound();
-    rewound.buffering(true, t0);
-    assert_eq!(rewound.stall_wake(), None);
-
     let mut stopped = stalled(t0);
     stopped.background(false, true, Seconds::ZERO);
     assert_eq!(stopped.stall_wake(), None);
@@ -2124,4 +2128,110 @@ fn only_a_live_stream_the_player_plays_is_watched() {
     let mut listening = stalled(t0);
     listening.background(true, true, Seconds::ZERO);
     assert_eq!(listening.stall_wake(), Some(t0 + STALL_LIMIT));
+
+    let mut left = stalled(t0);
+    assert!(left.leave(&live("a")));
+    assert_eq!(left.stall_wake(), None);
+}
+
+/// VOD page `vod()`, the player at `position` of an hour, waiting since
+/// `since`.
+fn stalled_vod(position: Option<u32>, since: Instant) -> PlaybackController {
+    let target = PlaybackTarget::Vod(vod());
+    let mut c = ready(target.clone());
+    if let Some(position) = position {
+        c.follow(&target, Seconds::new(position), Seconds::new(3600));
+    }
+    c.buffering(true, since);
+    c
+}
+
+#[test]
+fn a_stalled_vod_reloads_where_the_player_last_was() {
+    let t0 = Instant::now();
+    let mut c = stalled_vod(Some(1500), t0);
+    assert_eq!(c.stall_wake(), Some(t0 + STALL_LIMIT));
+    let stream = PlaybackTarget::Vod(vod());
+    assert_eq!(
+        c.stall_tick(t0 + STALL_LIMIT),
+        Some((stream.clone(), STALL_LIMIT))
+    );
+    let fresh = Ok(playback(vec![variant(
+        "720p60",
+        720,
+        QualityKind::Transcode,
+    )]));
+    assert_eq!(
+        reload_of(&mut c, &stream, fresh, &no_resume(), t0 + STALL_LIMIT),
+        Some(ReloadOutcome::Reloaded(open("720p60", 1500, false)))
+    );
+}
+
+#[test]
+fn a_vod_stalled_before_it_loaded_reloads_at_its_resume_point() {
+    let t0 = Instant::now();
+    let mut c = stalled_vod(None, t0);
+    let stream = PlaybackTarget::Vod(vod());
+    c.stall_tick(t0 + STALL_LIMIT);
+    let fresh = Ok(playback(vec![variant(
+        "1080p60",
+        1080,
+        QualityKind::Source,
+    )]));
+    assert_eq!(
+        reload_of(
+            &mut c,
+            &stream,
+            fresh,
+            &resume_at(900, 3600),
+            t0 + STALL_LIMIT
+        ),
+        Some(ReloadOutcome::Reloaded(open("1080p60", 900, false)))
+    );
+}
+
+#[test]
+fn a_stalled_rewound_page_reloads_its_recording_where_the_player_was() {
+    let t0 = Instant::now();
+    let mut c = rewound();
+    let stream = PlaybackTarget::Vod(archive());
+    c.follow(&live("a"), Seconds::new(2000), Seconds::new(3600));
+    c.buffering(true, t0);
+    assert_eq!(
+        c.stall_tick(t0 + STALL_LIMIT),
+        Some((stream.clone(), STALL_LIMIT))
+    );
+    // The live stream's reload is not this one.
+    assert_eq!(reload(&mut c, reresolved(), t0 + STALL_LIMIT), None);
+    assert_eq!(
+        reload_of(
+            &mut c,
+            &stream,
+            Ok(vod_ladder()),
+            &no_resume(),
+            t0 + STALL_LIMIT
+        ),
+        Some(ReloadOutcome::Reloaded(vod_open("1080p60", 2000)))
+    );
+    assert!(matches!(rewind_of(&c), Some(Rewind::Rewound { .. })));
+}
+
+#[test]
+fn a_recording_s_reload_is_dropped_once_the_page_is_back_at_live() {
+    let t0 = Instant::now();
+    let mut c = returning();
+    c.buffering(true, t0);
+    let stream = PlaybackTarget::Vod(archive());
+    c.stall_tick(t0 + STALL_LIMIT);
+    apply_return(&mut c, Ok(live_playback()), no_details());
+    assert_eq!(
+        reload_of(
+            &mut c,
+            &stream,
+            Ok(vod_ladder()),
+            &no_resume(),
+            t0 + STALL_LIMIT
+        ),
+        None
+    );
 }
