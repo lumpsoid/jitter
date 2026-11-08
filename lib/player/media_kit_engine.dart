@@ -72,6 +72,7 @@ class MediaKitEngine implements PlayerEngine {
     if (player.platform case final NativePlayer mpv) {
       final probes = _probes = MpvProbes(mpv);
       unawaited(probes.versions());
+      unawaited(probes.watchOutput());
       player.stream.videoParams.listen(probes.videoParams);
     }
     return player;
