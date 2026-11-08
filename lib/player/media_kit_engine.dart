@@ -48,8 +48,9 @@ class MediaKitEngine implements PlayerEngine {
   MpvProbes? _probes;
 
   /// Points mpv's on-disk cache, which media_kit turns on, at the app's
-  /// cache directory: mpv's own default has no folder on Android, where it
-  /// fails and caches in memory alone. Done before the first [open].
+  /// cache directory: with media_kit's setup, mpv's own default gives it no
+  /// folder, so it fails and caches in memory alone. Done before the first
+  /// [open].
   Future<void>? _cacheDir;
 
   /// The player, reporting to this run's log: mpv's warnings and errors,
