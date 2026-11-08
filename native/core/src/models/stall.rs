@@ -1,7 +1,8 @@
 use std::time::{Duration, Instant};
 
-/// A live stream the player has waited on this long is reloaded: resolved
-/// afresh, which can land on another CDN server, and opened again.
+/// A stream the player has waited on this long is reloaded: resolved
+/// afresh, which can land on another CDN server, and opened again where it
+/// was.
 pub const STALL_LIMIT: Duration = Duration::from_secs(15);
 
 /// Whether the player waits for data, as it last reported, and whether a

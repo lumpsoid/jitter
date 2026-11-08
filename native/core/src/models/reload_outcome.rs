@@ -1,6 +1,6 @@
 use super::Open;
 
-/// What a stalled live stream's reload did, for the head to log
+/// What a stalled stream's reload did, for the head to log
 /// ([`crate::playback::PlaybackController::apply_reload`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReloadOutcome {
