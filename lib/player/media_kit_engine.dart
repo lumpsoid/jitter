@@ -9,6 +9,7 @@ import 'package:jitter/player/player_engine.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:path_provider/path_provider.dart';
 
 /// The mpv `hwdec` to decode with under the [environment]; `null` keeps
 /// media_kit's `auto`.
@@ -46,6 +47,11 @@ class MediaKitEngine implements PlayerEngine {
   Player? _created;
   MpvProbes? _probes;
 
+  /// Points mpv's on-disk cache, which media_kit turns on, at the app's
+  /// cache directory: mpv's own default has no folder on Android, where it
+  /// fails and caches in memory alone. Done before the first [open].
+  Future<void>? _cacheDir;
+
   /// The player, reporting to this run's log: mpv's warnings and errors,
   /// each buffering wait with where it began and what was buffered, and
   /// the probes: mpv's versions and GL context, and how it plays each
@@ -72,6 +78,8 @@ class MediaKitEngine implements PlayerEngine {
     if (player.platform case final NativePlayer mpv) {
       final probes = _probes = MpvProbes(mpv);
       unawaited(probes.versions());
+      unawaited(probes.watchOutput());
+      _cacheDir = _setCacheDir(mpv);
       player.stream.videoParams.listen(probes.videoParams);
     }
     return player;
@@ -92,7 +100,18 @@ class MediaKitEngine implements PlayerEngine {
   Future<void> open(String url, {required Duration start}) async {
     await _setVolume(_volume.end());
     await _probes?.ended();
+    await _cacheDir;
     await _player.open(Media(url, start: start));
+  }
+
+  /// Without a cache directory, mpv keeps its default.
+  static Future<void> _setCacheDir(NativePlayer mpv) async {
+    try {
+      final dir = await getApplicationCacheDirectory();
+      await mpv.setProperty('demuxer-cache-dir', dir.path);
+    } on Object catch (error) {
+      logToRust(DartLogLevel.warning, 'player', 'No cache directory: $error');
+    }
   }
 
   /// Stops, then ends a fade: silent until stopped, the user's volume

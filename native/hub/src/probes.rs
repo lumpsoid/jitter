@@ -288,11 +288,19 @@ fn display_lines(signal: &DisplaysProbe) -> Vec<String> {
 }
 
 fn display_facts(d: &DisplayFacts) -> String {
+    let size = match (measured(d.width), measured(d.height)) {
+        (Some(width), Some(height)) => format!("{width:.0}x{height:.0}"),
+        _ => format!("{UNKNOWN} size"),
+    };
+    let refresh = measured(d.refresh_hz).map_or(UNKNOWN.to_owned(), |hz| format!("{hz:.0}"));
+    let scale = measured(d.scale).map_or(UNKNOWN.to_owned(), |scale| scale.to_string());
     let window = if d.has_window { ", has the window" } else { "" };
-    format!(
-        "{}x{} at {:.0} Hz, scale {}{window}",
-        d.width, d.height, d.refresh_hz, d.scale
-    )
+    format!("{size} at {refresh} Hz, scale {scale}{window}")
+}
+
+/// A screen's `value` where Flutter knew it: none is zero or less.
+fn measured(value: f64) -> Option<f64> {
+    (value.is_finite() && value > 0.0).then_some(value)
 }
 
 fn playback_line(p: &PlaybackProbe) -> String {
@@ -387,8 +395,8 @@ mod tests {
     #[test]
     fn each_display_gets_a_line_and_none_says_unknown() {
         let display = |has_window| DisplayFacts {
-            width: 2560,
-            height: 1440,
+            width: 2560.0,
+            height: 1440.0,
             refresh_hz: 143.998,
             scale: 1.25,
             has_window,
@@ -406,6 +414,23 @@ mod tests {
         assert_eq!(
             display_lines(&DisplaysProbe { displays: vec![] }),
             ["display: unknown"]
+        );
+    }
+
+    #[test]
+    fn a_display_says_unknown_for_what_android_gives_as_minus_one() {
+        let probe = DisplaysProbe {
+            displays: vec![DisplayFacts {
+                width: -1.0,
+                height: -1.0,
+                refresh_hz: 60.0,
+                scale: -1.0,
+                has_window: true,
+            }],
+        };
+        assert_eq!(
+            display_lines(&probe),
+            ["display 1 of 1: unknown size at 60 Hz, scale unknown, has the window"]
         );
     }
 
