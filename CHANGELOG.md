@@ -6,6 +6,16 @@ All notable changes to Jitter are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-08
+
+### Fixed
+
+- The player keeps what it has loaded of a stream in the app's cache
+  directory, instead of failing to and holding it all in memory.
+- Android: the log no longer gives a screen it cannot measure an impossible
+  size, and says which video output the player draws with, not the
+  placeholder it starts on.
+
 ## [0.1.1] - 2026-11-08
 
 ### Added
@@ -51,6 +61,7 @@ The first release: Android, Linux (AppImage) and Windows.
 - The version and commit under Settings and in `jitter --version`.
 - A command-line head, `jitter`, on the same core.
 
-[Unreleased]: https://github.com/lumpsoid/jitter/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/lumpsoid/jitter/compare/v0.1.2...HEAD
 [0.1.0]: https://github.com/lumpsoid/jitter/releases/tag/v0.1.0
 [0.1.1]: https://github.com/lumpsoid/jitter/compare/v0.1.0...v0.1.1
+[0.1.2]: https://github.com/lumpsoid/jitter/compare/v0.1.1...v0.1.2
