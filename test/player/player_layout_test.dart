@@ -154,6 +154,20 @@ void main() {
     expect(await tabThrough(tester, _order.length), _order);
   });
 
+  testWidgets('the chat beside is as wide as the width rule says', (
+    tester,
+  ) async {
+    double chatWidth() => tester.getRect(find.byType(ChatPanel)).width;
+
+    // 744 high under the app bar: wider than 16:9, the chat takes the room
+    // the video leaves, up to its cap.
+    await pumpLayout(tester, width: 1920);
+    expect(chatWidth(), 640);
+
+    await pumpLayout(tester, width: 1200);
+    expect(chatWidth(), 300);
+  });
+
   testWidgets('without the chat Tab goes app bar then video', (tester) async {
     await pumpLayout(tester, width: 1200, chat: false);
     final (:strip, :video, :top) = rects(tester);
