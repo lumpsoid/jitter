@@ -20,6 +20,7 @@ import 'package:jitter/search/search_holder.dart';
 import 'package:jitter/search/search_page.dart';
 import 'package:jitter/settings/settings_holder.dart';
 import 'package:jitter/settings/settings_page.dart';
+import 'package:jitter/shell/home_panes.dart';
 import 'package:jitter/shell/quit_button.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
@@ -30,6 +31,15 @@ import 'package:jitter/widgets/refresh_key.dart';
 /// Below this width the destinations sit in a bottom bar, from it in a
 /// side rail (Material's compact window class).
 const double _railMinWidth = 600;
+
+/// From this width the first [_homePaneCount] destinations (Top,
+/// Categories, Favorites) sit side by side under one Home destination, each
+/// about as wide as a 1080p window's page.
+const double _homeMinWidth = 2700;
+
+/// How many of the first destinations share Home in a window from
+/// [_homeMinWidth] wide.
+const int _homePaneCount = 3;
 
 /// One top-level page in the navigation.
 typedef _Destination = ({
@@ -98,6 +108,11 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _selected = 0;
+
+  /// One key per destination's page, in [_destinations]' order.
+  late final List<GlobalKey> _pageKeys = [
+    for (final _ in _destinations) GlobalKey(),
+  ];
 
   List<_Destination> get _destinations => [
     (
@@ -234,20 +249,18 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final destinations = _destinations;
-    // Keeps each page alive, so switching back keeps its scroll position;
-    // Ctrl+R refreshes the one shown.
-    final pages = RefreshKey(
-      onRefresh: destinations[_selected].refresh,
-      child: IndexedStack(
-        index: _selected,
-        children: [for (final d in destinations) d.page],
-      ),
-    );
+    // Each page keeps its state (its scroll position) when a resize moves
+    // it between its own place and a Home pane.
+    final pages = [
+      for (var i = 0; i < destinations.length; i++)
+        KeyedSubtree(key: _pageKeys[i], child: destinations[i].page),
+    ];
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < _railMinWidth) {
+        final width = constraints.maxWidth;
+        if (width < _railMinWidth) {
           return Scaffold(
-            body: SafeArea(child: pages),
+            body: SafeArea(child: _pages(destinations, pages)),
             bottomNavigationBar: NavigationBar(
               selectedIndex: _selected,
               onDestinationSelected: _select,
@@ -262,32 +275,96 @@ class _AppShellState extends State<AppShell> {
             ),
           );
         }
-        return Scaffold(
-          body: SafeArea(
-            child: Row(
+        if (width < _homeMinWidth) {
+          return _railed(
+            selected: _selected,
+            onSelected: _select,
+            destinations: [for (final d in destinations) _railEntry(d)],
+            body: _pages(destinations, pages),
+          );
+        }
+        final home = _selected < _homePaneCount;
+        return _railed(
+          selected: home ? 0 : _selected - _homePaneCount + 1,
+          onSelected: (index) {
+            // Home keeps the pane last selected, for a narrower window.
+            if (index == 0 && home) return;
+            _select(index == 0 ? 0 : index + _homePaneCount - 1);
+          },
+          destinations: [
+            const NavigationRailDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home),
+              label: Text('Home'),
+            ),
+            for (final d in destinations.skip(_homePaneCount)) _railEntry(d),
+          ],
+          body: RefreshKey(
+            onRefresh: home ? null : destinations[_selected].refresh,
+            child: IndexedStack(
+              index: home ? 0 : _selected - _homePaneCount + 1,
               children: [
-                NavigationRail(
-                  selectedIndex: _selected,
-                  onDestinationSelected: _select,
-                  labelType: NavigationRailLabelType.all,
-                  trailing: const QuitButton(),
-                  trailingAtBottom: true,
-                  destinations: [
-                    for (final d in destinations)
-                      NavigationRailDestination(
-                        icon: Icon(d.icon),
-                        selectedIcon: Icon(d.selectedIcon),
-                        label: Text(d.label),
+                HomePanes(
+                  active: home,
+                  panes: [
+                    for (var i = 0; i < _homePaneCount; i++)
+                      (
+                        title: destinations[i].label,
+                        page: pages[i],
+                        refresh: destinations[i].refresh,
                       ),
                   ],
                 ),
-                const VerticalDivider(width: 1),
-                Expanded(child: pages),
+                ...pages.skip(_homePaneCount),
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  /// [pages] one at a time, the selected one shown. Keeps each page alive,
+  /// so switching back keeps its scroll position; Ctrl+R refreshes the one
+  /// shown.
+  Widget _pages(List<_Destination> destinations, List<Widget> pages) =>
+      RefreshKey(
+        onRefresh: destinations[_selected].refresh,
+        child: IndexedStack(index: _selected, children: pages),
+      );
+
+  NavigationRailDestination _railEntry(_Destination d) =>
+      NavigationRailDestination(
+        icon: Icon(d.icon),
+        selectedIcon: Icon(d.selectedIcon),
+        label: Text(d.label),
+      );
+
+  /// [body] beside a side rail of [destinations], the [selected]th
+  /// highlighted.
+  Widget _railed({
+    required int selected,
+    required ValueChanged<int> onSelected,
+    required List<NavigationRailDestination> destinations,
+    required Widget body,
+  }) {
+    return Scaffold(
+      body: SafeArea(
+        child: Row(
+          children: [
+            NavigationRail(
+              selectedIndex: selected,
+              onDestinationSelected: onSelected,
+              labelType: NavigationRailLabelType.all,
+              trailing: const QuitButton(),
+              trailingAtBottom: true,
+              destinations: destinations,
+            ),
+            const VerticalDivider(width: 1),
+            Expanded(child: body),
+          ],
+        ),
+      ),
     );
   }
 }
