@@ -6,6 +6,20 @@ All notable changes to Jitter are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-09
+
+### Added
+
+- On a very wide window (2700 logical pixels or more), Top, Categories and
+  Favorites sit side by side as three panes under one Home entry, instead
+  of grids whose rows span the whole screen.
+- SteamOS: how to get touch, not mouse, controls in Game Mode.
+
+### Changed
+
+- The chat beside the video takes a share of the window instead of a fixed
+  width: narrower on small or scaled screens, wider on ultrawide ones.
+
 ## [0.1.2] - 2026-11-08
 
 ### Fixed
@@ -61,7 +75,8 @@ The first release: Android, Linux (AppImage) and Windows.
 - The version and commit under Settings and in `jitter --version`.
 - A command-line head, `jitter`, on the same core.
 
-[Unreleased]: https://github.com/lumpsoid/jitter/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/lumpsoid/jitter/compare/v0.1.3...HEAD
 [0.1.0]: https://github.com/lumpsoid/jitter/releases/tag/v0.1.0
 [0.1.1]: https://github.com/lumpsoid/jitter/compare/v0.1.0...v0.1.1
 [0.1.2]: https://github.com/lumpsoid/jitter/compare/v0.1.1...v0.1.2
+[0.1.3]: https://github.com/lumpsoid/jitter/compare/v0.1.2...v0.1.3
