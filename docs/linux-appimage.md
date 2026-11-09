@@ -126,6 +126,19 @@ Properties:
 To update, delete `~/Applications/jitter` and extract the new AppImage the
 same way.
 
+### Touch acts as a mouse
+
+By default Steam turns taps on the touchscreen into mouse clicks: a cursor
+appears under your finger and Jitter shows its mouse controls. To pass touch
+through instead, with Jitter running in Game Mode:
+
+1. Press the Steam button, then *Controller settings → Edit layout*.
+2. Open *Action sets → Default → Add Always-On Command*.
+3. Select the new command, then *System → Touchscreen Native Support*.
+4. Save the layout.
+
+The layout belongs to the shortcut, so this is needed once.
+
 ### Debugging a Game Mode launch
 
 Game Mode hides the app's output. To capture it, create
