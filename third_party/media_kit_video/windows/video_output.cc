@@ -9,6 +9,7 @@
 #include "video_output.h"
 
 #include <algorithm>
+#include <cstdio>
 
 // Limit the frame size to 1080p in software rendering.
 // This is for performance reasons & to avoid allocating too much memory.
@@ -17,16 +18,43 @@
 #define SW_RENDERING_PIXEL_BUFFER_SIZE \
   (SW_RENDERING_MAX_WIDTH) * (SW_RENDERING_MAX_HEIGHT) * (4)
 
+// The name Windows gives |reason|, with its code.
+static std::string RemovedReason(HRESULT reason) {
+  const char* name = "unknown";
+  switch (reason) {
+    case DXGI_ERROR_DEVICE_HUNG:
+      name = "DXGI_ERROR_DEVICE_HUNG";
+      break;
+    case DXGI_ERROR_DEVICE_REMOVED:
+      name = "DXGI_ERROR_DEVICE_REMOVED";
+      break;
+    case DXGI_ERROR_DEVICE_RESET:
+      name = "DXGI_ERROR_DEVICE_RESET";
+      break;
+    case DXGI_ERROR_DRIVER_INTERNAL_ERROR:
+      name = "DXGI_ERROR_DRIVER_INTERNAL_ERROR";
+      break;
+    case DXGI_ERROR_INVALID_CALL:
+      name = "DXGI_ERROR_INVALID_CALL";
+      break;
+  }
+  char code[16];
+  snprintf(code, sizeof(code), "0x%08lX", static_cast<unsigned long>(reason));
+  return std::string(name) + " (" + code + ")";
+}
+
 VideoOutput::VideoOutput(int64_t handle,
                          VideoOutputConfiguration configuration,
                          flutter::PluginRegistrarWindows* registrar,
-                         ThreadPool* thread_pool_ref)
+                         ThreadPool* thread_pool_ref,
+                         VideoOutputLog log)
     : handle_(reinterpret_cast<mpv_handle*>(handle)),
       width_(configuration.width),
       height_(configuration.height),
       configuration_(configuration),
       registrar_(registrar),
-      thread_pool_ref_(thread_pool_ref) {
+      thread_pool_ref_(thread_pool_ref),
+      log_(std::move(log)) {
   // The constructor must be invoked through the thread pool, because
   // |ANGLESurfaceManager| & libmpv render context creation can conflict with
   // the existing |Render| or |Resize| calls from another |VideoOutput|
@@ -71,17 +99,23 @@ VideoOutput::VideoOutput(int64_t handle,
               reinterpret_cast<void*>(this));
           // Set flag to true, indicating that H/W rendering is supported.
           is_hardware_acceleration_enabled = true;
-          std::cout << "media_kit: VideoOutput: Using H/W rendering."
-                    << std::endl;
+          log_("info",
+               std::string("H/W rendering; ANGLE's D3D 11 device ") +
+                   (surface_manager_->HasANGLEDevice() ? "found"
+                                                       : "not found"));
+        } else {
+          log_("error", "H/W rendering: mpv_render_context_create failed");
         }
-      } catch (...) {
-        // Do nothing.
+      } catch (const std::exception& error) {
         // Likely received an |std::runtime_error| from |ANGLESurfaceManager|,
         // which indicates that H/W rendering is not supported.
+        log_("error", std::string("H/W rendering: ") + error.what());
+      } catch (...) {
+        log_("error", "H/W rendering: unknown failure");
       }
     }
     if (!is_hardware_acceleration_enabled) {
-      std::cout << "media_kit: VideoOutput: Using S/W rendering." << std::endl;
+      log_("info", "S/W rendering");
       // Allocate a "large enough" buffer ahead of time.
       pixel_buffer_ =
           std::make_unique<uint8_t[]>(SW_RENDERING_PIXEL_BUFFER_SIZE);
@@ -119,10 +153,8 @@ VideoOutput::~VideoOutput() {
           // executed (and won't reference the dead object anymore), most
           // notably |CheckAndResize| & |Render|.
           auto future = thread_pool_ref_->Post([&, id = texture_id]() {
-            std::cout << "media_kit: VideoOutput: Free Texture: " << id
-                      << std::endl;
-            std::cout << "VideoOutput::~VideoOutput: "
-                      << reinterpret_cast<int64_t>(handle_) << std::endl;
+            log_("info", "texture " + std::to_string(id) +
+                             " freed, output disposed");
             std::lock_guard<std::mutex> lock(textures_mutex_);
             texture_variants_.clear();
             // H/W
@@ -170,8 +202,15 @@ void VideoOutput::Render() {
             {MPV_RENDER_PARAM_OPENGL_FBO, &fbo},
             {MPV_RENDER_PARAM_INVALID, nullptr},
         };
-        mpv_render_context_render(render_context_, params);
+        auto result = mpv_render_context_render(render_context_, params);
+        if (result != render_result_) {
+          render_result_ = result;
+          log_(result < 0 ? "error" : "info",
+               std::string("mpv_render_context_render: ") +
+                   mpv_error_string(result));
+        }
       });
+      CheckDevices();
     }
     // S/W
     if (pixel_buffer_ != nullptr) {
@@ -195,6 +234,28 @@ void VideoOutput::Render() {
     } catch (...) {
       // Prevent any redundant exceptions if the texture is unregistered etc.
     }
+  }
+}
+
+void VideoOutput::CheckDevices() {
+  ReportDevice("ANGLE's D3D 11 device, which mpv decodes and renders on",
+               surface_manager_->ANGLEDeviceRemovedReason(),
+               angle_device_reason_);
+  ReportDevice("media_kit's D3D 11 device, which shares frames with Flutter",
+               surface_manager_->DeviceRemovedReason(), device_reason_);
+}
+
+void VideoOutput::ReportDevice(const char* device,
+                               HRESULT reason,
+                               HRESULT& last) {
+  if (reason == last) {
+    return;
+  }
+  last = reason;
+  if (reason == S_OK) {
+    log_("info", std::string(device) + " works again");
+  } else {
+    log_("error", std::string(device) + " removed: " + RemovedReason(reason));
   }
 }
 
@@ -266,18 +327,18 @@ void VideoOutput::CheckAndResize() {
 }
 
 void VideoOutput::Resize(int64_t required_width, int64_t required_height) {
-  std::cout << required_width << " " << required_height << std::endl;
+  log_("info", "resize to " + std::to_string(required_width) + "x" +
+                   std::to_string(required_height));
   // Unregister previously registered texture & delete underlying objects.
   if (texture_id_) {
     registrar_->texture_registrar()->UnregisterTexture(
         texture_id_, [&, id = texture_id_]() {
           if (id) {
-            std::cout << "media_kit: VideoOutput: Free Texture: " << id
-                      << std::endl;
             std::lock_guard<std::mutex> lock(textures_mutex_);
             if (destroyed_) {
               return;
             }
+            log_("info", "texture " + std::to_string(id) + " freed");
             if (texture_variants_.find(id) != texture_variants_.end()) {
               texture_variants_.erase(id);
             }
@@ -322,8 +383,7 @@ void VideoOutput::Resize(int64_t required_width, int64_t required_height) {
     // Register new texture.
     texture_id_ =
         registrar_->texture_registrar()->RegisterTexture(texture_variant.get());
-    std::cout << "media_kit: VideoOutput: Create Texture: " << texture_id_
-              << std::endl;
+    log_("info", "texture " + std::to_string(texture_id_) + " created");
     std::lock_guard<std::mutex> lock(textures_mutex_);
     textures_.emplace(std::make_pair(texture_id_, std::move(texture)));
     texture_variants_.emplace(
@@ -351,8 +411,7 @@ void VideoOutput::Resize(int64_t required_width, int64_t required_height) {
     // Register new texture.
     texture_id_ =
         registrar_->texture_registrar()->RegisterTexture(texture_variant.get());
-    std::cout << "media_kit: VideoOutput: Create Texture: " << texture_id_
-              << std::endl;
+    log_("info", "texture " + std::to_string(texture_id_) + " created");
     std::lock_guard<std::mutex> lock(textures_mutex_);
     pixel_buffer_textures_.emplace(
         std::make_pair(texture_id_, std::move(pixel_buffer_texture)));

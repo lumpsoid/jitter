@@ -60,12 +60,17 @@ pub fn drops(signal: &PlaybackDrops) {
     );
 }
 
-/// Whether to keep mpv's verbose line `message`: only the OpenGL context
-/// it renders with (on Windows ANGLE's, which names the D3D driver).
-pub fn keeps_verbose(message: &str) -> bool {
-    ["GL_VENDOR=", "GL_RENDERER=", "GL_VERSION="]
+/// Whether to keep mpv's verbose line from `source`: what its decoder and
+/// renderer say, which is how a stream's video is set up and torn down,
+/// and the OpenGL context it renders with (on Windows ANGLE's, which
+/// names the D3D driver).
+pub fn keeps_verbose(source: &str) -> bool {
+    ["mpv/vd", "mpv/ffmpeg/video", "mpv/libmpv_render"]
         .iter()
-        .any(|key| message.trim_start().starts_with(key))
+        .any(|kept| match source.strip_prefix(kept) {
+            Some(rest) => rest.is_empty() || rest.starts_with('/'),
+            None => false,
+        })
 }
 
 fn os() -> String {
@@ -459,13 +464,13 @@ mod tests {
     }
 
     #[test]
-    fn only_the_gl_context_s_verbose_lines_are_kept() {
-        assert!(keeps_verbose(
-            "GL_RENDERER='ANGLE (NVIDIA, D3D11 31.0.15.5222)'\n"
-        ));
-        assert!(keeps_verbose("GL_VERSION='OpenGL ES 3.0.0'"));
-        assert!(!keeps_verbose(
-            "Opening 'https://edge.test/seg.ts' for reading"
-        ));
+    fn only_the_video_s_verbose_lines_are_kept() {
+        assert!(keeps_verbose("mpv/libmpv_render"));
+        assert!(keeps_verbose("mpv/libmpv_render/d3d11-egl"));
+        assert!(keeps_verbose("mpv/vd"));
+        assert!(keeps_verbose("mpv/ffmpeg/video"));
+        assert!(!keeps_verbose("mpv/ffmpeg/demuxer"));
+        assert!(!keeps_verbose("mpv/vdx"));
+        assert!(!keeps_verbose("mpv/cplayer"));
     }
 }

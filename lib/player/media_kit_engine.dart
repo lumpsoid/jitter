@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:jitter/logs/rust_log.dart';
 import 'package:jitter/player/faded_volume.dart';
 import 'package:jitter/player/live.dart';
@@ -31,7 +32,7 @@ String? hwdecFor(Map<String, String> environment) =>
     : null;
 
 /// The log's level for an mpv message at [level] (`fatal`, `error`,
-/// `warn`, `info`, `v`). Rust keeps only the probes' lines of the verbose
+/// `warn`, `info`, `v`). Rust keeps only the video's lines of the verbose
 /// ones.
 DartLogLevel _logLevel(String level) => switch (level) {
   'fatal' || 'error' => DartLogLevel.error,
@@ -54,15 +55,16 @@ class MediaKitEngine implements PlayerEngine {
   Future<void>? _cacheDir;
 
   /// The player, reporting to this run's log: mpv's warnings and errors,
-  /// each buffering wait with where it began and what was buffered, and
-  /// the probes: mpv's versions and GL context, and how it plays each
-  /// stream.
+  /// what its decoder and renderer do, each buffering wait with where it
+  /// began and what was buffered, the probes: mpv's versions and GL
+  /// context, and how it plays each stream, and, on Windows, what
+  /// media_kit's video output does.
   Player _create() {
     final player = Player(
       configuration: const PlayerConfiguration(
         // What the OS volume mixer shows for our audio stream.
         title: 'Jitter',
-        // Verbose, for the GL context mpv names only there.
+        // Verbose, for how mpv sets up and tears down the video.
         logLevel: MPVLogLevel.v,
       ),
     );
@@ -76,6 +78,7 @@ class MediaKitEngine implements PlayerEngine {
         bufferMs: player.state.buffer.inMilliseconds,
       ).sendSignalToRust(),
     );
+    _videoOutputLog.setMethodCallHandler(_logVideoOutput);
     if (player.platform case final NativePlayer mpv) {
       final probes = _probes = MpvProbes(mpv);
       unawaited(probes.versions());
@@ -84,6 +87,24 @@ class MediaKitEngine implements PlayerEngine {
       player.stream.videoParams.listen(probes.videoParams);
     }
     return player;
+  }
+
+  /// What media_kit's Windows video output reports: its textures, and the
+  /// first time a D3D 11 device it draws with stops working, with Windows'
+  /// reason. Its patch: `third_party/media_kit_video/PATCHED.md`.
+  static const _videoOutputLog = MethodChannel('jitter/media_kit_video/log');
+
+  static Future<void> _logVideoOutput(MethodCall call) async {
+    if (call.arguments case {
+      'level': final String level,
+      'message': final String message,
+    }) {
+      logToRust(
+        level == 'error' ? DartLogLevel.error : DartLogLevel.info,
+        'media_kit/video',
+        message,
+      );
+    }
   }
 
   /// What the player page's `Video` renders.

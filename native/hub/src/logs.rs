@@ -138,13 +138,13 @@ fn read(dir: &Path, name: &str) -> Result<(PathBuf, String), String> {
 }
 
 /// `LogFromDart`: one line, under the source Dart gave; a verbose one
-/// only if it is a probe's.
+/// only if it is the video's.
 pub fn from_dart(signal: LogFromDart) {
     let level = match signal.level {
         DartLogLevel::Error => Level::Error,
         DartLogLevel::Warning => Level::Warn,
         DartLogLevel::Info => Level::Info,
-        DartLogLevel::Verbose if probes::keeps_verbose(&signal.message) => Level::Info,
+        DartLogLevel::Verbose if probes::keeps_verbose(&signal.source) => Level::Info,
         DartLogLevel::Verbose => return,
     };
     log::log!(target: "dart", level, "{}: {}", signal.source, signal.message);
