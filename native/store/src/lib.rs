@@ -4,9 +4,15 @@
 //! number of CLI processes at once), so the store is written for concurrent
 //! connections: WAL journal, migrations under an `IMMEDIATE` transaction, and
 //! no upsert that could bring back a row another process deleted.
+//!
+//! It also writes and reads backups: [`SqliteStore::export_backup`] and
+//! [`SqliteStore::import_backup`], over text so each head picks the file.
 
+mod backup;
+mod backup_file;
 mod favorite_rows;
 mod history_rows;
+mod imported;
 mod migrations;
 mod resume_rows;
 mod settings_rows;
@@ -15,6 +21,7 @@ mod sqlite_store;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+pub use imported::Imported;
 pub use jitter_core::ports::StoreError;
 pub use sqlite_store::SqliteStore;
 

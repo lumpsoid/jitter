@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/app.dart';
+import 'package:jitter/backup/backup_holder.dart';
 import 'package:jitter/boot/boot_holder.dart';
 import 'package:jitter/categories/categories_holder.dart';
 import 'package:jitter/categories/categories_page.dart';
@@ -32,6 +33,7 @@ JitterApp _app(BootHolder boot, {SettingsHolder? settings}) => JitterApp(
   chat: ChatHolder(),
   search: SearchHolder(),
   settings: settings ?? SettingsHolder(),
+  backup: BackupHolder(),
   logs: LogsHolder(),
 );
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
+import 'package:jitter/backup/backup_holder.dart';
 import 'package:jitter/boot/boot_failure_page.dart';
 import 'package:jitter/boot/boot_holder.dart';
 import 'package:jitter/categories/categories_holder.dart';
@@ -47,6 +48,7 @@ class JitterApp extends StatefulWidget {
     required this.search,
     // Settings
     required this.settings,
+    required this.backup,
     required this.logs,
     super.key,
   });
@@ -72,6 +74,9 @@ class JitterApp extends StatefulWidget {
   final SearchHolder search;
   // Settings: the theme here, the rest on the settings page.
   final SettingsHolder settings;
+
+  /// Backups, exported and imported from the settings page.
+  final BackupHolder backup;
 
   /// The logs page's, opened from the settings page.
   final LogsHolder logs;
@@ -181,6 +186,7 @@ class _JitterAppState extends State<JitterApp> {
               search: widget.search,
               // Settings
               settings: widget.settings,
+              backup: widget.backup,
               logs: widget.logs,
             ),
           },

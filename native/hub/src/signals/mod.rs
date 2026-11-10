@@ -4,6 +4,8 @@
 //! `rinf gen` reads every signal type in the crate into one flat namespace,
 //! so names are unique across files and avoid Flutter's own.
 
+// Backup
+mod backup;
 mod boot;
 // Browse
 mod browse;
@@ -26,6 +28,8 @@ mod search;
 // Settings
 mod settings;
 
+// Backup
+pub use backup::{BackupUpdate, ExportBackup, ImportBackup};
 pub use boot::{Boot, BootFailed, Booted};
 // Browse
 pub use browse::{

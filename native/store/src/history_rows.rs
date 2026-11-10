@@ -4,7 +4,7 @@ use jitter_core::models::{
 };
 use jitter_core::playback::PlaybackTarget;
 use jitter_core::ports::{HistoryStore, StoreError};
-use rusqlite::{OptionalExtension, Row};
+use rusqlite::{Connection, OptionalExtension, Row};
 
 use crate::sqlite_store::{SqliteStore, bad_row, db_error};
 
@@ -13,6 +13,13 @@ const COLUMNS: &str = "id, kind, target, started_at, last_seen_at, title, channe
                        streamed_at";
 
 const NEWEST_FIRST: &str = "ORDER BY started_at DESC, id DESC";
+
+/// The columns a visit is written with, as `?1` to `?12` in [`insert`].
+const WRITTEN: &str = "kind, target, started_at, last_seen_at, title, channel_id, \
+                       channel_login, channel_name, channel_avatar, game_id, game_name, \
+                       streamed_at";
+
+const VALUES: &str = "?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12";
 
 /// One `visits` row as read, in [`COLUMNS`] order.
 struct VisitRow {
@@ -53,29 +60,11 @@ impl HistoryStore for SqliteStore {
     }
 
     fn add_visit(&mut self, visit: &NewVisit) -> Result<VisitId, StoreError> {
-        let (kind, target) = target_columns(&visit.target);
-        let details = &visit.details;
-        let channel = details.channel.as_ref();
-        let game = details.game.as_ref();
         let conn = self.conn()?;
-        conn.execute(
-            "INSERT INTO visits (kind, target, started_at, last_seen_at, title, channel_id,
-                 channel_login, channel_name, channel_avatar, game_id, game_name, streamed_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-            rusqlite::params![
-                kind,
-                target,
-                visit.started_at.unix(),
-                visit.last_seen_at.unix(),
-                details.title,
-                channel.map(|c| c.id.as_str()),
-                channel.map(|c| c.login.as_str()),
-                channel.map(|c| c.display_name.as_str()),
-                channel.and_then(Channel::avatar),
-                game.map(|g| g.id.as_str()),
-                game.map(|g| g.name.as_str()),
-                details.streamed_at.map(Timestamp::unix),
-            ],
+        insert(
+            &conn,
+            &format!("INSERT INTO visits ({WRITTEN}) VALUES ({VALUES})"),
+            visit,
         )
         .map_err(db_error)?;
         Ok(VisitId::from_raw(conn.last_insert_rowid()))
@@ -115,6 +104,47 @@ impl HistoryStore for SqliteStore {
             .map(drop)
             .map_err(db_error)
     }
+}
+
+/// Stores `visit` unless one to the same target started at the same time
+/// is stored, so importing the same visits twice adds them once. Returns
+/// the rows inserted, 0 or 1.
+pub(crate) fn insert_unless_stored(conn: &Connection, visit: &NewVisit) -> rusqlite::Result<usize> {
+    insert(
+        conn,
+        &format!(
+            "INSERT INTO visits ({WRITTEN}) SELECT {VALUES}
+             WHERE NOT EXISTS (
+                 SELECT 1 FROM visits WHERE kind = ?1 AND target = ?2 AND started_at = ?3
+             )"
+        ),
+        visit,
+    )
+}
+
+/// Runs `sql`, an insert taking [`WRITTEN`] as `?1` to `?12`, for `visit`.
+fn insert(conn: &Connection, sql: &str, visit: &NewVisit) -> rusqlite::Result<usize> {
+    let (kind, target) = target_columns(&visit.target);
+    let details = &visit.details;
+    let channel = details.channel.as_ref();
+    let game = details.game.as_ref();
+    conn.execute(
+        sql,
+        rusqlite::params![
+            kind,
+            target,
+            visit.started_at.unix(),
+            visit.last_seen_at.unix(),
+            details.title,
+            channel.map(|c| c.id.as_str()),
+            channel.map(|c| c.login.as_str()),
+            channel.map(|c| c.display_name.as_str()),
+            channel.and_then(Channel::avatar),
+            game.map(|g| g.id.as_str()),
+            game.map(|g| g.name.as_str()),
+            details.streamed_at.map(Timestamp::unix),
+        ],
+    )
 }
 
 fn target_columns(target: &PlaybackTarget) -> (&'static str, &str) {

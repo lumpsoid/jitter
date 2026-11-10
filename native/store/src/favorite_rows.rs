@@ -1,5 +1,6 @@
 use jitter_core::models::{ChannelId, ChannelLogin, Favorite, Timestamp};
 use jitter_core::ports::{FavoritesStore, StoreError};
+use rusqlite::Connection;
 
 use crate::sqlite_store::{SqliteStore, bad_row, db_error};
 
@@ -40,21 +41,7 @@ impl FavoritesStore for SqliteStore {
     }
 
     fn add(&mut self, favorite: &Favorite) -> Result<(), StoreError> {
-        self.conn()?
-            .execute(
-                "INSERT INTO favorites (channel_id, login, display_name, avatar_url, added_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5)
-                 ON CONFLICT (channel_id) DO NOTHING",
-                (
-                    favorite.channel_id.as_str(),
-                    favorite.login.as_str(),
-                    favorite.display_name.as_str(),
-                    favorite.avatar_url.as_deref(),
-                    favorite.added_at.unix(),
-                ),
-            )
-            .map(drop)
-            .map_err(db_error)
+        insert(&*self.conn()?, favorite).map(drop).map_err(db_error)
     }
 
     fn rename(
@@ -88,4 +75,21 @@ impl FavoritesStore for SqliteStore {
             .map(drop)
             .map_err(db_error)
     }
+}
+
+/// Inserts `favorite` unless its channel id is stored; a stored one is left
+/// as it is. Returns the rows inserted, 0 or 1.
+pub(crate) fn insert(conn: &Connection, favorite: &Favorite) -> rusqlite::Result<usize> {
+    conn.execute(
+        "INSERT INTO favorites (channel_id, login, display_name, avatar_url, added_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT (channel_id) DO NOTHING",
+        (
+            favorite.channel_id.as_str(),
+            favorite.login.as_str(),
+            favorite.display_name.as_str(),
+            favorite.avatar_url.as_deref(),
+            favorite.added_at.unix(),
+        ),
+    )
 }

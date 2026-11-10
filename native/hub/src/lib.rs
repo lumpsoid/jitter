@@ -1,6 +1,8 @@
 //! The rinf bridge: turns Dart signals into controller actions and
 //! controller state into Rust signals. Entry point of the Rust logic.
 
+// Backup
+mod backup;
 // Browse
 mod browse;
 // Categories

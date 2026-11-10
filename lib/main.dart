@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:jitter/app.dart';
+import 'package:jitter/backup/backup_holder.dart';
 import 'package:jitter/boot/boot_holder.dart';
 import 'package:jitter/categories/categories_holder.dart';
 import 'package:jitter/categories/category_holder.dart';
@@ -59,6 +60,7 @@ Future<void> main() async {
   final search = SearchHolder()..connect();
   // Settings
   final settings = SettingsHolder()..connect();
+  final backup = BackupHolder()..connect();
   final logs = LogsHolder()..connect();
 
   final boot = BootHolder();
@@ -87,6 +89,7 @@ Future<void> main() async {
       search: search,
       // Settings
       settings: settings,
+      backup: backup,
       logs: logs,
     ),
   );
