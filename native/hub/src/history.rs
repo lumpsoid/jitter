@@ -93,6 +93,12 @@ pub fn clear(history: &mut HistoryController) {
     send_snapshot(history);
 }
 
+/// Re-reads the store after an import, then sends the history.
+pub fn reload(history: &mut HistoryController) {
+    report(history.load(), "Couldn't reload the history");
+    send_snapshot(history);
+}
+
 /// Sends a failed action's error as `Failed`, prefixed with `what`.
 fn report<E: Display>(result: Result<(), E>, what: &str) {
     if let Err(e) = result {

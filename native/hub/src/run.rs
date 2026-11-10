@@ -26,6 +26,9 @@ use tokio::sync::mpsc;
 use tokio::time::Instant;
 
 use crate::signals::{Boot, Booted};
+// Backup
+use crate::backup;
+use crate::signals::{ExportBackup, ImportBackup};
 // Browse
 use crate::browse;
 use crate::signals::{BrowseReady, NextBrowsePage, RefreshBrowse};
@@ -90,12 +93,14 @@ pub struct Controllers {
     search: SearchPanel,
     // Settings
     settings: SettingsController,
+    // Backup: the store itself, which exports and imports whole.
+    store: SqliteStore,
 }
 
 impl Controllers {
     /// Builds each controller on a clone of `store`, then loads the
     /// favorites, the history and the settings; the chat starts under the
-    /// settings.
+    /// settings. Keeps a clone of `store` for backups.
     pub fn boot(store: &SqliteStore) -> Result<Self, StoreError> {
         let mut favorites = FavoritesController::new(Box::new(store.clone()));
         favorites.load()?;
@@ -123,6 +128,8 @@ impl Controllers {
             search: SearchPanel::default(),
             // Settings
             settings,
+            // Backup
+            store: store.clone(),
         })
     }
 }
@@ -291,6 +298,10 @@ pub async fn run(
     // Settings
     let settings_ready = SettingsReady::get_dart_signal_receiver();
     let change_setting = ChangeSetting::get_dart_signal_receiver();
+
+    // Backup
+    let export_backup = ExportBackup::get_dart_signal_receiver();
+    let import_backup = ImportBackup::get_dart_signal_receiver();
 
     loop {
         // Chat: the batch deadline, copied out so its timer arm borrows nothing.
@@ -473,6 +484,15 @@ pub async fn run(
                 }
             }
 
+            // Backup: an import reaches the favorites, the history and the
+            // settings, so each reloads.
+            Some(_) = export_backup.recv() => backup::export(&c.store),
+            Some(pack) = import_backup.recv() => {
+                if backup::import(&mut c.store, &pack.message) {
+                    imported(&mut c, &twitch, &fetch);
+                }
+            }
+
             // Network results
             Some(result) = fetched.recv() => on_fetched(&mut c, result, &twitch, &fetch),
 
@@ -588,4 +608,15 @@ fn on_fetched(
 fn favorites_changed(c: &Controllers) {
     categories::send_from_your_channels(&c.favorites);
     category::favorites_changed(&c.category, &c.favorites);
+}
+
+/// A backup was imported into the store: every feature it reaches reloads
+/// and goes out again, the chat takes the settings at once, and the
+/// favorites' live status is checked.
+fn imported(c: &mut Controllers, twitch: &Twitch, fetch: &mpsc::UnboundedSender<Fetched>) {
+    favorites::refresh(&mut c.favorites, twitch, fetch);
+    favorites_changed(c);
+    history::reload(&mut c.history);
+    settings::reload(&mut c.settings);
+    chat::settings_changed(&mut c.chat, *c.settings.state());
 }

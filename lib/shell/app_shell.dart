@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:jitter/backup/backup_holder.dart';
 import 'package:jitter/categories/categories_holder.dart';
 import 'package:jitter/categories/categories_page.dart';
 import 'package:jitter/categories/category_holder.dart';
@@ -76,6 +77,7 @@ class AppShell extends StatefulWidget {
     required this.search,
     // Settings
     required this.settings,
+    required this.backup,
     required this.logs,
     super.key,
   });
@@ -100,6 +102,7 @@ class AppShell extends StatefulWidget {
   final SearchHolder search;
   // Settings
   final SettingsHolder settings;
+  final BackupHolder backup;
   final LogsHolder logs;
 
   @override
@@ -175,7 +178,11 @@ class _AppShellState extends State<AppShell> {
       label: 'Settings',
       icon: Icons.settings_outlined,
       selectedIcon: Icons.settings,
-      page: SettingsPage(settings: widget.settings, logs: widget.logs),
+      page: SettingsPage(
+        settings: widget.settings,
+        backup: widget.backup,
+        logs: widget.logs,
+      ),
       refresh: null,
     ),
   ];

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jitter/backup/backup_holder.dart';
 import 'package:jitter/logs/logs_holder.dart';
 import 'package:jitter/settings/settings_holder.dart';
 import 'package:jitter/settings/settings_page.dart';
@@ -11,7 +12,11 @@ Future<void> pumpPage(WidgetTester tester, SettingsHolder holder) =>
     tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: SettingsPage(settings: holder, logs: LogsHolder()),
+          body: SettingsPage(
+            settings: holder,
+            backup: BackupHolder(),
+            logs: LogsHolder(),
+          ),
         ),
       ),
     );

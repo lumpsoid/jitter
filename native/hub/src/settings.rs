@@ -33,6 +33,18 @@ pub fn change(settings: &mut SettingsController, signal: ChangeSetting) -> bool 
     }
 }
 
+/// Re-reads the store after an import, then sends the settings, or the
+/// failure (the settings are then as before).
+pub fn reload(settings: &mut SettingsController) {
+    if let Err(e) = settings.load() {
+        SettingsUpdate::Failed {
+            message: format!("Couldn't reload the settings: {e}"),
+        }
+        .send_signal_to_dart();
+    }
+    send_snapshot(settings.state());
+}
+
 fn send_snapshot(settings: &Settings) {
     SettingsUpdate::Snapshot {
         theme: settings.theme.into(),

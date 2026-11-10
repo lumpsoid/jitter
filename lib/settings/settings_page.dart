@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:jitter/backup/backup_holder.dart';
+import 'package:jitter/backup/backup_tiles.dart';
 import 'package:jitter/logs/logs_holder.dart';
 import 'package:jitter/logs/logs_page.dart';
 import 'package:jitter/settings/settings_holder.dart';
@@ -9,12 +11,18 @@ import 'package:jitter/src/bindings/bindings.dart';
 /// The user's settings: the theme, how chat loads and draws emotes, and
 /// the quality a player opens at. Each control sends its change to Rust
 /// and shows the setting as Rust answers; a change Rust could not store
-/// shows as a snackbar. The app's logs open from here, and its version
-/// shows at the foot.
+/// shows as a snackbar. Backups export and import from here, the app's
+/// logs open from here, and its version shows at the foot.
 class SettingsPage extends StatefulWidget {
-  const new({required this.settings, required this.logs, super.key});
+  const new({
+    required this.settings,
+    required this.backup,
+    required this.logs,
+    super.key,
+  });
 
   final SettingsHolder settings;
+  final BackupHolder backup;
   final LogsHolder logs;
 
   @override
@@ -137,6 +145,8 @@ class _SettingsPageState extends State<SettingsPage> {
               value: settings.backgroundAudio,
               onChanged: (on) => holder.setBackgroundAudio(on: on),
             ),
+            const _Header(label: 'Your data'),
+            BackupTiles(backup: widget.backup),
             const _Header(label: 'Troubleshooting'),
             ListTile(
               leading: const Icon(Icons.article_outlined),
