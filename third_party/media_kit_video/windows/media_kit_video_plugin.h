@@ -44,6 +44,9 @@ class MediaKitVideoPlugin : public flutter::Plugin {
   flutter::PluginRegistrarWindows* registrar_ = nullptr;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel_ =
       nullptr;
+  // Jitter's patch: |VideoOutput|'s log lines, for the app's log.
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+      log_channel_ = nullptr;
   std::unique_ptr<VideoOutputManager> video_output_manager_ = nullptr;
   HWND flutter_window_ = nullptr;
   WNDPROC original_window_proc_ = nullptr;
