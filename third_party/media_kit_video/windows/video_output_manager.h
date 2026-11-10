@@ -27,11 +27,13 @@ class VideoOutputManager {
 
   // Creates a new |VideoOutput| instance. It's texture ID may be used to render
   // the video. The changes in it's texture ID & video dimensions will be
-  // notified via the |texture_update_callback|.
+  // notified via the |texture_update_callback|. What it does, and the first
+  // time a D3D 11 device it draws with stops working, go to |log|.
   void Create(
       int64_t handle,
       VideoOutputConfiguration configuration,
-      std::function<void(int64_t, int64_t, int64_t)> texture_update_callback);
+      std::function<void(int64_t, int64_t, int64_t)> texture_update_callback,
+      VideoOutputLog log);
 
   // Sets the required video output size.
   // This forces |VideoOutput| to resize the internal OpenGL surface / D3D

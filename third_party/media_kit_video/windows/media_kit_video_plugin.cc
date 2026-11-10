@@ -37,6 +37,10 @@ MediaKitVideoPlugin::MediaKitVideoPlugin(
   channel_->SetMethodCallHandler([&](const auto& call, auto result) {
     HandleMethodCall(call, std::move(result));
   });
+  log_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          registrar->messenger(), "jitter/media_kit_video/log",
+          &flutter::StandardMethodCodec::GetInstance());
 }
 
 MediaKitVideoPlugin::~MediaKitVideoPlugin() {
@@ -163,6 +167,23 @@ void MediaKitVideoPlugin::HandleMethodCall(
                                 flutter::EncodableValue(height),
                             },
                         }),
+                    },
+                }),
+                nullptr);
+          });
+        },
+        [this](const std::string& level, const std::string& message) {
+          RunOnMainThread([=]() {
+            log_channel_->InvokeMethod(
+                "log",
+                std::make_unique<flutter::EncodableValue>(flutter::EncodableMap{
+                    {
+                        flutter::EncodableValue("level"),
+                        flutter::EncodableValue(level),
+                    },
+                    {
+                        flutter::EncodableValue("message"),
+                        flutter::EncodableValue(message),
                     },
                 }),
                 nullptr);

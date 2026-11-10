@@ -15,6 +15,12 @@ All notable changes to Jitter are listed here. The format follows
   position is replaced only by a newer one, and the file's settings are
   taken. On Android and iOS the export goes to the share sheet.
 
+### Changed
+
+- The log keeps what mpv's video decoder and renderer report, and on
+  Windows what the video output does and the first time a GPU device it
+  draws with stops working, with Windows' reason.
+
 ## [0.1.3] - 2026-11-09
 
 ### Added

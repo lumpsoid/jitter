@@ -17,6 +17,7 @@
 
 #include <future>
 #include <memory>
+#include <string>
 
 #include <flutter/method_channel.h>
 #include <flutter/plugin_registrar_windows.h>
@@ -37,6 +38,11 @@ typedef struct _VideoOutputConfiguration {
         height(height),
         enable_hardware_acceleration(enable_hardware_acceleration) {}
 } VideoOutputConfiguration;
+
+// Writes a line to the app's log; |level| is "info" or "error".
+typedef std::function<void(const std::string& level,
+                           const std::string& message)>
+    VideoOutputLog;
 
 class VideoOutput {
  public:
@@ -67,7 +73,8 @@ class VideoOutput {
   VideoOutput(int64_t handle,
               VideoOutputConfiguration configuration,
               flutter::PluginRegistrarWindows* registrar,
-              ThreadPool* thread_pool_ref);
+              ThreadPool* thread_pool_ref,
+              VideoOutputLog log);
 
   ~VideoOutput();
 
@@ -85,6 +92,12 @@ class VideoOutput {
 
   void Resize(int64_t required_width, int64_t required_height);
 
+  // Logs the first time each D3D 11 device stops working, with Windows'
+  // reason: mpv's frames die with ANGLE's without a word from mpv.
+  void CheckDevices();
+
+  void ReportDevice(const char* device, HRESULT reason, HRESULT& last);
+
   int64_t GetVideoWidth();
 
   int64_t GetVideoHeight();
@@ -98,6 +111,12 @@ class VideoOutput {
   int64_t texture_id_ = 0;
   flutter::PluginRegistrarWindows* registrar_ = nullptr;
   ThreadPool* thread_pool_ref_ = nullptr;
+  VideoOutputLog log_;
+  // What each check last found; |S_OK| while the device works.
+  HRESULT angle_device_reason_ = S_OK;
+  HRESULT device_reason_ = S_OK;
+  // What |mpv_render_context_render| last returned.
+  int render_result_ = 0;
   // For preventing any asynchronous operations (primarily texture objects
   // deletion after unregister in |Resize|) access this object after
   // destruction.

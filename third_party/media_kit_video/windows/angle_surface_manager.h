@@ -53,6 +53,18 @@ class ANGLESurfaceManager {
 
   void MakeCurrent(bool value);
 
+  // Whether ANGLE said which D3D 11 device it draws with: the one mpv also
+  // decodes on, through |hwdec=d3d11va|.
+  bool HasANGLEDevice() const { return angle_d3d_11_device_ != nullptr; }
+
+  // Why ANGLE's D3D 11 device was removed: |S_OK| while it works, or when
+  // ANGLE did not say which device it is.
+  HRESULT ANGLEDeviceRemovedReason();
+
+  // Why this manager's own D3D 11 device, which shares the drawn frames
+  // with Flutter, was removed: |S_OK| while it works.
+  HRESULT DeviceRemovedReason();
+
  private:
   void SwapBuffers();
 
@@ -66,6 +78,8 @@ class ANGLESurfaceManager {
 
   bool CreateAndBindEGLSurface();
 
+  void QueryANGLEDevice();
+
   int32_t width_ = 1;
   int32_t height_ = 1;
   HANDLE internal_handle_ = nullptr;
@@ -78,6 +92,7 @@ class ANGLESurfaceManager {
   ID3D11DeviceContext* d3d_11_device_context_ = nullptr;
   Microsoft::WRL::ComPtr<ID3D11Texture2D> internal_d3d_11_texture_2D_;
   Microsoft::WRL::ComPtr<ID3D11Texture2D> d3d_11_texture_2D_;
+  Microsoft::WRL::ComPtr<ID3D11Device> angle_d3d_11_device_;
   // ANGLE
   EGLSurface surface_ = EGL_NO_SURFACE;
   EGLDisplay display_ = EGL_NO_DISPLAY;
