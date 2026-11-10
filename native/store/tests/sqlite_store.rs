@@ -600,3 +600,166 @@ fn a_visit_one_connection_removed_stays_removed_when_the_other_touches_it() -> T
     assert!(cli.load_visits()?.is_empty());
     Ok(())
 }
+
+// --- Backups -------------------------------------------------------------
+
+/// The visits without the ids their database gave them.
+fn visits_of(store: &SqliteStore) -> Result<Vec<NewVisit>, jitter_store::StoreError> {
+    Ok(store
+        .load_visits()?
+        .into_iter()
+        .map(|v| NewVisit {
+            target: v.target,
+            started_at: v.started_at,
+            last_seen_at: v.last_seen_at,
+            details: v.details,
+        })
+        .collect())
+}
+
+/// A store holding one of everything a backup carries.
+fn kept_store() -> Result<SqliteStore, Box<dyn std::error::Error>> {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.add(&Favorite {
+        avatar_url: Some("https://a/1.png".to_owned()),
+        ..favorite("1", "Alpha", 10)
+    })?;
+    let Ok(game) = CategoryId::parse("509658") else {
+        unreachable!("valid id");
+    };
+    let mut watched = new_visit(vod("42"), 1_000);
+    watched.details = VisitDetails {
+        channel: Some(with_avatar(channel("1", "Alpha"), "https://a/1.png")),
+        title: Some("react andy".to_owned()),
+        game: Some(GameRef {
+            id: game,
+            name: "Just Chatting".to_owned(),
+        }),
+        streamed_at: Some(Timestamp::from_unix(500)),
+    };
+    store.add_visit(&watched)?;
+    store.add_visit(&new_visit(live("alpha"), 2_000))?;
+    store.put(&point("42", 300, 3_600, 1_100))?;
+    store.put_setting(Setting::Theme(ThemeChoice::Dark))?;
+    store.put_setting(Setting::StartQuality(QualityPreference::P720))?;
+    store.put_setting(Setting::BackgroundAudio(false))?;
+    Ok(store)
+}
+
+#[test]
+fn a_backup_restores_everything_into_an_empty_database() -> TestResult {
+    let kept = kept_store()?;
+    let backup = kept.export_backup(Timestamp::from_unix(9_999))?;
+
+    let mut restored = SqliteStore::open_in_memory()?;
+    let imported = restored.import_backup(&backup)?;
+
+    assert_eq!(
+        imported,
+        jitter_store::Imported {
+            favorites: 1,
+            visits: 2,
+            resume_points: 1,
+        }
+    );
+    assert_eq!(restored.load_all()?, kept.load_all()?);
+    assert_eq!(visits_of(&restored)?, visits_of(&kept)?);
+    assert_eq!(restored.get(&video("42"))?, kept.get(&video("42"))?);
+    assert_eq!(restored.load_settings()?, kept.load_settings()?);
+    Ok(())
+}
+
+#[test]
+fn importing_a_backup_again_adds_nothing() -> TestResult {
+    let mut store = kept_store()?;
+    let backup = store.export_backup(Timestamp::from_unix(9_999))?;
+    let visits = visits_of(&store)?;
+
+    let imported = store.import_backup(&backup)?;
+
+    assert_eq!(imported, jitter_store::Imported::default());
+    assert_eq!(visits_of(&store)?, visits);
+    assert_eq!(store.load_all()?.len(), 1);
+    Ok(())
+}
+
+#[test]
+fn an_import_keeps_what_is_stored_and_only_a_newer_resume_point_replaces() -> TestResult {
+    let mut source = SqliteStore::open_in_memory()?;
+    source.add(&favorite("1", "OldName", 1))?;
+    source.add(&favorite("2", "Beta", 2))?;
+    source.put(&point("42", 100, 3_600, 500))?;
+    source.put(&point("43", 900, 3_600, 900))?;
+    let backup = source.export_backup(Timestamp::from_unix(1_000))?;
+
+    let mut store = SqliteStore::open_in_memory()?;
+    store.add(&favorite("1", "Alpha", 10))?;
+    store.put(&point("42", 200, 3_600, 600))?;
+    store.put(&point("43", 50, 3_600, 100))?;
+    let imported = store.import_backup(&backup)?;
+
+    assert_eq!(imported.favorites, 1);
+    assert_eq!(imported.resume_points, 1);
+    assert_eq!(
+        store.load_all()?,
+        [favorite("2", "Beta", 2), favorite("1", "Alpha", 10)]
+    );
+    assert_eq!(store.get(&video("42"))?, Some(point("42", 200, 3_600, 600)));
+    assert_eq!(store.get(&video("43"))?, Some(point("43", 900, 3_600, 900)));
+    Ok(())
+}
+
+#[test]
+fn a_backup_without_a_setting_leaves_that_setting_as_stored() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.put_setting(Setting::AnimatedEmotes(false))?;
+    store.import_backup(
+        r#"{"format": "jitter-backup", "version": 1, "exported_at": 0,
+            "settings": {"theme": "light"}}"#,
+    )?;
+    assert_eq!(
+        store.load_settings()?,
+        Settings {
+            theme: ThemeChoice::Light,
+            animated_emotes: false,
+            ..Settings::default()
+        }
+    );
+    Ok(())
+}
+
+#[test]
+fn a_backup_with_one_invalid_value_imports_nothing() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    let result = store.import_backup(
+        r#"{"format": "jitter-backup", "version": 1, "exported_at": 0,
+            "settings": {"theme": "dark"},
+            "favorites": [
+                {"channel_id": "1", "login": "alpha", "display_name": "Alpha",
+                 "avatar_url": null, "added_at": 0},
+                {"channel_id": "not-a-number", "login": "beta", "display_name": "Beta",
+                 "avatar_url": null, "added_at": 0}
+            ]}"#,
+    );
+    assert!(result.is_err());
+    assert!(store.load_all()?.is_empty());
+    assert_eq!(store.load_settings()?, Settings::default());
+    Ok(())
+}
+
+#[test]
+fn other_json_and_a_newer_backup_are_refused() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    assert!(store.import_backup(r#"{"favorites": []}"#).is_err());
+    assert!(
+        store
+            .import_backup(r#"{"format": "other", "version": 1, "exported_at": 0}"#)
+            .is_err()
+    );
+    let newer = store
+        .import_backup(r#"{"format": "jitter-backup", "version": 2, "favorites": "changed"}"#)
+        .err()
+        .ok_or("a newer backup was imported")?;
+    assert!(newer.reason().contains("version 2"), "{newer}");
+    Ok(())
+}

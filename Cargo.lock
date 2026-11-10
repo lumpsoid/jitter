@@ -1156,6 +1156,8 @@ dependencies = [
  "dirs",
  "jitter_core",
  "rusqlite",
+ "serde",
+ "serde_json",
  "tempfile",
 ]
 

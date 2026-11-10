@@ -1,5 +1,6 @@
 use jitter_core::models::{QualityPreference, Setting, Settings, ThemeChoice};
 use jitter_core::ports::{SettingsStore, StoreError};
+use rusqlite::Connection;
 use rusqlite::types::Value;
 
 use crate::sqlite_store::{SqliteStore, bad_row, db_error};
@@ -64,25 +65,26 @@ impl SettingsStore for SqliteStore {
     }
 
     fn put_setting(&mut self, setting: Setting) -> Result<(), StoreError> {
-        // Column names come from this match only, never from input.
-        let (column, value) = match setting {
-            Setting::Theme(theme) => ("theme", Value::from(theme.name().to_owned())),
-            Setting::AnimatedEmotes(on) => ("animated_emotes", Value::from(on)),
-            Setting::AutoLoadChat(on) => ("auto_load_chat", Value::from(on)),
-            Setting::StartQuality(quality) => {
-                ("start_quality", Value::from(quality.name().to_owned()))
-            }
-            Setting::ThirdPartyEmotes(on) => ("third_party_emotes", Value::from(on)),
-            Setting::BackgroundAudio(on) => ("background_audio", Value::from(on)),
-        };
-        self.conn()?
-            .execute(
-                &format!("UPDATE settings SET {column} = ?1 WHERE id = 1"),
-                [value],
-            )
-            .map(drop)
-            .map_err(db_error)
+        put(&*self.conn()?, setting).map_err(db_error)
     }
+}
+
+/// Stores `setting` in its own column, leaving the others as stored.
+pub(crate) fn put(conn: &Connection, setting: Setting) -> rusqlite::Result<()> {
+    // Column names come from this match only, never from input.
+    let (column, value) = match setting {
+        Setting::Theme(theme) => ("theme", Value::from(theme.name().to_owned())),
+        Setting::AnimatedEmotes(on) => ("animated_emotes", Value::from(on)),
+        Setting::AutoLoadChat(on) => ("auto_load_chat", Value::from(on)),
+        Setting::StartQuality(quality) => ("start_quality", Value::from(quality.name().to_owned())),
+        Setting::ThirdPartyEmotes(on) => ("third_party_emotes", Value::from(on)),
+        Setting::BackgroundAudio(on) => ("background_audio", Value::from(on)),
+    };
+    conn.execute(
+        &format!("UPDATE settings SET {column} = ?1 WHERE id = 1"),
+        [value],
+    )
+    .map(drop)
 }
 
 /// A stored enum by its core name; `None` when never stored.
