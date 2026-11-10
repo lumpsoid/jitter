@@ -24,6 +24,9 @@ Interactive, Inc. "Twitch" is a trademark of Twitch Interactive, Inc.
   and Steam keyboard support in Game Mode.
 - A local **watch history**, light and dark themes, and per-run **logs** to
   attach to a bug report.
+- **Export and import** your favorites, history, VOD positions and settings
+  as one JSON file, to move them to another device (Settings → Your data, or
+  `jitter export` / `jitter import`).
 
 ### Privacy
 

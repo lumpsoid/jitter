@@ -6,6 +6,15 @@ All notable changes to Jitter are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Export your favorites, watch history, VOD positions and settings to a
+  JSON file, and import one, from Settings → Your data or with
+  `jitter export` and `jitter import`. An import adds to what you have and
+  removes nothing: a favorite or visit you already have is kept, a VOD
+  position is replaced only by a newer one, and the file's settings are
+  taken. On Android and iOS the export goes to the share sheet.
+
 ## [0.1.3] - 2026-11-09
 
 ### Added
