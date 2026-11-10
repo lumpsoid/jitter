@@ -6,6 +6,7 @@
 
 mod commands;
 
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
@@ -101,6 +102,13 @@ enum Command {
         #[command(subcommand)]
         command: Option<HistoryCommand>,
     },
+    /// Write your favorites, history, resume points and settings to a
+    /// backup file.
+    Export { file: PathBuf },
+    /// Merge a backup file into what is stored: nothing is removed, a
+    /// favorite or visit already stored is kept, and the backup's settings
+    /// are taken.
+    Import { file: PathBuf },
     /// Record a VOD position by hand.
     Resume {
         id: String,
@@ -148,6 +156,8 @@ async fn run(command: Command) -> commands::Result<()> {
         } => commands::resume::run(&id, position_s, duration_s),
         Command::Settings { command } => commands::settings::run(command),
         Command::History { command } => commands::history::run(command),
+        Command::Export { file } => commands::backup::export(&file),
+        Command::Import { file } => commands::backup::import(&file),
     }
 }
 

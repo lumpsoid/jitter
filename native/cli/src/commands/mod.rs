@@ -1,6 +1,7 @@
 //! One module per command, plus what they share: the error type, opening
 //! the shared database and parsing arguments into core's value objects.
 
+pub mod backup;
 pub mod categories;
 pub mod category;
 pub mod chat;
