@@ -26,6 +26,11 @@ All notable changes to Jitter are listed here. The format follows
   records the GPU devices' state as each stream stops, opens, loads and
   starts decoding.
 
+### Fixed
+
+- On Windows, the second stream in a row shows its picture again, instead of
+  playing sound over a black video with zero-copy hardware decoding.
+
 ## [0.1.3] - 2026-11-09
 
 ### Added
