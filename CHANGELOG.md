@@ -14,6 +14,9 @@ All notable changes to Jitter are listed here. The format follows
   removes nothing: a favorite or visit you already have is kept, a VOD
   position is replaced only by a newer one, and the file's settings are
   taken. On Android and iOS the export goes to the share sheet.
+- Setting the environment variable `JITTER_HWDEC` makes the player decode
+  video with that mpv `hwdec`, for example `d3d11va-copy`, or `no` for
+  software decoding, to try another decoder when a GPU driver misbehaves.
 
 ### Changed
 

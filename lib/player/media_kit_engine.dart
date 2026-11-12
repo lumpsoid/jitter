@@ -13,7 +13,9 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:path_provider/path_provider.dart';
 
 /// The mpv `hwdec` to decode with under the [environment]; `null` keeps
-/// media_kit's `auto`.
+/// media_kit's `auto`. `JITTER_HWDEC`, when set and not empty, is used
+/// as-is, to try another decoder (`d3d11va-copy`, or `no` for software)
+/// without a rebuild, and wins over the gamescope case.
 ///
 /// Under gamescope (SteamOS game mode), `auto` tries Vulkan decoding, and
 /// gamescope's WSI layer aborts the process when FFmpeg 9 creates its
@@ -23,13 +25,19 @@ import 'package:path_provider/path_provider.dart';
 /// same streams there; `vaapi-copy` keeps it when the video is drawn
 /// without EGL.
 ///
-/// Workaround: remove it, and its test, once SteamOS ships a gamescope
-/// whose vkroots has that fix (ValveSoftware/gamescope#2261). How to
-/// check, and the full trail: `docs/gamescope-vulkan-hwdec.md`.
-String? hwdecFor(Map<String, String> environment) =>
-    environment.containsKey('GAMESCOPE_WAYLAND_DISPLAY')
-    ? 'vaapi,vaapi-copy'
-    : null;
+/// Workaround: remove the gamescope case and its test once SteamOS ships a
+/// gamescope whose vkroots has that fix (ValveSoftware/gamescope#2261). How
+/// to check, and the full trail: `docs/gamescope-vulkan-hwdec.md`. The
+/// `JITTER_HWDEC` override stays.
+String? hwdecFor(Map<String, String> environment) {
+  if (environment['JITTER_HWDEC'] case final String hwdec
+      when hwdec.isNotEmpty) {
+    return hwdec;
+  }
+  return environment.containsKey('GAMESCOPE_WAYLAND_DISPLAY')
+      ? 'vaapi,vaapi-copy'
+      : null;
+}
 
 /// The log's level for an mpv message at [level] (`fatal`, `error`,
 /// `warn`, `info`, `v`). Rust keeps only the video's lines of the verbose
