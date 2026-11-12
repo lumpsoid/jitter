@@ -144,25 +144,37 @@ class MediaKitEngine implements PlayerEngine {
     }
   }
 
-  /// On Windows, asks media_kit's video output to log its D3D 11 devices'
-  /// state at this checkpoint, so the log places a device reset between
-  /// checkpoints (patch: `third_party/media_kit_video/PATCHED.md`).
-  Future<void> _checkDevices(String when) async {
+  /// Calls [method] on media_kit's video output with this handle, at this
+  /// checkpoint. A failure is logged with the text [failure], then [when].
+  Future<void> _askVideoOutput(
+    String method,
+    String when,
+    String failure,
+  ) async {
     final handle = _handle;
     if (handle == null) return;
     try {
-      await _videoOutputLog.invokeMethod<void>('checkDevices', {
+      await _videoOutputLog.invokeMethod<void>(method, {
         'handle': '${await handle}',
         'when': when,
       });
     } on Object catch (error) {
-      logToRust(
-        DartLogLevel.warning,
-        'player',
-        'No device check $when: $error',
-      );
+      logToRust(DartLogLevel.warning, 'player', '$failure $when: $error');
     }
   }
+
+  /// On Windows, asks media_kit's video output to log its D3D 11 devices'
+  /// state at this checkpoint, so the log places a device reset between
+  /// checkpoints (patch: `third_party/media_kit_video/PATCHED.md`).
+  Future<void> _checkDevices(String when) =>
+      _askVideoOutput('checkDevices', when, 'No device check');
+
+  /// On Windows, asks media_kit's video output to render once, so libmpv
+  /// applies the video teardown mpv left pending when it went idle.
+  /// Otherwise the next stream reuses mpv's d3d11-egl hwdec mapper and ANGLE's
+  /// D3D 11 device is reset (cause: `docs/windows-d3d11-device-reset.md`).
+  Future<void> _flush(String when) =>
+      _askVideoOutput('flush', when, 'No video flush');
 
   /// What the player page's `Video` renders.
   late final VideoController controller = VideoController(
@@ -180,6 +192,7 @@ class MediaKitEngine implements PlayerEngine {
     await _setVolume(_volume.end());
     await _probes?.ended();
     await _cacheDir;
+    await _flush('before the next stream opens');
     await _checkDevices('before the next stream opens');
     await _player.open(Media(url, start: start));
   }
@@ -200,6 +213,7 @@ class MediaKitEngine implements PlayerEngine {
   Future<void> stop() async {
     await _probes?.ended();
     await _player.stop();
+    await _flush('after the stream stopped');
     await _checkDevices('after the stream stopped');
     await _setVolume(_volume.end());
   }
