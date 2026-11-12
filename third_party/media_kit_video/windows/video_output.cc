@@ -299,6 +299,30 @@ void VideoOutput::SetSize(std::optional<int64_t> width,
   });
 }
 
+void VideoOutput::CheckDevicesAt(std::string when) {
+  if (destroyed_) {
+    return;
+  }
+  thread_pool_ref_->Post([&, when]() {
+    if (surface_manager_ == nullptr) {
+      log_("info", "D3D 11 devices not checked " + when +
+                       ": software rendering");
+      return;
+    }
+    auto state = [](HRESULT reason) {
+      return reason == S_OK ? std::string("works") : RemovedReason(reason);
+    };
+    auto angle_reason = surface_manager_->ANGLEDeviceRemovedReason();
+    auto own_reason = surface_manager_->DeviceRemovedReason();
+    bool works = angle_reason == S_OK && own_reason == S_OK;
+    log_(works ? "info" : "error",
+         "D3D 11 devices checked " + when + ": ANGLE's " +
+             state(angle_reason) + ", media_kit's " + state(own_reason));
+    // Keeps the first-time "removed" bookkeeping of |CheckDevices| in step.
+    CheckDevices();
+  });
+}
+
 void VideoOutput::CheckAndResize() {
   // Check if a new texture with different dimensions is needed.
   auto required_width = GetVideoWidth(), required_height = GetVideoHeight();

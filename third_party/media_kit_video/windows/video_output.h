@@ -83,6 +83,10 @@ class VideoOutput {
 
   void SetSize(std::optional<int64_t> width, std::optional<int64_t> height);
 
+  // Logs the state of both D3D 11 devices now, on the worker thread. |when|
+  // names the app's checkpoint, e.g. "the next stream loaded".
+  void CheckDevicesAt(std::string when);
+
  private:
   void NotifyRender();
 

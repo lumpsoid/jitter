@@ -41,6 +41,22 @@ MediaKitVideoPlugin::MediaKitVideoPlugin(
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
           registrar->messenger(), "jitter/media_kit_video/log",
           &flutter::StandardMethodCodec::GetInstance());
+  // Jitter's patch: the app asks for the D3D 11 devices to be checked at its
+  // checkpoints, see |VideoOutput::CheckDevicesAt|.
+  log_channel_->SetMethodCallHandler([&](const auto& call, auto result) {
+    if (call.method_name().compare("checkDevices") != 0) {
+      result->NotImplemented();
+      return;
+    }
+    auto arguments = std::get<flutter::EncodableMap>(*call.arguments());
+    auto handle =
+        std::get<std::string>(arguments[flutter::EncodableValue("handle")]);
+    auto when =
+        std::get<std::string>(arguments[flutter::EncodableValue("when")]);
+    auto handle_value = static_cast<int64_t>(std::stoll(handle.c_str()));
+    video_output_manager_->CheckDevices(handle_value, when);
+    result->Success(flutter::EncodableValue(std::monostate{}));
+  });
 }
 
 MediaKitVideoPlugin::~MediaKitVideoPlugin() {
