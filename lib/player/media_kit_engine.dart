@@ -56,6 +56,10 @@ class MediaKitEngine implements PlayerEngine {
   Player? _created;
   MpvProbes? _probes;
 
+  /// The mpv handle, on Windows only: the device checks ask media_kit's
+  /// video output about its devices with it.
+  Future<int>? _handle;
+
   /// Points mpv's on-disk cache, which media_kit turns on, at the app's
   /// cache directory: with media_kit's setup, mpv's own default gives it no
   /// folder, so it fails and caches in memory alone. Done before the first
@@ -93,13 +97,38 @@ class MediaKitEngine implements PlayerEngine {
       unawaited(probes.watchOutput());
       _cacheDir = _setCacheDir(mpv);
       player.stream.videoParams.listen(probes.videoParams);
+      if (Platform.isWindows) {
+        _handle = mpv.handle;
+        unawaited(
+          mpv.observeProperty(
+            'path',
+            (path) => _checkDevices('as the path became "$path"'),
+          ),
+        );
+        unawaited(
+          mpv.observeProperty(
+            'hwdec-current',
+            (hwdec) => _checkDevices('as hwdec-current became "$hwdec"'),
+          ),
+        );
+        player.stream.videoParams.listen((params) {
+          if (params.pixelformat case final format?) {
+            unawaited(
+              _checkDevices(
+                'as video params became $format ${params.w}x${params.h}',
+              ),
+            );
+          }
+        });
+      }
     }
     return player;
   }
 
   /// What media_kit's Windows video output reports: its textures, and the
   /// first time a D3D 11 device it draws with stops working, with Windows'
-  /// reason. Its patch: `third_party/media_kit_video/PATCHED.md`.
+  /// reason. The app also asks it, at each checkpoint, to log both devices'
+  /// state. Its patch: `third_party/media_kit_video/PATCHED.md`.
   static const _videoOutputLog = MethodChannel('jitter/media_kit_video/log');
 
   static Future<void> _logVideoOutput(MethodCall call) async {
@@ -111,6 +140,26 @@ class MediaKitEngine implements PlayerEngine {
         level == 'error' ? DartLogLevel.error : DartLogLevel.info,
         'media_kit/video',
         message,
+      );
+    }
+  }
+
+  /// On Windows, asks media_kit's video output to log its D3D 11 devices'
+  /// state at this checkpoint, so the log places a device reset between
+  /// checkpoints (patch: `third_party/media_kit_video/PATCHED.md`).
+  Future<void> _checkDevices(String when) async {
+    final handle = _handle;
+    if (handle == null) return;
+    try {
+      await _videoOutputLog.invokeMethod<void>('checkDevices', {
+        'handle': '${await handle}',
+        'when': when,
+      });
+    } on Object catch (error) {
+      logToRust(
+        DartLogLevel.warning,
+        'player',
+        'No device check $when: $error',
       );
     }
   }
@@ -131,6 +180,7 @@ class MediaKitEngine implements PlayerEngine {
     await _setVolume(_volume.end());
     await _probes?.ended();
     await _cacheDir;
+    await _checkDevices('before the next stream opens');
     await _player.open(Media(url, start: start));
   }
 
@@ -150,6 +200,7 @@ class MediaKitEngine implements PlayerEngine {
   Future<void> stop() async {
     await _probes?.ended();
     await _player.stop();
+    await _checkDevices('after the stream stopped');
     await _setVolume(_volume.end());
   }
 
