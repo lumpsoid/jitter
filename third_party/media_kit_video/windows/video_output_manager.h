@@ -46,6 +46,10 @@ class VideoOutputManager {
   // handle, as |VideoOutput::CheckDevicesAt| does.
   void CheckDevices(int64_t handle, std::string when);
 
+  // Renders the |VideoOutput| with given handle once, as |VideoOutput::Flush|
+  // does.
+  void Flush(int64_t handle, std::string when);
+
   // Destroys the |VideoOutput| with given handle.
   void Dispose(int64_t handle);
 
