@@ -42,6 +42,10 @@ class VideoOutputManager {
                std::optional<int64_t> width,
                std::optional<int64_t> height);
 
+  // Logs the state of both D3D 11 devices of the |VideoOutput| with given
+  // handle, as |VideoOutput::CheckDevicesAt| does.
+  void CheckDevices(int64_t handle, std::string when);
+
   // Destroys the |VideoOutput| with given handle.
   void Dispose(int64_t handle);
 

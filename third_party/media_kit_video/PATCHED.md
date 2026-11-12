@@ -64,7 +64,11 @@ writes to the app's log under `media_kit/video`:
 - each change in what `mpv_render_context_render` returns;
 - after each frame, `GetDeviceRemovedReason` on ANGLE's device and on
   media_kit's own, which shares frames with Flutter: the first time
-  either stops working, its reason (`DXGI_ERROR_DEVICE_HUNG`, …).
+  either stops working, its reason (`DXGI_ERROR_DEVICE_HUNG`, …);
+- when the app asks over the same channel (method `checkDevices`, with
+  `handle` and `when`), both devices' state at that moment, named by the
+  app's checkpoint (a stream ending, the next one loading, its decoder
+  starting), so a reset falls between two checkpoints in the log.
 
 Changed: `windows/video_output.{h,cc}`, `windows/video_output_manager.{h,cc}`,
 `windows/media_kit_video_plugin.{h,cc}` and
