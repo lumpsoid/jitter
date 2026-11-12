@@ -323,6 +323,17 @@ void VideoOutput::CheckDevicesAt(std::string when) {
   });
 }
 
+void VideoOutput::Flush(std::string when) {
+  if (destroyed_) {
+    return;
+  }
+  thread_pool_ref_->Post([&, when]() {
+    log_("info", "Rendering once " + when +
+                     " to apply mpv's pending video teardown");
+    Render();
+  });
+}
+
 void VideoOutput::CheckAndResize() {
   // Check if a new texture with different dimensions is needed.
   auto required_width = GetVideoWidth(), required_height = GetVideoHeight();

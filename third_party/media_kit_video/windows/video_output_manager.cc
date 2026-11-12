@@ -48,6 +48,15 @@ void VideoOutputManager::CheckDevices(int64_t handle, std::string when) {
   }).detach();
 }
 
+void VideoOutputManager::Flush(int64_t handle, std::string when) {
+  std::thread([=]() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (video_outputs_.find(handle) != video_outputs_.end()) {
+      video_outputs_[handle]->Flush(when);
+    }
+  }).detach();
+}
+
 void VideoOutputManager::Dispose(int64_t handle) {
   std::thread([=]() {
     std::lock_guard<std::mutex> lock(mutex_);

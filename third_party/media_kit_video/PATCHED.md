@@ -69,6 +69,11 @@ writes to the app's log under `media_kit/video`:
   `handle` and `when`), both devices' state at that moment, named by the
   app's checkpoint (a stream ending, the next one loading, its decoder
   starting), so a reset falls between two checkpoints in the log.
+- when the app asks over the same channel to flush (method `flush`, with
+  `handle` and `when`), it renders once, so libmpv applies the video teardown
+  mpv leaves pending on going idle. Without it the next stream reuses mpv's
+  d3d11-egl hwdec mapper and ANGLE's D3D 11 device is reset (see
+  `docs/windows-d3d11-device-reset.md`).
 
 Changed: `windows/video_output.{h,cc}`, `windows/video_output_manager.{h,cc}`,
 `windows/media_kit_video_plugin.{h,cc}` and

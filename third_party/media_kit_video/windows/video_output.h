@@ -87,6 +87,12 @@ class VideoOutput {
   // names the app's checkpoint, e.g. "the next stream loaded".
   void CheckDevicesAt(std::string when);
 
+  // Renders once on the worker thread, so libmpv applies the video teardown
+  // mpv left pending when it went idle: its render API frees the hwdec mapper
+  // only inside a render. Without it the next stream reuses the old mapper and
+  // ANGLE's D3D 11 device is reset. |when| names the app's checkpoint.
+  void Flush(std::string when);
+
  private:
   void NotifyRender();
 
