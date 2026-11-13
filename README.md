@@ -93,7 +93,7 @@ native/gtk     an experimental native GTK head
 lib/           the Flutter app
 ```
 
-More in [CLAUDE.md](./CLAUDE.md), [code principles](./docs/code-principles.md)
+More in [CLAUDE.md](./CLAUDE.md), [code principles](./CODE-PRINCIPLES.md)
 and [the rinf bridge](./docs/rinf-bridge.md).
 
 ## Contributing
