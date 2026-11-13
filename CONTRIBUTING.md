@@ -47,7 +47,7 @@ scripts/libmpv-android.sh fetch
 
 ## Where a change goes
 
-Read [CLAUDE.md](./CLAUDE.md) and the [code principles](./docs/code-principles.md)
+Read [CLAUDE.md](./CLAUDE.md) and the [code principles](./CODE-PRINCIPLES.md)
 first. In short:
 
 - Business logic and state go in `native/core`, tested with plain values.
