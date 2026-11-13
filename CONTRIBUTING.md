@@ -86,12 +86,22 @@ show.
 |---|---|
 | `feat` | New code, or a change in behaviour |
 | `fix` | A bug fix |
+| `refactor` | A change in structure, not behaviour |
+| `perf` | Faster or lighter, same behaviour |
 | `test` | Only tests |
 | `docs` | Only documentation |
+| `build` | Build, packaging or dependencies |
 | `ci` | Only CI (`.github/workflows`) |
-| `chore` | Everything else: build, scripts, dependencies, formatting, releases |
+| `chore` | Everything else: scripts, formatting, releases |
+| `revert` | Undoes an earlier commit |
 
-Name branches the same way: `feat/chat-search`, `fix/vod-seek`.
+The scope is the module or feature touched, lower-case; leave it out when
+the change has no single home. The subject is imperative, lower-case, with
+no trailing period, 72 characters at most. A breaking change takes a `!`
+after the scope and a `BREAKING CHANGE: <what>` footer.
+
+Name branches the same way: `feat/chat-search`, `fix/vod-seek`. Cut them
+from an up-to-date `main`, and rebase on `main` rather than merging it in.
 
 ## License
 

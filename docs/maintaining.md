@@ -21,8 +21,9 @@ back (see [Signing key](#android-signing-key)).
 - `make fmt` formats Rust and Dart.
 - Add a line under `## [Unreleased]` in `CHANGELOG.md` for anything a user
   would notice.
-- Pull requests: CI must be green; squash or rebase so each commit on `main`
-  passes the gates on its own.
+- Pull requests: CI must be green, and each commit must pass the gates on
+  its own. Rebase the branch on `main`, then land it with a merge commit
+  (GitHub's "Create a merge commit"); no squash or fast-forward merges.
 
 ## Version
 
