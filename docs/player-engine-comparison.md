@@ -1,6 +1,7 @@
-# Player engine load on Linux
+# Player engine load
 
-Measured 2026-11-14 on one machine. This is a spike, not a decision.
+Measured 2026-11-14 on two machines, a Linux laptop and an Android
+phone. This is a spike, not a decision.
 fvp is a dev dependency used only by the bench. The app still ships
 media_kit.
 
@@ -10,8 +11,9 @@ media_kit.
 - Intel Arrow Lake iGPU (i915) runs the desktop and Flutter's renderer
   (Impeller, OpenGL ES).
 - NVIDIA RTX 5070 Ti Mobile, driver 615.78, idle at about 3 W.
-- No `intel-media-driver`, so there is no VA-API on the iGPU. Neither
-  engine can decode on the Intel GPU here.
+- In the first run there was no `intel-media-driver`, so no VA-API on
+  the iGPU. Neither engine could decode on the Intel GPU. See
+  [Linux with VA-API](#linux-with-va-api).
 - Flutter 3.50. mpv from the system libmpv. fvp 0.40.0 with libmdk
   0.40.1.
 
@@ -107,9 +109,49 @@ embedder a video texture redraws without a Dart frame, so
 - **Memory**: fvp uses about 40 to 80 MB less.
 - **NVIDIA power**: fvp's CUDA decoding keeps the dGPU at about
   10.9 W. mpv's `vulkan-copy` uses about 4.3 W, and the idle draw is
-  about 3 W. On a hybrid laptop without VA-API, this is the largest
-  cost in the table. With `intel-media-driver` installed, fvp would
-  try VA-API first and leave the dGPU idle. That was not measured.
+  about 3 W. Without VA-API, this is the largest cost in the first
+  table. With `intel-media-driver` installed, both engines decode on the
+  iGPU and the dGPU stays idle. See [Linux with VA-API](#linux-with-va-api).
+
+## Linux with VA-API
+
+The first run had no `intel-media-driver`. With it installed, both
+engines decode on the Intel iGPU through VA-API. mpv's `hwdec=auto`
+picks `vaapi`, and fvp's default decoder list picks `VAAPI`. The NVIDIA
+GPU stays idle, at about 3 W, for both.
+
+Runs: 3 VOD and 1 live per engine. Each run has a 15 s warm-up and a
+60 s measured window. swayidle was paused and the monitors were on (see
+the hidden-window gotcha below). Every run handed Flutter 60 frames/s.
+A `LD_PRELOAD` shim counted calls to
+`fl_texture_registrar_mark_texture_frame_available`. mpv dropped 0
+frames.
+
+Medians of the VOD runs (3) and the live run (1).
+
+| Source | Engine      | CPU % | RSS MB | iGPU render % | iGPU video % |
+|--------|-------------|-------|--------|---------------|--------------|
+| VOD    | mpv (vaapi) | 66.9  | 435    | 44.5 ¹        | 15.4         |
+| VOD    | fvp (VAAPI) | 64.8  | 315    | 15.9          | 15.4         |
+| live   | mpv (vaapi) | 65.2  | 401    | 48.0          | 13.6         |
+| live   | fvp (VAAPI) | 62.3  | 315    | 15.2          | 13.0         |
+
+¹ Two of three mpv VOD runs read no i915 client at the window's edge.
+The live run agrees.
+
+Reading:
+
+- **Decoding** costs the same on both engines: about 13 to 15 % of the
+  video engine.
+- **Composition** still differs. mpv's render engine time is about 44
+  to 48 %, against about 16 % for fvp.
+- **CPU** is within 2 to 3 points now. Most of fvp's earlier CPU lead
+  came from mpv's `vulkan-copy`, which copies frames back to system
+  memory.
+- **Memory**: fvp uses about 120 MB less on VOD and about 90 MB less on
+  live.
+- Forced `vulkan-copy` and `CUDA` reruns reproduced the first table.
+  fvp with CUDA still drew about 11 W on NVIDIA.
 
 ## Gotchas found
 
@@ -137,22 +179,111 @@ embedder a video texture redraws without a Dart frame, so
   the plugin registrants. Do not commit those. Flutter drops
   dev-dependency plugins only from release builds. So debug and profile
   builds of the app on every platform build fvp too.
+- **A hidden window stops mpv's frames.** media_kit renders a frame only
+  when Flutter draws. With the window off screen, mpv handed Flutter
+  about 6 frames/s and dropped the rest, with any hwdec. fvp kept
+  decoding and handed over 60 frames/s. So a hidden window costs almost
+  nothing with mpv, and full decoding with fvp. Power is not measured.
+  swayidle powered the monitors off after 600 s, and niri then throttled
+  frame callbacks. Measure with the screen on. The Linux reruns paused
+  swayidle (`kill -STOP`) and ran `niri msg action power-on-monitors`.
+  The first Linux matrix ran without that wake lock. mpv's two outlier
+  runs (2100 and 3037 drops) fit a monitor power-off. The other runs
+  dropped few frames.
+
+## Android
+
+Measured on a OnePlus 6: Snapdragon 845, Adreno 630, 8 GB, Android 14,
+1080×2280 at 60 Hz. Three engines:
+
+- `mpv`: media_kit with the patched libmpv.
+- `fvp`: fvp, with libmdk on `AMediaCodec`.
+- `exo`: the official `video_player` on ExoPlayer. This is the same
+  `FvpEngine` without `fvp.registerWith`.
+
+All three decode with the hardware decoder `OMX.qcom.video.decoder.avc`.
+mpv picks `hwdec=mediacodec-copy` and `vo=gpu`.
+
+Method:
+
+- Run `scripts/player-load-android.sh <engine> <url>` over adb. The
+  bench is a profile build with the application id
+  `io.github.lumpsoid.jitter.bench`. Profile builds get their own id, so
+  they install next to a release build.
+- Config reaches the app over `adb reverse tcp:8765`. Markers come back
+  through logcat.
+- The phone must stay unlocked. Runs behind the lock screen do not
+  count. The first attempt ran behind it.
+- Streams: the same Twitch VOD at 1080p60. Live: channel `caedrel` at
+  1080p60 (H.264 High, 60 fps).
+- Battery current and the Adreno GPU counters need root, so they are not
+  measured.
+
+Columns:
+
+- App CPU: the app process's utime + stime, as % of one core.
+- System CPU: all 8 cores busy, %, from `/proc/stat`. Hardware decoding
+  runs in the media codec service, outside the app.
+- PSS: from `dumpsys meminfo`, in MB.
+- Frames shown/s: SurfaceFlinger timestats `averageFPS` of the app's
+  layer. It counts updates of that layer, not decoded video frames, so
+  it can read slightly above 60.
+
+VOD rows are medians of 3 runs. Live `fvp` and `exo` are 1 run each.
+Live `mpv` is 3 runs: the median, with the range in brackets.
+
+| Source | Engine | App CPU % | System CPU % | PSS MB | Frames shown/s    | mpv drops/min        |
+|--------|--------|-----------|--------------|--------|-------------------|----------------------|
+| VOD    | mpv    | 155.4     | 53.1         | 271    | 54.7              | 431                  |
+| VOD    | fvp    | 88.3      | 33.4         | 223    | 52.2              | –                    |
+| VOD    | exo    | 95.2      | 32.8         | 216    | 61.4              | –                    |
+| live   | mpv    | 56.8      | 37.8         | 247    | 10.2 (8.2-14.2)   | 2970 (2740-3069)     |
+| live   | fvp    | 91.9      | 33.6         | 221    | 50.5              | –                    |
+| live   | exo    | 95.5      | 33.4         | 181    | 61.5              | –                    |
+
+Raw VOD per run:
+
+- mpv app CPU 157.8, 155.0, 155.4; frames 54.9, 52.1, 54.7; drops 419,
+  580, 431.
+- fvp app CPU 88.0, 88.5, 88.3; frames 52.1, 52.2, 52.2.
+- exo app CPU 95.4, 95.2, 95.2; frames 61.4, 61.4, 61.5.
+
+Reading:
+
+- **mpv is the heaviest on the whole system.** On VOD it uses about 53 %
+  of all cores, against about 33 % for fvp and exo. It also uses about
+  50 MB more memory. `mediacodec-copy` copies every decoded frame back
+  to memory, and mpv's GPU output renders it again.
+- **mpv falls apart on the live stream.** It showed 8 to 14 frames/s and
+  dropped about 50 frames/s, in 3 of 3 runs. fvp and ExoPlayer were
+  smooth on the same channel. mpv's CPU drops because it throws frames
+  away. Why live and not VOD was not traced. Both streams are H.264 High
+  1080p60.
+- **ExoPlayer is the only engine that reached 60 frames/s on both VOD
+  and live.** fvp showed about 50 to 52 frames/s on both.
+- **fvp and ExoPlayer cost about the same**: app CPU 88 to 96 %, system
+  about 33 %, PSS 181 to 223 MB.
 
 ## Recommendation
 
 - fvp is worth a Windows spike. On Linux it composed into Flutter's
-  texture at about a third of mpv's GPU cost, with less CPU and
-  memory. The Windows trouble with ANGLE and D3D 11 interop sits in
-  that composition layer, which fvp replaces with its own D3D 11 path.
-  Run this bench on Windows before deciding. The Linux numbers do not
-  transfer.
-- For Android, prefer the official `video_player` (ExoPlayer, maintained
-  by Google) over fvp. fvp would add libmdk where the platform player
-  already exists. Both sit behind the same video_player API, so
-  `PlayerEngine` can grow toward that API either way.
+  texture at about a third of mpv's GPU cost, with less CPU (without
+  VA-API) and memory. The Windows trouble with ANGLE and D3D 11 interop
+  sits in that composition layer, which fvp replaces with its own D3D 11
+  path. Run this bench on Windows before deciding. The Linux numbers do
+  not transfer. Check what fvp does with a hidden window.
+- Android: the data now backs ExoPlayer through the official
+  `video_player`. It has the lowest memory, reached 60 frames/s on VOD
+  and live, adds no closed-source library, and is maintained by Google.
+  mpv is the worst of the three on this phone, especially on live. fvp
+  is no better than ExoPlayer here. Both sit behind the same video_player
+  API, so `PlayerEngine` can grow toward that API either way.
+- Linux: with VA-API, fvp's gain is the composition cost and memory, not
+  CPU. mpv works here. No reason to switch Linux alone.
 - Before any migration, `PlayerEngine` must cover what the player page
   uses today: positions, buffering, play/pause, volume, seek-by and
   frame step. The page also needs its own controls instead of
   media_kit's.
-- Not measured: VA-API decoding on Intel (needs `intel-media-driver`),
-  X11, battery drain over time, and latency to the live edge.
+- Not measured: X11, battery drain over time, latency to the live edge,
+  and on Android the battery current and Adreno GPU counters (both need
+  root).
