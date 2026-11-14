@@ -125,22 +125,23 @@ until grep -q '^BENCH_START' "$log"; do
 done
 read -r ticks0 wall0 render0 video0 <<<"$(snapshot)" || true
 
-# Poll every 0.2 s and sample every fifth poll, which is once a second. The
-# bench exits right after BENCH_END, so the end readings are the newest
-# snapshot taken while it was still alive, not one taken after the poll
-# sees the line.
+# Poll every 0.2 s and sample every fifth poll, which is once a second.
+# The bench prints BENCH_END and then stops its engine, which closes its GPU
+# clients. The end reading is the last snapshot taken before a poll that
+# still did not see the line: BENCH_END was printed after that snapshot.
 samples=""
 end=""
 polls=0
+now="$(snapshot)"
 until grep -q '^BENCH_END' "$log"; do
   kill -0 "$pid" 2>/dev/null || die "bench exited before BENCH_END"
+  if [[ "${now%% *}" != "?" ]]; then end="$now"; fi
   if (( polls % 5 == 0 )); then
     samples+="$(sample)"$'\n'
   fi
-  now="$(snapshot)"
-  if [[ "${now%% *}" != "?" ]]; then end="$now"; fi
   polls=$((polls + 1))
   sleep 0.2
+  now="$(snapshot)"
 done
 read -r ticks1 wall1 render1 video1 <<<"$end" || true
 hz="$(getconf CLK_TCK)"
