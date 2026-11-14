@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:fvp/fvp.dart' as fvp;
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/player_engine.dart';
@@ -17,11 +16,14 @@ import 'fvp_engine.dart';
 
 /// Plays `JITTER_BENCH_URL` full-window with the engine named by
 /// `JITTER_BENCH_ENGINE` (`mpv` or `fvp`), as a bare picture with no
-/// controls, then reports the frames drawn over the measured window.
+/// controls, then reports what the engine did over the measured window.
 ///
 /// Both engines run in this one build, so the system load is comparable.
 /// Output: `BENCH_START engine=<name>` when measuring begins, then one
 /// `BENCH_END ...` line when it ends. Failures are `BENCH_ERROR` on stderr.
+///
+/// Flutter frame timings are not counted: the Linux embedder redraws video
+/// textures without a Dart frame, so they never show up as `FrameTiming`s.
 Future<void> main() async {
   final env = Platform.environment;
   final url = env['JITTER_BENCH_URL'];
@@ -35,9 +37,7 @@ Future<void> main() async {
 
   WidgetsFlutterBinding.ensureInitialized();
   await initializeRust(assignRustSignal);
-  final frames = _Frames();
-  SchedulerBinding.instance.addTimingsCallback(frames.onTimings);
-  final subject = _subject(name);
+  final subject = _subject(name, _decoders(env));
   runApp(
     MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -50,7 +50,6 @@ Future<void> main() async {
   unawaited(
     _measure(
       subject,
-      frames,
       url: url,
       warmup: Duration(seconds: warmup),
       window: Duration(seconds: seconds),
@@ -72,9 +71,21 @@ int _seconds(Map<String, String> env, String name, int fallback) {
   return int.tryParse(raw) ?? _fail(2, 'bad $name $raw');
 }
 
-/// The engine [name] runs as. fvp registers itself for Linux and forwards
-/// what libmdk logs; mpv needs media_kit's setup first.
-_Subject _subject(String name) {
+/// The decoder names in `JITTER_BENCH_FVP_DECODERS` (comma-separated), or
+/// `null` when it is unset or empty, which keeps fvp's own list.
+List<String>? _decoders(Map<String, String> env) {
+  final names = (env['JITTER_BENCH_FVP_DECODERS'] ?? '')
+      .split(',')
+      .map((name) => name.trim())
+      .where((name) => name.isNotEmpty)
+      .toList();
+  return names.isEmpty ? null : names;
+}
+
+/// The engine [name] runs as. fvp registers itself for Linux with
+/// [decoders] in place of its own list when given, and forwards what libmdk
+/// logs; mpv needs media_kit's setup first.
+_Subject _subject(String name, List<String>? decoders) {
   if (name == 'fvp') {
     Logger.root.level = Level.INFO;
     Logger.root.onRecord.listen(
@@ -82,22 +93,21 @@ _Subject _subject(String name) {
         'MDK ${record.level.name} ${record.loggerName}: ${record.message}',
       ),
     );
-    fvp.registerWith(
-      options: {
-        'platforms': ['linux'],
-      },
-    );
+    final options = <String, Object>{
+      'platforms': ['linux'],
+    };
+    if (decoders != null) options['video.decoders'] = decoders;
+    fvp.registerWith(options: options);
     return _FvpSubject(FvpEngine());
   }
   MediaKit.ensureInitialized();
   return _MpvSubject(MediaKitEngine());
 }
 
-/// Opens [url] at zero and lets it warm up, then times the [window] while
-/// counting frames, and ends the run.
+/// Opens [url] at zero and lets it warm up, then times the [window] and
+/// ends the run.
 Future<void> _measure(
-  _Subject subject,
-  _Frames frames, {
+  _Subject subject, {
   required String url,
   required Duration warmup,
   required Duration window,
@@ -106,20 +116,15 @@ Future<void> _measure(
     await subject.engine.open(url, start: Duration.zero);
     await Future<void>.delayed(warmup);
     await subject.startWindow();
-    frames.measuring = true;
     final clock = Stopwatch()..start();
     stdout.writeln('BENCH_START engine=${subject.name}');
     await Future<void>.delayed(window);
-    frames.measuring = false;
     clock.stop();
     final fields = await subject.endWindow();
     final seconds = clock.elapsedMilliseconds / 1000;
-    final fps = frames.count / seconds;
     stdout.writeln(
       'BENCH_END engine=${subject.name}'
       ' seconds=${seconds.toStringAsFixed(1)}'
-      ' frames=${frames.count}'
-      ' fps=${fps.toStringAsFixed(1)}'
       ' position_s=${subject.engine.position.inSeconds}$fields',
     );
     await subject.engine.stop();
@@ -127,16 +132,6 @@ Future<void> _measure(
   } on Object catch (error) {
     stderr.writeln('BENCH_ERROR $error');
     exit(1);
-  }
-}
-
-/// Counts the raster frames Flutter draws while [measuring].
-class _Frames {
-  bool measuring = false;
-  int count = 0;
-
-  void onTimings(List<FrameTiming> timings) {
-    if (measuring) count += timings.length;
   }
 }
 
@@ -193,8 +188,10 @@ class _MpvSubject implements _Subject {
       await _int('decoder-frame-drop-count'),
       _decoderDrops,
     );
+    final vfFps = double.tryParse(await _property('estimated-vf-fps') ?? '');
     return ' hwdec=$hwdec vo=$vo vo_drops=$voDrops'
-        ' decoder_drops=$decoderDrops';
+        ' decoder_drops=$decoderDrops'
+        ' vf_fps=${vfFps?.toStringAsFixed(1) ?? '?'}';
   }
 
   /// [end] less [start], or `?` when either was unreadable.
