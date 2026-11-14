@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fvp/fvp.dart' as fvp;
 import 'package:jitter/player/media_kit_engine.dart';
@@ -15,12 +17,19 @@ import 'package:video_player/video_player.dart';
 import 'fvp_engine.dart';
 
 /// Plays `JITTER_BENCH_URL` full-window with the engine named by
-/// `JITTER_BENCH_ENGINE` (`mpv` or `fvp`), as a bare picture with no
-/// controls, then reports what the engine did over the measured window.
+/// `JITTER_BENCH_ENGINE` (`mpv`, `fvp`, or `exo` on Android), as a bare
+/// picture with no controls, then reports what the engine did over the
+/// measured window.
 ///
 /// Both engines run in this one build, so the system load is comparable.
-/// Output: `BENCH_START engine=<name>` when measuring begins, then one
-/// `BENCH_END ...` line when it ends. Failures are `BENCH_ERROR` on stderr.
+/// `exo` is video_player's own ExoPlayer, which runs when fvp is not
+/// registered. Output: `BENCH_START engine=<name>` when measuring begins,
+/// then one `BENCH_END ...` line when it ends. Failures are `BENCH_ERROR`
+/// (on stderr, except on Android).
+///
+/// Android apps get no environment from the host, so there the settings
+/// come from a socket on 127.0.0.1:8765 as `KEY=VALUE` lines, and output
+/// goes to logcat, where stdout is not visible.
 ///
 /// `JITTER_BENCH_MPV_HWDEC`, when set, is the mpv `hwdec` the mpv engine
 /// decodes with. It is set before the URL opens and echoed as
@@ -29,12 +38,15 @@ import 'fvp_engine.dart';
 /// Flutter frame timings are not counted: the Linux embedder redraws video
 /// textures without a Dart frame, so they never show up as `FrameTiming`s.
 Future<void> main() async {
-  final env = Platform.environment;
+  final env = await _config();
   final url = env['JITTER_BENCH_URL'];
   if (url == null || url.isEmpty) _fail(2, 'no JITTER_BENCH_URL');
   final name = env['JITTER_BENCH_ENGINE'] ?? 'mpv';
-  if (name != 'mpv' && name != 'fvp') {
+  if (name != 'mpv' && name != 'fvp' && name != 'exo') {
     _fail(2, 'unknown JITTER_BENCH_ENGINE $name');
+  }
+  if (name == 'exo' && !Platform.isAndroid) {
+    _fail(2, 'JITTER_BENCH_ENGINE exo runs only on Android');
   }
   final warmup = _seconds(env, 'JITTER_BENCH_WARMUP', 15);
   final seconds = _seconds(env, 'JITTER_BENCH_SECONDS', 60);
@@ -61,9 +73,55 @@ Future<void> main() async {
   );
 }
 
-/// Reports a usage error on stderr and exits with [code].
+/// The port the sampler serves the Android settings on, reached through
+/// `adb reverse tcp:8765 tcp:8765`.
+const _configPort = 8765;
+
+/// The bench's settings. Desktop reads the environment. Android gets none
+/// from the host, so it reads `KEY=VALUE` lines from [_configPort], which
+/// the sampler closes after writing them.
+Future<Map<String, String>> _config() async {
+  if (!Platform.isAndroid) return Platform.environment;
+  try {
+    final socket = await Socket.connect(
+      '127.0.0.1',
+      _configPort,
+      timeout: const Duration(seconds: 10),
+    );
+    return _parseConfig(await utf8.decodeStream(socket));
+  } on Object catch (error) {
+    _fail(2, 'no config on 127.0.0.1:$_configPort: $error');
+  }
+}
+
+/// The `KEY=VALUE` lines in [text] as a map, each split at its first `=`.
+/// Lines without an `=`, such as blank ones, are skipped.
+Map<String, String> _parseConfig(String text) {
+  final config = <String, String>{};
+  for (final line in const LineSplitter().convert(text)) {
+    final at = line.indexOf('=');
+    if (at < 0) continue;
+    config[line.substring(0, at).trim()] = line.substring(at + 1).trim();
+  }
+  return config;
+}
+
+/// Writes one bench line where this platform shows it: logcat on Android,
+/// and stdout or stderr on desktop. `debugPrintSynchronously` is `print`
+/// without the throttling of `debugPrint`, which would delay the markers.
+void _emit(String line, {bool error = false}) {
+  if (Platform.isAndroid) {
+    debugPrintSynchronously(line);
+  } else if (error) {
+    stderr.writeln(line);
+  } else {
+    stdout.writeln(line);
+  }
+}
+
+/// Reports a usage error as `BENCH_ERROR` and exits with [code].
 Never _fail(int code, String message) {
-  stderr.writeln('BENCH_ERROR $message');
+  _emit('BENCH_ERROR $message', error: true);
   exit(code);
 }
 
@@ -93,24 +151,28 @@ String? _mpvHwdec(Map<String, String> env) {
   return value == null || value.isEmpty ? null : value;
 }
 
-/// The engine [name] runs as. fvp registers itself for Linux with
+/// The engine [name] runs as. fvp registers itself for Linux and Android with
 /// [decoders] in place of its own list when given, and forwards what libmdk
-/// logs; mpv needs media_kit's setup first, and decodes with [hwdec] when
-/// given.
+/// logs. exo is the same [FvpEngine] left unregistered, so video_player
+/// plays it with ExoPlayer. mpv needs media_kit's setup first, and decodes
+/// with [hwdec] when given.
 _Subject _subject(String name, List<String>? decoders, String? hwdec) {
+  if (name == 'exo') {
+    return _VideoPlayerSubject(FvpEngine(), 'exo', ' hwdec=see-logcat');
+  }
   if (name == 'fvp') {
     Logger.root.level = Level.INFO;
     Logger.root.onRecord.listen(
-      (record) => stdout.writeln(
+      (record) => _emit(
         'MDK ${record.level.name} ${record.loggerName}: ${record.message}',
       ),
     );
     final options = <String, Object>{
-      'platforms': ['linux'],
+      'platforms': ['linux', 'android'],
     };
     if (decoders != null) options['video.decoders'] = decoders;
     fvp.registerWith(options: options);
-    return _FvpSubject(FvpEngine());
+    return _VideoPlayerSubject(FvpEngine(), 'fvp', ' hwdec=see-MDK-log');
   }
   MediaKit.ensureInitialized();
   return _MpvSubject(MediaKitEngine(), hwdec);
@@ -130,12 +192,12 @@ Future<void> _measure(
     await Future<void>.delayed(warmup);
     await subject.startWindow();
     final clock = Stopwatch()..start();
-    stdout.writeln('BENCH_START engine=${subject.name}');
+    _emit('BENCH_START engine=${subject.name}');
     await Future<void>.delayed(window);
     clock.stop();
     final fields = await subject.endWindow();
     final seconds = clock.elapsedMilliseconds / 1000;
-    stdout.writeln(
+    _emit(
       'BENCH_END engine=${subject.name}'
       ' seconds=${seconds.toStringAsFixed(1)}'
       ' position_s=${subject.engine.position.inSeconds}$fields',
@@ -143,7 +205,7 @@ Future<void> _measure(
     await subject.engine.stop();
     exit(0);
   } on Object catch (error) {
-    stderr.writeln('BENCH_ERROR $error');
+    _emit('BENCH_ERROR $error', error: true);
     exit(1);
   }
 }
@@ -203,7 +265,7 @@ class _MpvSubject implements _Subject {
       throw StateError('the mpv player has no libmpv handle');
     }
     await platform.setProperty('hwdec', hwdec);
-    stdout.writeln('BENCH_MPV_HWDEC $hwdec');
+    _emit('BENCH_MPV_HWDEC $hwdec');
   }
 
   @override
@@ -243,15 +305,18 @@ class _MpvSubject implements _Subject {
   }
 }
 
-/// The fvp engine, with its picture. The mpv counters do not apply, so its
-/// end line points at the MDK log for the decoder.
-class _FvpSubject implements _Subject {
-  new(this._engine);
+/// A video_player engine (fvp's or ExoPlayer's), with its picture. The mpv
+/// counters do not apply, so its end line is [_end] alone, which says where
+/// the decoder is reported.
+class _VideoPlayerSubject implements _Subject {
+  new(this._engine, this._name, this._end);
 
   final FvpEngine _engine;
+  final String _name;
+  final String _end;
 
   @override
-  String get name => 'fvp';
+  String get name => _name;
 
   @override
   PlayerEngine get engine => _engine;
@@ -274,5 +339,5 @@ class _FvpSubject implements _Subject {
   Future<void> startWindow() async {}
 
   @override
-  Future<String> endWindow() async => ' hwdec=see-MDK-log';
+  Future<String> endWindow() async => _end;
 }
