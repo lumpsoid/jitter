@@ -72,6 +72,13 @@ without a GitHub account; the run's summary links it. The zip is named
 `jitter-X.Y.Z-test.<short commit>-windows-x64.zip`. Without it, the zip is
 only the run's artifact, which needs a GitHub login.
 
+Tick "bench" to build the player bench (`bench/bench_app.dart`, the dev-only
+GUI player) instead of the app. It is a profile build, not a release, because
+Flutter leaves dev-dependency plugins such as fvp out of release builds. Its
+zip is `jitter-bench-X.Y.Z-test.<short commit>-windows-x64.zip`, published as
+the prerelease `test-windows-bench-<short commit>`, so it never replaces the
+app's test build of the same commit. Delete it the same way, under its tag.
+
 ```sh
 gh workflow run windows.yml --ref <branch>       # the same, from a shell
 gh release delete test-windows-<commit> --cleanup-tag --yes   # once done

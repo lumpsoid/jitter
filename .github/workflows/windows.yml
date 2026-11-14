@@ -17,6 +17,10 @@ on:
         description: Publish the zip as a test prerelease anyone can download
         type: boolean
         default: true
+      bench:
+        description: Build the player bench (bench/bench_app.dart) instead of the app
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -36,19 +40,50 @@ jobs:
         shell: bash
     outputs:
       zip: ${{ steps.name.outputs.zip }}
+      tag: ${{ steps.name.outputs.tag }}
+      bench: ${{ steps.name.outputs.bench }}
     steps:
       - uses: actions/checkout@v4
       # A test build is named after its commit, so it can't pass for a release.
+      # The bench is a profile build: Flutter drops dev-dependency plugins
+      # (fvp) from release builds. inputs.bench is unset on a release.
       - name: Name the zip
         id: name
         env:
           VERSION: ${{ inputs.version }}
+          BENCH: ${{ inputs.bench }}
         run: |
+          sha=${GITHUB_SHA::7}
           if [[ -z $VERSION ]]; then
             full=$(scripts/version.sh show)
-            VERSION="${full%+*}-test.${GITHUB_SHA::7}"
+            VERSION="${full%+*}-test.$sha"
           fi
-          echo "zip=jitter-$VERSION-windows-x64.zip" >> "$GITHUB_OUTPUT"
+          if [[ $BENCH == true ]]; then
+            prefix=jitter-bench
+            is_bench=true
+            mode=profile
+            target=bench/bench_app.dart
+            dir=Profile
+            define=--dart-define=JITTER_BENCH_BUILD=$sha
+            tag=test-windows-bench-$sha
+          else
+            prefix=jitter
+            is_bench=false
+            mode=release
+            target=lib/main.dart
+            dir=Release
+            define=
+            tag=test-windows-$sha
+          fi
+          {
+            echo "zip=$prefix-$VERSION-windows-x64.zip"
+            echo "bench=$is_bench"
+            echo "tag=$tag"
+            echo "mode=$mode"
+            echo "target=$target"
+            echo "dir=$dir"
+            echo "define=$define"
+          } >> "$GITHUB_OUTPUT"
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -60,12 +95,19 @@ jobs:
           channel: stable
           cache: true
       - run: rinf gen
-      - run: flutter build windows --release
+      - name: Build the bundle
+        env:
+          MODE: ${{ steps.name.outputs.mode }}
+          TARGET: ${{ steps.name.outputs.target }}
+          DEFINE: ${{ steps.name.outputs.define }}
+        run: flutter build windows --$MODE -t $TARGET $DEFINE
       - name: Zip the bundle
         shell: pwsh
+        env:
+          DIR: ${{ steps.name.outputs.dir }}
         run: |
           New-Item -ItemType Directory -Force out | Out-Null
-          Compress-Archive -Path build/windows/x64/runner/Release/* `
+          Compress-Archive -Path "build/windows/x64/runner/$env:DIR/*" `
             -DestinationPath "out/${{ steps.name.outputs.zip }}"
       - uses: actions/upload-artifact@v4
         with:
@@ -83,6 +125,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       ZIP: ${{ needs.build.outputs.zip }}
+      TAG: ${{ needs.build.outputs.tag }}
+      BENCH: ${{ needs.build.outputs.bench }}
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -90,14 +134,20 @@ jobs:
           path: out
       # One prerelease per commit; a re-run replaces its zip.
       - run: |
-          tag="test-windows-${GITHUB_SHA::7}"
+          tag=$TAG
+          if [[ $BENCH == true ]]; then
+            title="Windows player bench ${GITHUB_SHA::7} ($GITHUB_REF_NAME)"
+            notes="Not a release: the player bench at $GITHUB_REF_NAME $GITHUB_SHA. Unzip anywhere, run jitter.exe, follow the on-screen steps, then copy the log back. Not code-signed, so SmartScreen may warn the first time."
+          else
+            title="Windows test build ${GITHUB_SHA::7} ($GITHUB_REF_NAME)"
+            notes="Not a release: a test build of $GITHUB_REF_NAME at $GITHUB_SHA, to check a fix before it ships. Unzip anywhere and run jitter.exe. It is not code-signed, so SmartScreen may warn the first time."
+          fi
           if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$tag" -R "$GITHUB_REPOSITORY" --clobber "out/$ZIP"
           else
             gh release create "$tag" -R "$GITHUB_REPOSITORY" \
               --target "$GITHUB_SHA" --prerelease --latest=false \
-              --title "Windows test build ${GITHUB_SHA::7} ($GITHUB_REF_NAME)" \
-              --notes "Not a release: a test build of $GITHUB_REF_NAME at $GITHUB_SHA, to check a fix before it ships. Unzip anywhere and run jitter.exe. It is not code-signed, so SmartScreen may warn the first time." \
+              --title "$title" --notes "$notes" \
               "out/$ZIP"
           fi
           url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$tag"
