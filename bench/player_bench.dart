@@ -22,6 +22,10 @@ import 'fvp_engine.dart';
 /// Output: `BENCH_START engine=<name>` when measuring begins, then one
 /// `BENCH_END ...` line when it ends. Failures are `BENCH_ERROR` on stderr.
 ///
+/// `JITTER_BENCH_MPV_HWDEC`, when set, is the mpv `hwdec` the mpv engine
+/// decodes with. It is set before the URL opens and echoed as
+/// `BENCH_MPV_HWDEC <value>`.
+///
 /// Flutter frame timings are not counted: the Linux embedder redraws video
 /// textures without a Dart frame, so they never show up as `FrameTiming`s.
 Future<void> main() async {
@@ -37,7 +41,7 @@ Future<void> main() async {
 
   WidgetsFlutterBinding.ensureInitialized();
   await initializeRust(assignRustSignal);
-  final subject = _subject(name, _decoders(env));
+  final subject = _subject(name, _decoders(env), _mpvHwdec(env));
   runApp(
     MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -82,10 +86,18 @@ List<String>? _decoders(Map<String, String> env) {
   return names.isEmpty ? null : names;
 }
 
+/// The mpv `hwdec` in `JITTER_BENCH_MPV_HWDEC`, or `null` when it is unset
+/// or empty, which keeps the player's own choice.
+String? _mpvHwdec(Map<String, String> env) {
+  final value = env['JITTER_BENCH_MPV_HWDEC'];
+  return value == null || value.isEmpty ? null : value;
+}
+
 /// The engine [name] runs as. fvp registers itself for Linux with
 /// [decoders] in place of its own list when given, and forwards what libmdk
-/// logs; mpv needs media_kit's setup first.
-_Subject _subject(String name, List<String>? decoders) {
+/// logs; mpv needs media_kit's setup first, and decodes with [hwdec] when
+/// given.
+_Subject _subject(String name, List<String>? decoders, String? hwdec) {
   if (name == 'fvp') {
     Logger.root.level = Level.INFO;
     Logger.root.onRecord.listen(
@@ -101,7 +113,7 @@ _Subject _subject(String name, List<String>? decoders) {
     return _FvpSubject(FvpEngine());
   }
   MediaKit.ensureInitialized();
-  return _MpvSubject(MediaKitEngine());
+  return _MpvSubject(MediaKitEngine(), hwdec);
 }
 
 /// Opens [url] at zero and lets it warm up, then times the [window] and
@@ -113,6 +125,7 @@ Future<void> _measure(
   required Duration window,
 }) async {
   try {
+    await subject.prepare();
     await subject.engine.open(url, start: Duration.zero);
     await Future<void>.delayed(warmup);
     await subject.startWindow();
@@ -143,6 +156,9 @@ abstract interface class _Subject {
 
   Widget get picture;
 
+  /// Readies the engine before the URL opens.
+  Future<void> prepare();
+
   /// Reads the counters at the start of the measured window.
   Future<void> startWindow();
 
@@ -154,9 +170,10 @@ abstract interface class _Subject {
 /// The mpv engine, with its picture and the mpv counters the end line
 /// reports.
 class _MpvSubject implements _Subject {
-  new(this._engine);
+  new(this._engine, this._hwdec);
 
   final MediaKitEngine _engine;
+  final String? _hwdec;
   int? _frameDrops;
   int? _decoderDrops;
 
@@ -172,6 +189,22 @@ class _MpvSubject implements _Subject {
     // NoVideoControls is null; the analyzer types the constant as dynamic.
     controls: null,
   );
+
+  /// Sets mpv's `hwdec` when one is given. The video controller sets its own
+  /// `hwdec` as it is created, so this waits for that first and then is the
+  /// last word before the URL opens.
+  @override
+  Future<void> prepare() async {
+    final hwdec = _hwdec;
+    if (hwdec == null) return;
+    await _engine.controller.platform.future;
+    final platform = _engine.controller.player.platform;
+    if (platform is! NativePlayer) {
+      throw StateError('the mpv player has no libmpv handle');
+    }
+    await platform.setProperty('hwdec', hwdec);
+    stdout.writeln('BENCH_MPV_HWDEC $hwdec');
+  }
 
   @override
   Future<void> startWindow() async {
@@ -233,6 +266,9 @@ class _FvpSubject implements _Subject {
             child: VideoPlayer(controller),
           ),
   );
+
+  @override
+  Future<void> prepare() async {}
 
   @override
   Future<void> startWindow() async {}
