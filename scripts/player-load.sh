@@ -5,8 +5,8 @@
 #
 # Build the bench first:
 #   flutter build linux --profile -t bench/player_bench.dart
-# The environment passes through: JITTER_HWDEC, JITTER_BENCH_FVP_DECODERS,
-# JITTER_BENCH_WARMUP and JITTER_BENCH_SECONDS.
+# The environment passes through: JITTER_BENCH_MPV_HWDEC,
+# JITTER_BENCH_FVP_DECODERS, JITTER_BENCH_WARMUP and JITTER_BENCH_SECONDS.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
