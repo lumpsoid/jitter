@@ -60,10 +60,36 @@ rss_kb() {
   awk '/^VmRSS:/ { print $2 }' "/proc/$pid/status" 2>/dev/null || true
 }
 
-# A GT's cumulative RC6 (idle) residency in ms, or ? when unreadable. The
-# Intel iGPU is card1; gt0 is render and gt1 is media.
-rc6_ms() {
-  cat "/sys/class/drm/card1/gt/$1/rc6_residency_ms" 2>/dev/null || echo "?"
+# The bench's engine time in ns, summed over its unique i915 DRM clients, as
+# "render video", or "? ?" when it has no i915 client. Fds that share a
+# drm-client-id show the same counters, so each id counts once. Non-DRM and
+# unreadable fds are skipped. awk resets its per-fd fields at each file's
+# first line, so one awk call covers every fd.
+i915_ns() {
+  local out
+  out="$(awk '
+    function add() {
+      if (drv == "i915" && id != "" && !(id in seen)) {
+        seen[id] = 1
+        found = 1
+        render += er
+        video += ev
+      }
+    }
+    FNR == 1 {
+      if (NR > 1) add()
+      drv = ""; id = ""; er = 0; ev = 0
+    }
+    $1 == "drm-driver:" { drv = $2 }
+    $1 == "drm-client-id:" { id = $2 }
+    $1 == "drm-engine-render:" { er = $2 }
+    $1 == "drm-engine-video:" { ev = $2 }
+    END {
+      add()
+      if (found) { print render, video } else { print "? ?" }
+    }
+  ' /proc/"$pid"/fdinfo/* 2>/dev/null || true)"
+  echo "${out:-? ?}"
 }
 
 # One sample: VmRSS kB, then nvidia-smi's GPU %, decoder % and power W.
@@ -79,9 +105,10 @@ sample() {
   echo "${rss:-?} ${gpu:-?} ${dec:-?} ${power:-?}"
 }
 
-# The bench's cpu ticks, the wall clock in ms, and both GTs' rc6 ms.
+# The bench's cpu ticks, the wall clock in ms, and its i915 render and video
+# engine ns.
 snapshot() {
-  echo "$(cpu_ticks) $(date +%s%3N) $(rc6_ms gt0) $(rc6_ms gt1)"
+  echo "$(cpu_ticks) $(date +%s%3N) $(i915_ns)"
 }
 
 JITTER_BENCH_ENGINE="$engine" JITTER_BENCH_URL="$url" \
@@ -96,7 +123,7 @@ until grep -q '^BENCH_START' "$log"; do
   polls=$((polls + 1))
   sleep 0.2
 done
-read -r ticks0 wall0 render0 media0 <<<"$(snapshot)" || true
+read -r ticks0 wall0 render0 video0 <<<"$(snapshot)" || true
 
 # Poll every 0.2 s and sample every fifth poll, which is once a second. The
 # bench exits right after BENCH_END, so the end readings are the newest
@@ -115,7 +142,7 @@ until grep -q '^BENCH_END' "$log"; do
   polls=$((polls + 1))
   sleep 0.2
 done
-read -r ticks1 wall1 render1 media1 <<<"$end" || true
+read -r ticks1 wall1 render1 video1 <<<"$end" || true
 hz="$(getconf CLK_TCK)"
 
 printf '%s' "$samples" | awk \
@@ -123,17 +150,18 @@ printf '%s' "$samples" | awk \
   -v ticks0="$ticks0" -v ticks1="$ticks1" \
   -v wall0="$wall0" -v wall1="$wall1" \
   -v render0="$render0" -v render1="$render1" \
-  -v media0="$media0" -v media1="$media1" '
+  -v video0="$video0" -v video1="$video1" '
 function num(s) {
   return s ~ /^[0-9]+(\.[0-9]+)?$/
 }
 function avg(sum, n) {
   return n > 0 ? sprintf("%.1f", sum / n) : "?"
 }
-# Percent busy over the window, from a cumulative RC6 (idle) ms counter.
+# Percent of the window that a cumulative engine counter in ns advanced
+# (dw is in ms, so dw * 1000000 is ns).
 function busy(before, after) {
   return num(before) && num(after) && dw > 0 \
-    ? sprintf("%.1f", 100 - 100 * (after - before) / dw) : "?"
+    ? sprintf("%.1f", 100 * (after - before) / (dw * 1000000)) : "?"
 }
 {
   if (num($1)) {
@@ -154,8 +182,8 @@ END {
   }
   printf "LOAD engine=%s cpu_pct=%s rss_avg_mb=%s rss_max_mb=%s ", \
     engine, cpu, avg(rss, rn), (rn > 0 ? sprintf("%.1f", rmax) : "?")
-  printf "igpu_render_pct=%s igpu_media_pct=%s ", \
-    busy(render0, render1), busy(media0, media1)
+  printf "igpu_render_pct=%s igpu_video_pct=%s ", \
+    busy(render0, render1), busy(video0, video1)
   printf "nv_gpu_pct=%s nv_dec_pct=%s nv_power_w=%s\n", \
     avg(gpu, gn), avg(dec, dn), avg(pw, pn)
 }'
