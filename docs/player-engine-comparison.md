@@ -1,13 +1,16 @@
 # Player engine load
 
 Measured 2026-11-14 on two machines, a Linux laptop and an Android
-phone. This is a spike, not a decision.
+phone. The measurements began as a spike. The Recommendation now
+records the decisions taken so far.
 fvp is a dev dependency used only by the bench. The app still ships
 media_kit.
 
 ## Machine
 
-- Arch Linux, kernel 7.2.11, Wayland session. No X11 runs.
+- Arch Linux, kernel 7.2.11, Wayland session. The measured matrices
+  have no X11 runs. The GUI bench checks under XWayland
+  (`GDK_BACKEND=x11`) were functional runs, not measurements.
 - Intel Arrow Lake iGPU (i915) runs the desktop and Flutter's renderer
   (Impeller, OpenGL ES).
 - NVIDIA RTX 5070 Ti Mobile, driver 615.78, idle at about 3 W.
@@ -58,6 +61,34 @@ The bench reads these environment variables:
 `LD_PRELOAD` puts the system `libgcc_s` ahead of Flutter's unwinder.
 Without it, mpv's Lua scripts crash. See the first item under
 [Gotchas found](#gotchas-found).
+
+### Windows
+
+- `bench/bench_app.dart` is a GUI bench. The tester types channels, VOD
+  ids or links. The Rust hub resolves them as the app does.
+- One entry plays 3 times, because the D3D 11 device reset shows on the
+  2nd stream.
+- The tester picks one engine per launch (mpv or fvp) and presses Run
+  test. Each stream gets a warm-up, then a measured window. The result
+  screen has a Copy log button.
+- Log counters:
+  - CPU: the process's total processor time, from PowerShell
+    `Get-Process`.
+  - Memory: Dart's `ProcessInfo.currentRss`, sampled each second.
+  - GPU: per engine type, from
+    `typeperf "\GPU Engine(pid_<pid>_*)\Utilization Percentage"`. The
+    values are summed per engine type and averaged over the samples.
+  - mpv's hwdec, vo and drops.
+  - The app's lifecycle states during the window (visible, focused).
+  - For mpv, media_kit's own `VIDEO` lines. They carry the D3D 11
+    device checks.
+- fvp does not expose which decoder it opened. The `VideoDecode` GPU
+  share shows whether it decodes in hardware.
+- Built by `.github/workflows/windows.yml` with the `bench` checkbox.
+  It is a profile build, because Flutter drops dev-dependency plugins
+  (fvp) from release builds. The run publishes a prerelease
+  `test-windows-bench-<sha7>`.
+- Results: pending a tester.
 
 ## Results
 
@@ -159,13 +190,42 @@ Reading:
   3.50 exports `_Unwind_*` symbols. When a Lua error unwinds in
   libmpv's script thread, LuaJIT resolves those symbols to Flutter's
   unwinder, and the process gets SIGSEGV at mpv start. This happened
-  in 3 of 3 bench starts without the preload. Preloading
+  in 3 of 6 bench starts without the preload. Preloading
   `libgcc_s.so.1` puts the system unwinder first. The app built with
   Flutter 3.50 is likely affected the same way on its first stream.
   CI pins Flutter 3.47.8, which was not checked.
-- **mpv's hwdec cannot be chosen on main.** `hwdecFor`
-  (`lib/player/media_kit_engine.dart`) only handles gamescope. Otherwise
-  media_kit sets `hwdec=auto`. The bench sets it itself with
+- **`load-scripts=no` cannot be set through media_kit.** libmpv reads
+  `load-scripts` only before `mpv_initialize`. media_kit 1.2.6 has no
+  public hook for pre-init options. Its pre-init map holds only
+  `vid=no`, plus the Android libass options. A local patch that added
+  `'load-scripts': 'no'` to that map did not work. The patch was
+  reverted, and nothing was committed. The bench crashed in 3 of 6
+  starts both without and with the patch. gdb shows the SIGSEGV in
+  thread `lua/stats`, inside `libluajit-5.1.so.2`, reached through
+  `_Unwind_RaiseException` exported by `libflutter_linux_gtk.so`. The
+  stack is the same with and without the patch. The patched run still
+  started every built-in Lua script thread (`lua/stats`,
+  `lua/console`, `lua/ytdl_hook`, `lua/select`). So the option never
+  took effect: media_kit's initializer ignores the return value of
+  `mpv_set_option_string`.
+  **Verdict:** media_kit's configuration cannot reach it. The
+  workaround is still `LD_PRELOAD=/usr/lib/libgcc_s.so.1`. A real fix
+  needs either a Flutter without the exported `_Unwind_*` symbols, or a
+  player plugin we own that sets `load-scripts=no` before init.
+- **Native Wayland freezes the GUI bench.** With the local Flutter 3.50
+  on niri (Wayland), `bench/bench_app.dart` sometimes freezes for good.
+  The main thread is blocked in `gtk_widget_size_allocate` (Flutter's
+  synchronous resize). The raster thread is blocked in Mesa EGL
+  `wl_display_roundtrip_queue`. It happens with either engine, and with
+  direct URLs too. Native Wayland: 0 of 3 hub runs finished. With
+  `GDK_BACKEND=x11` (XWayland), every run finished: mpv 3 of 3, direct
+  URLs 4 of 4, fvp 1 of 1. Local bench runs therefore use
+  `GDK_BACKEND=x11`. The real app with Flutter 3.50 on Wayland is
+  unchecked.
+- **mpv's hwdec is set by `JITTER_HWDEC` on main.** `hwdecFor`
+  (`lib/player/media_kit_engine.dart`) returns `JITTER_HWDEC` first when
+  it is set. Otherwise it keeps the gamescope case, and media_kit sets
+  `hwdec=auto`. The bench still sets hwdec itself with
   `JITTER_BENCH_MPV_HWDEC`.
 - **mpv `nvdec` does not engage** under media_kit's render context
   here. mpv falls back to software decoding.
@@ -266,12 +326,18 @@ Reading:
 
 ## Recommendation
 
-- fvp is worth a Windows spike. On Linux it composed into Flutter's
-  texture at about a third of mpv's GPU cost, with less CPU (without
-  VA-API) and memory. The Windows trouble with ANGLE and D3D 11 interop
-  sits in that composition layer, which fvp replaces with its own D3D 11
-  path. Run this bench on Windows before deciding. The Linux numbers do
-  not transfer. Check what fvp does with a hidden window.
+- **Windows: fvp is the primary candidate** (decided by the user,
+  2026-11-14). media_kit is unmaintained, and fvp is actively
+  maintained. So an fvp crash becomes an upstream report, not a fork we
+  carry.
+  - Accepted risk: libmdk is a closed-source binary from one
+    maintainer.
+  - Not deal-breakers: the one Linux teardown SIGSEGV (1 of 12 runs),
+    and fvp decoding while the window is hidden. The app can turn video
+    off when hidden, as it already goes audio-only in the background.
+  - The Windows bench run decides whether fvp avoids the D3D 11 device
+    reset between streams without adding load. Its results go in a
+    `## Windows` section once a tester runs it.
 - Android: the data now backs ExoPlayer through the official
   `video_player`. It has the lowest memory, reached 60 frames/s on VOD
   and live, adds no closed-source library, and is maintained by Google.
@@ -279,11 +345,25 @@ Reading:
   is no better than ExoPlayer here. Both sit behind the same video_player
   API, so `PlayerEngine` can grow toward that API either way.
 - Linux: with VA-API, fvp's gain is the composition cost and memory, not
-  CPU. mpv works here. No reason to switch Linux alone.
+  CPU. mpv works here. No reason to switch Linux alone. Linux keeps mpv
+  for now.
+- **Don't rebuild media_kit as a general plugin.** If mpv stays
+  anywhere (Linux), own a minimal plugin sized to `PlayerEngine`. The
+  graphics-interop layer is the upkeep that killed media_kit. Such a
+  plugin could also set `load-scripts=no` before init, which media_kit
+  cannot (see [Gotchas found](#gotchas-found)).
+- **The local Rust HLS proxy idea is shelved.** Rewind already uses the
+  recording VOD, and the stall reload is already driven from Rust.
+  Revisit it only for rewind on channels without VODs.
 - Before any migration, `PlayerEngine` must cover what the player page
   uses today: positions, buffering, play/pause, volume, seek-by and
   frame step. The page also needs its own controls instead of
   media_kit's.
-- Not measured: X11, battery drain over time, latency to the live edge,
+- Not measured: X11 matrices, battery drain over time, latency to the
+  live edge,
   and on Android the battery current and Adreno GPU counters (both need
-  root).
+  root). The Android `hwdec=mediacodec` with `vo=mediacodec_embed` spike
+  is not run yet: `MediaKitEngine` passes only `hwdec`, and
+  media_kit_video's Android controller re-applies its configured `vo` on
+  every surface change, so the bench needs its own mpv subject with:
+  `VideoControllerConfiguration(vo: 'mediacodec_embed', hwdec: 'mediacodec')`.
