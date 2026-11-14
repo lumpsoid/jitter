@@ -14,6 +14,22 @@ All notable changes to Jitter are listed here. The format follows
   removes nothing: a favorite or visit you already have is kept, a VOD
   position is replaced only by a newer one, and the file's settings are
   taken. On Android and iOS the export goes to the share sheet.
+- Setting the environment variable `JITTER_HWDEC` makes the player decode
+  video with that mpv `hwdec`, for example `d3d11va-copy`, or `no` for
+  software decoding, to try another decoder when a GPU driver misbehaves.
+
+### Changed
+
+- The log keeps what mpv's video decoder and renderer report, and on
+  Windows what the video output does and the first time a GPU device it
+  draws with stops working, with Windows' reason. On Windows it also
+  records the GPU devices' state as each stream stops, opens, loads and
+  starts decoding.
+
+### Fixed
+
+- On Windows, the second stream in a row shows its picture again, instead of
+  playing sound over a black video with zero-copy hardware decoding.
 
 ## [0.1.3] - 2026-11-09
 

@@ -37,6 +37,32 @@ MediaKitVideoPlugin::MediaKitVideoPlugin(
   channel_->SetMethodCallHandler([&](const auto& call, auto result) {
     HandleMethodCall(call, std::move(result));
   });
+  log_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          registrar->messenger(), "jitter/media_kit_video/log",
+          &flutter::StandardMethodCodec::GetInstance());
+  // Jitter's patch: the app asks for the D3D 11 devices to be checked at its
+  // checkpoints, see |VideoOutput::CheckDevicesAt|, and for a render that
+  // applies mpv's pending teardown, see |VideoOutput::Flush|.
+  log_channel_->SetMethodCallHandler([&](const auto& call, auto result) {
+    if (call.method_name().compare("checkDevices") != 0 &&
+        call.method_name().compare("flush") != 0) {
+      result->NotImplemented();
+      return;
+    }
+    auto arguments = std::get<flutter::EncodableMap>(*call.arguments());
+    auto handle =
+        std::get<std::string>(arguments[flutter::EncodableValue("handle")]);
+    auto when =
+        std::get<std::string>(arguments[flutter::EncodableValue("when")]);
+    auto handle_value = static_cast<int64_t>(std::stoll(handle.c_str()));
+    if (call.method_name().compare("flush") == 0) {
+      video_output_manager_->Flush(handle_value, when);
+    } else {
+      video_output_manager_->CheckDevices(handle_value, when);
+    }
+    result->Success(flutter::EncodableValue(std::monostate{}));
+  });
 }
 
 MediaKitVideoPlugin::~MediaKitVideoPlugin() {
@@ -163,6 +189,23 @@ void MediaKitVideoPlugin::HandleMethodCall(
                                 flutter::EncodableValue(height),
                             },
                         }),
+                    },
+                }),
+                nullptr);
+          });
+        },
+        [this](const std::string& level, const std::string& message) {
+          RunOnMainThread([=]() {
+            log_channel_->InvokeMethod(
+                "log",
+                std::make_unique<flutter::EncodableValue>(flutter::EncodableMap{
+                    {
+                        flutter::EncodableValue("level"),
+                        flutter::EncodableValue(level),
+                    },
+                    {
+                        flutter::EncodableValue("message"),
+                        flutter::EncodableValue(message),
                     },
                 }),
                 nullptr);

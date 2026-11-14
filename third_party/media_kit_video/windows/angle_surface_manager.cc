@@ -78,6 +78,20 @@ void ANGLESurfaceManager::SwapBuffers() {
   glFinish();
 }
 
+HRESULT ANGLESurfaceManager::ANGLEDeviceRemovedReason() {
+  if (angle_d3d_11_device_ == nullptr) {
+    return S_OK;
+  }
+  return angle_d3d_11_device_->GetDeviceRemovedReason();
+}
+
+HRESULT ANGLESurfaceManager::DeviceRemovedReason() {
+  if (d3d_11_device_ == nullptr) {
+    return S_OK;
+  }
+  return d3d_11_device_->GetDeviceRemovedReason();
+}
+
 void ANGLESurfaceManager::Create() {
   CleanUp(false);
   if (!CreateD3DTexture()) {
@@ -87,6 +101,9 @@ void ANGLESurfaceManager::Create() {
   if (!CreateEGLDisplay()) {
     throw std::runtime_error("Unable to create ANGLE EGL display.");
     return;
+  }
+  if (angle_d3d_11_device_ == nullptr) {
+    QueryANGLEDevice();
   }
   if (!CreateAndBindEGLSurface()) {
     throw std::runtime_error("Unable to create ANGLE EGL surface.");
@@ -111,6 +128,7 @@ void ANGLESurfaceManager::CleanUp(bool release_context) {
       eglDestroySurface(display_, surface_);
       surface_ = EGL_NO_SURFACE;
     }
+    angle_d3d_11_device_.Reset();
     if (instance_count_ == 1) {
       eglTerminate(display_);
     }
@@ -268,6 +286,28 @@ bool ANGLESurfaceManager::CreateEGLDisplay() {
     }
   }
   return true;
+}
+
+// The D3D 11 device behind |display_|, which ANGLE created, the way mpv's
+// |d3d11-egl| interop finds it to decode on.
+void ANGLESurfaceManager::QueryANGLEDevice() {
+  auto query_display = reinterpret_cast<PFNEGLQUERYDISPLAYATTRIBEXTPROC>(
+      eglGetProcAddress("eglQueryDisplayAttribEXT"));
+  auto query_device = reinterpret_cast<PFNEGLQUERYDEVICEATTRIBEXTPROC>(
+      eglGetProcAddress("eglQueryDeviceAttribEXT"));
+  if (query_display == nullptr || query_device == nullptr) {
+    return;
+  }
+  EGLAttrib device = 0;
+  if (!query_display(display_, EGL_DEVICE_EXT, &device) || device == 0) {
+    return;
+  }
+  EGLAttrib d3d_11_device = 0;
+  if (!query_device(reinterpret_cast<EGLDeviceEXT>(device),
+                    EGL_D3D11_DEVICE_ANGLE, &d3d_11_device)) {
+    return;
+  }
+  angle_d3d_11_device_ = reinterpret_cast<ID3D11Device*>(d3d_11_device);
 }
 
 bool ANGLESurfaceManager::CreateAndBindEGLSurface() {

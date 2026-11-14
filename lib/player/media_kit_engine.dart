@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:jitter/logs/rust_log.dart';
 import 'package:jitter/player/faded_volume.dart';
 import 'package:jitter/player/live.dart';
@@ -12,7 +13,9 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:path_provider/path_provider.dart';
 
 /// The mpv `hwdec` to decode with under the [environment]; `null` keeps
-/// media_kit's `auto`.
+/// media_kit's `auto`. `JITTER_HWDEC`, when set and not empty, is used
+/// as-is, to try another decoder (`d3d11va-copy`, or `no` for software)
+/// without a rebuild, and wins over the gamescope case.
 ///
 /// Under gamescope (SteamOS game mode), `auto` tries Vulkan decoding, and
 /// gamescope's WSI layer aborts the process when FFmpeg 9 creates its
@@ -22,16 +25,22 @@ import 'package:path_provider/path_provider.dart';
 /// same streams there; `vaapi-copy` keeps it when the video is drawn
 /// without EGL.
 ///
-/// Workaround: remove it, and its test, once SteamOS ships a gamescope
-/// whose vkroots has that fix (ValveSoftware/gamescope#2261). How to
-/// check, and the full trail: `docs/gamescope-vulkan-hwdec.md`.
-String? hwdecFor(Map<String, String> environment) =>
-    environment.containsKey('GAMESCOPE_WAYLAND_DISPLAY')
-    ? 'vaapi,vaapi-copy'
-    : null;
+/// Workaround: remove the gamescope case and its test once SteamOS ships a
+/// gamescope whose vkroots has that fix (ValveSoftware/gamescope#2261). How
+/// to check, and the full trail: `docs/gamescope-vulkan-hwdec.md`. The
+/// `JITTER_HWDEC` override stays.
+String? hwdecFor(Map<String, String> environment) {
+  if (environment['JITTER_HWDEC'] case final String hwdec
+      when hwdec.isNotEmpty) {
+    return hwdec;
+  }
+  return environment.containsKey('GAMESCOPE_WAYLAND_DISPLAY')
+      ? 'vaapi,vaapi-copy'
+      : null;
+}
 
 /// The log's level for an mpv message at [level] (`fatal`, `error`,
-/// `warn`, `info`, `v`). Rust keeps only the probes' lines of the verbose
+/// `warn`, `info`, `v`). Rust keeps only the video's lines of the verbose
 /// ones.
 DartLogLevel _logLevel(String level) => switch (level) {
   'fatal' || 'error' => DartLogLevel.error,
@@ -47,6 +56,10 @@ class MediaKitEngine implements PlayerEngine {
   Player? _created;
   MpvProbes? _probes;
 
+  /// The mpv handle, on Windows only: the device checks ask media_kit's
+  /// video output about its devices with it.
+  Future<int>? _handle;
+
   /// Points mpv's on-disk cache, which media_kit turns on, at the app's
   /// cache directory: with media_kit's setup, mpv's own default gives it no
   /// folder, so it fails and caches in memory alone. Done before the first
@@ -54,15 +67,16 @@ class MediaKitEngine implements PlayerEngine {
   Future<void>? _cacheDir;
 
   /// The player, reporting to this run's log: mpv's warnings and errors,
-  /// each buffering wait with where it began and what was buffered, and
-  /// the probes: mpv's versions and GL context, and how it plays each
-  /// stream.
+  /// what its decoder and renderer do, each buffering wait with where it
+  /// began and what was buffered, the probes: mpv's versions and GL
+  /// context, and how it plays each stream, and, on Windows, what
+  /// media_kit's video output does.
   Player _create() {
     final player = Player(
       configuration: const PlayerConfiguration(
         // What the OS volume mixer shows for our audio stream.
         title: 'Jitter',
-        // Verbose, for the GL context mpv names only there.
+        // Verbose, for how mpv sets up and tears down the video.
         logLevel: MPVLogLevel.v,
       ),
     );
@@ -76,15 +90,91 @@ class MediaKitEngine implements PlayerEngine {
         bufferMs: player.state.buffer.inMilliseconds,
       ).sendSignalToRust(),
     );
+    _videoOutputLog.setMethodCallHandler(_logVideoOutput);
     if (player.platform case final NativePlayer mpv) {
       final probes = _probes = MpvProbes(mpv);
       unawaited(probes.versions());
       unawaited(probes.watchOutput());
       _cacheDir = _setCacheDir(mpv);
       player.stream.videoParams.listen(probes.videoParams);
+      if (Platform.isWindows) {
+        _handle = mpv.handle;
+        unawaited(
+          mpv.observeProperty(
+            'path',
+            (path) => _checkDevices('as the path became "$path"'),
+          ),
+        );
+        unawaited(
+          mpv.observeProperty(
+            'hwdec-current',
+            (hwdec) => _checkDevices('as hwdec-current became "$hwdec"'),
+          ),
+        );
+        player.stream.videoParams.listen((params) {
+          if (params.pixelformat case final format?) {
+            unawaited(
+              _checkDevices(
+                'as video params became $format ${params.w}x${params.h}',
+              ),
+            );
+          }
+        });
+      }
     }
     return player;
   }
+
+  /// What media_kit's Windows video output reports: its textures, and the
+  /// first time a D3D 11 device it draws with stops working, with Windows'
+  /// reason. The app also asks it, at each checkpoint, to log both devices'
+  /// state. Its patch: `third_party/media_kit_video/PATCHED.md`.
+  static const _videoOutputLog = MethodChannel('jitter/media_kit_video/log');
+
+  static Future<void> _logVideoOutput(MethodCall call) async {
+    if (call.arguments case {
+      'level': final String level,
+      'message': final String message,
+    }) {
+      logToRust(
+        level == 'error' ? DartLogLevel.error : DartLogLevel.info,
+        'media_kit/video',
+        message,
+      );
+    }
+  }
+
+  /// Calls [method] on media_kit's video output with this handle, at this
+  /// checkpoint. A failure is logged with the text [failure], then [when].
+  Future<void> _askVideoOutput(
+    String method,
+    String when,
+    String failure,
+  ) async {
+    final handle = _handle;
+    if (handle == null) return;
+    try {
+      await _videoOutputLog.invokeMethod<void>(method, {
+        'handle': '${await handle}',
+        'when': when,
+      });
+    } on Object catch (error) {
+      logToRust(DartLogLevel.warning, 'player', '$failure $when: $error');
+    }
+  }
+
+  /// On Windows, asks media_kit's video output to log its D3D 11 devices'
+  /// state at this checkpoint, so the log places a device reset between
+  /// checkpoints (patch: `third_party/media_kit_video/PATCHED.md`).
+  Future<void> _checkDevices(String when) =>
+      _askVideoOutput('checkDevices', when, 'No device check');
+
+  /// On Windows, asks media_kit's video output to render once, so libmpv
+  /// applies the video teardown mpv left pending when it went idle.
+  /// Otherwise the next stream reuses mpv's d3d11-egl hwdec mapper and ANGLE's
+  /// D3D 11 device is reset (cause: `docs/windows-d3d11-device-reset.md`).
+  Future<void> _flush(String when) =>
+      _askVideoOutput('flush', when, 'No video flush');
 
   /// What the player page's `Video` renders.
   late final VideoController controller = VideoController(
@@ -102,6 +192,8 @@ class MediaKitEngine implements PlayerEngine {
     await _setVolume(_volume.end());
     await _probes?.ended();
     await _cacheDir;
+    await _flush('before the next stream opens');
+    await _checkDevices('before the next stream opens');
     await _player.open(Media(url, start: start));
   }
 
@@ -121,6 +213,8 @@ class MediaKitEngine implements PlayerEngine {
   Future<void> stop() async {
     await _probes?.ended();
     await _player.stop();
+    await _flush('after the stream stopped');
+    await _checkDevices('after the stream stopped');
     await _setVolume(_volume.end());
   }
 

@@ -1,8 +1,8 @@
 # media_kit_video, patched
 
-`media_kit_video` 2.0.1, vendored without `example/`. Two patches differ
-from upstream: hardware rendering on X11 (`linux/video_output.cc`), and
-`Video.pictureBuilder` (below).
+`media_kit_video` 2.0.1, vendored without `example/`. Three patches differ
+from upstream: hardware rendering on X11 (`linux/video_output.cc`),
+`Video.pictureBuilder`, and the Windows video output's log (both below).
 
 ## Why
 
@@ -46,3 +46,35 @@ which builds a new `Video` from those, keeps it. Changed:
 `lib/src/video_view_parameters.dart`, `lib/src/video/video_texture.dart`,
 `lib/src/video/video_web.dart` (accepted, unused) and
 `lib/media_kit_video_controls/src/controls/methods/fullscreen.dart`.
+
+## The Windows video output's log
+
+Upstream's Windows video output writes what it does to `std::cout`, which
+a Windows GUI app throws away, and never checks its D3D 11 devices. When
+one is removed, mpv only says `Mapping hardware decoded surface failed.`
+for each frame, and nothing says why.
+
+Patched, `VideoOutput` sends its lines over the method channel
+`jitter/media_kit_video/log` (`level`, `message`), which `MediaKitEngine`
+writes to the app's log under `media_kit/video`:
+
+- whether it renders in hardware, and why not, and whether ANGLE named
+  its D3D 11 device: the one mpv decodes on with `hwdec=d3d11va`;
+- each resize, and each texture created and freed;
+- each change in what `mpv_render_context_render` returns;
+- after each frame, `GetDeviceRemovedReason` on ANGLE's device and on
+  media_kit's own, which shares frames with Flutter: the first time
+  either stops working, its reason (`DXGI_ERROR_DEVICE_HUNG`, …);
+- when the app asks over the same channel (method `checkDevices`, with
+  `handle` and `when`), both devices' state at that moment, named by the
+  app's checkpoint (a stream ending, the next one loading, its decoder
+  starting), so a reset falls between two checkpoints in the log.
+- when the app asks over the same channel to flush (method `flush`, with
+  `handle` and `when`), it renders once, so libmpv applies the video teardown
+  mpv leaves pending on going idle. Without it the next stream reuses mpv's
+  d3d11-egl hwdec mapper and ANGLE's D3D 11 device is reset (see
+  `docs/windows-d3d11-device-reset.md`).
+
+Changed: `windows/video_output.{h,cc}`, `windows/video_output_manager.{h,cc}`,
+`windows/media_kit_video_plugin.{h,cc}` and
+`windows/angle_surface_manager.{h,cc}`.

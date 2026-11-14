@@ -27,8 +27,8 @@ pub enum DartLogLevel {
     Error,
     Warning,
     Info,
-    /// Only probe lines are kept, such as mpv's `GL_RENDERER`; the rest
-    /// would drown the log.
+    /// Only the video's lines are kept: mpv's decoder and renderer, with
+    /// the GL context it names there; the rest would drown the log.
     Verbose,
 }
 
