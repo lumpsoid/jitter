@@ -143,12 +143,12 @@ class VideoPlayerSubject implements BenchSubject {
   Future<String> endWindow() async => _end;
 }
 
-/// The engine [name] runs as. fvp registers itself for Linux and Android with
-/// [decoders] in place of its own list when given, and forwards what libmdk
-/// logs through [log]. exo is the same [FvpEngine] left unregistered, so
-/// video_player plays it with ExoPlayer. mpv needs media_kit's setup first,
-/// decodes with [hwdec] when given, and reports its `hwdec` line through
-/// [log].
+/// The engine [name] runs as. fvp registers itself for Windows, Linux and
+/// Android with [decoders] in place of its own list when given, and forwards
+/// what libmdk logs through [log]. exo is the same [FvpEngine] left
+/// unregistered, so video_player plays it with ExoPlayer. mpv needs media_kit's
+/// setup first, decodes with [hwdec] when given, and reports its `hwdec` line
+/// through [log].
 BenchSubject benchSubject(
   String name, {
   required void Function(String line) log,
@@ -166,7 +166,7 @@ BenchSubject benchSubject(
       ),
     );
     final options = <String, Object>{
-      'platforms': ['linux', 'android'],
+      'platforms': ['windows', 'linux', 'android'],
     };
     if (decoders != null) options['video.decoders'] = decoders;
     fvp.registerWith(options: options);
