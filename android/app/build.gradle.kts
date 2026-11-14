@@ -61,6 +61,16 @@ android {
     }
 }
 
+// Profile builds are debug-signed, so under the release id they can't
+// install over an installed release build, and uninstalling that would
+// wipe the user's data. They get their own id to sit alongside it. Debug
+// and release keep the id above.
+androidComponents {
+    onVariants(selector().withBuildType("profile")) { variant ->
+        variant.applicationId.set("io.github.lumpsoid.jitter.bench")
+    }
+}
+
 // Checked when a release build runs, not at configuration: Gradle
 // configures every variant, and a debug build must not need the key.
 tasks.matching { it.name == "preReleaseBuild" }.configureEach {
