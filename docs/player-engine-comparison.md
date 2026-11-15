@@ -398,11 +398,14 @@ Caveats:
   mpv is the worst of the three on this phone, especially on live. fvp
   is no better than ExoPlayer here. Both sit behind the same video_player
   API, so `PlayerEngine` can grow toward that API either way.
-- Linux: with VA-API, fvp's gain is the composition cost and memory, not
-  CPU. mpv works here. No reason to switch Linux alone. Linux keeps mpv
-  for now.
-- **Don't rebuild media_kit as a general plugin.** If mpv stays
-  anywhere (Linux), own a minimal plugin sized to `PlayerEngine`. The
+- **Linux: fvp too** (decided by the user, 2026-11-15). With VA-API,
+  fvp's gain is the composition cost and memory, not CPU, so Linux alone
+  would not justify a switch. But with Windows on fvp and Android on
+  ExoPlayer, keeping mpv for Linux only would mean carrying media_kit,
+  its forks and the Lua crash workaround for one platform. All desktops
+  share one engine.
+- **Don't rebuild media_kit as a general plugin.** If mpv ever comes
+  back, own a minimal plugin sized to `PlayerEngine`. The
   graphics-interop layer is the upkeep that killed media_kit. Such a
   plugin could also set `load-scripts=no` before init, which media_kit
   cannot (see [Gotchas found](#gotchas-found)).
