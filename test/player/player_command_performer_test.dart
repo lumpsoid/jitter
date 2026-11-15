@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jitter/player/live.dart';
 import 'package:jitter/player/player_command_performer.dart';
 import 'package:jitter/player/player_engine.dart';
 import 'package:jitter/src/bindings/bindings.dart';
@@ -32,6 +33,51 @@ class _FakeEngine implements PlayerEngine {
 
   @override
   Duration get duration => Duration.zero;
+
+  @override
+  Future<void> stopForExit() async {}
+
+  @override
+  Future<void> play() async {}
+
+  @override
+  Future<void> pause() async {}
+
+  @override
+  Future<void> togglePlaying() async {}
+
+  @override
+  bool get isPlaying => false;
+
+  @override
+  Stream<bool> get playing => const Stream.empty();
+
+  @override
+  Future<void> seekBy(Duration by) async {}
+
+  @override
+  Future<void> stepFrame({required bool forward}) async {}
+
+  @override
+  Live<Duration> get positions =>
+      Live(now: () => Duration.zero, changes: Stream.empty);
+
+  @override
+  Live<Duration> get durations =>
+      Live(now: () => Duration.zero, changes: Stream.empty);
+
+  @override
+  Stream<bool> get bufferings => const Stream.empty();
+
+  @override
+  Live<Duration> get buffers =>
+      Live(now: () => Duration.zero, changes: Stream.empty);
+
+  @override
+  Future<void> toggleMute() async {}
+
+  @override
+  Future<void> nudgeVolume(double by) async {}
 }
 
 void main() {

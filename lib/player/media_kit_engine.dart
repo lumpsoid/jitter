@@ -220,6 +220,7 @@ class MediaKitEngine implements PlayerEngine {
 
   /// Stops what plays, if a player was ever created, so the exit does not
   /// wait on libmpv tearing down a live stream and its video output.
+  @override
   Future<void> stopForExit() async {
     await _probes?.ended();
     await _created?.stop();
@@ -229,14 +230,18 @@ class MediaKitEngine implements PlayerEngine {
   Future<void> setFade(double level) =>
       _setVolume(_volume.fade(level, current: _player.state.volume));
 
+  @override
   Future<void> togglePlaying() => _player.playOrPause();
 
+  @override
   Future<void> play() => _player.play();
 
+  @override
   Future<void> pause() => _player.pause();
 
   /// Whether it is playing now, then each change; an `open` passes
   /// through `false`.
+  @override
   Stream<bool> get playing async* {
     yield _player.state.playing;
     yield* _player.stream.playing;
@@ -247,6 +252,7 @@ class MediaKitEngine implements PlayerEngine {
 
   /// Moves the position by [by], within the media: not before its start,
   /// nor past its end, which would end it.
+  @override
   Future<void> seekBy(Duration by) {
     final to = position + by;
     return _player.seek(
@@ -260,6 +266,7 @@ class MediaKitEngine implements PlayerEngine {
 
   /// Steps one frame [forward] or back, while paused; playing, it does
   /// nothing, as mpv's step would pause it.
+  @override
   Future<void> stepFrame({required bool forward}) async {
     if (_player.state.playing) return;
     if (_player.platform case final NativePlayer mpv) {
@@ -268,24 +275,28 @@ class MediaKitEngine implements PlayerEngine {
   }
 
   /// Where it plays.
+  @override
   Live<Duration> get positions => Live(
     now: () => _player.state.position,
     changes: () => _player.stream.position,
   );
 
   /// How long the media is: zero until it has loaded.
+  @override
   Live<Duration> get durations => Live(
     now: () => _player.state.duration,
     changes: () => _player.stream.duration,
   );
 
   /// Whether it waits for the media to load now, then each change.
+  @override
   Stream<bool> get bufferings async* {
     yield _player.state.buffering;
     yield* _player.stream.buffering;
   }
 
   /// How far it has buffered.
+  @override
   Live<Duration> get buffers => Live(
     now: () => _player.state.buffer,
     changes: () => _player.stream.buffer,
@@ -293,10 +304,12 @@ class MediaKitEngine implements PlayerEngine {
 
   /// Mutes, or unmutes back to the volume it was muted at; mid-fade, under
   /// the fade.
+  @override
   Future<void> toggleMute() =>
       _player.setVolume(_volume.toggleMute(current: _player.state.volume));
 
   /// Moves the volume by [by] (of 0–100); mid-fade, under the fade.
+  @override
   Future<void> nudgeVolume(double by) =>
       _player.setVolume(_volume.nudge(by, current: _player.state.volume));
 
@@ -305,6 +318,7 @@ class MediaKitEngine implements PlayerEngine {
   }
 
   /// Whether it is playing now, not paused.
+  @override
   bool get isPlaying => _player.state.playing;
 
   @override
