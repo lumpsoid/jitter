@@ -11,6 +11,7 @@ import 'package:jitter/player/playback_failure.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/player/playback_loading.dart';
 import 'package:jitter/player/playback_title.dart';
+import 'package:jitter/player/player_engine.dart';
 import 'package:jitter/player/player_layout.dart';
 import 'package:jitter/player/player_options.dart';
 import 'package:jitter/player/player_shortcuts.dart';
@@ -64,7 +65,7 @@ class PlayerPage extends StatefulWidget {
   final String title;
 
   final PlaybackHolder playback;
-  final MediaKitEngine player;
+  final PlayerEngine player;
 
   /// The chat (live, or a VOD's replay), shown while Rust has one open;
   /// the app bar's options can hide and show it.
@@ -321,7 +322,8 @@ class _PlayerPageState extends State<PlayerPage> {
   Widget _video(PlaybackUpdate state) => switch (state) {
     PlaybackUpdateReady(:final live, :final rewind) => Video(
       key: _videoKey,
-      controller: widget.player.controller,
+      // Until the engine hands out its own video surface (engine-02).
+      controller: (widget.player as MediaKitEngine).controller,
       pictureBuilder: _zoomedPicture,
       // The theme sits inside the controls, not around the video:
       // media_kit's fullscreen route copies the theme around the video
@@ -381,7 +383,7 @@ class _Controls extends StatelessWidget {
   });
 
   final bool live;
-  final MediaKitEngine player;
+  final PlayerEngine player;
 
   /// A live stream's [LiveModeSlot]; renders nothing for a VOD.
   final Widget mode;

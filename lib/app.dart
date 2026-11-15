@@ -11,8 +11,8 @@ import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/history/history_holder.dart';
 import 'package:jitter/logs/logs_holder.dart';
-import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
+import 'package:jitter/player/player_engine.dart';
 import 'package:jitter/search/search_holder.dart';
 import 'package:jitter/settings/settings_holder.dart';
 import 'package:jitter/shell/app_shell.dart';
@@ -66,7 +66,7 @@ class JitterApp extends StatefulWidget {
   final HistoryHolder history;
   // Playback
   final PlaybackHolder playback;
-  final MediaKitEngine player;
+  final PlayerEngine player;
   // Channel
   final ChannelHolder channel;
   // Chat

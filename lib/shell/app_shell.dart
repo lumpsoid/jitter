@@ -13,8 +13,8 @@ import 'package:jitter/favorites/favorites_page.dart';
 import 'package:jitter/history/history_holder.dart';
 import 'package:jitter/history/history_page.dart';
 import 'package:jitter/logs/logs_holder.dart';
-import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
+import 'package:jitter/player/player_engine.dart';
 import 'package:jitter/player/player_page.dart';
 import 'package:jitter/search/search_holder.dart';
 import 'package:jitter/search/search_page.dart';
@@ -93,7 +93,7 @@ class AppShell extends StatefulWidget {
   final HistoryHolder history;
   // Playback: what a page needs to push a `PlayerPage`.
   final PlaybackHolder playback;
-  final MediaKitEngine player;
+  final PlayerEngine player;
   // Channel
   final ChannelHolder channel;
   // Chat: shown on the player page.

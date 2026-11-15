@@ -9,8 +9,8 @@ abstract interface class PlayerEngine {
   /// Stops; a fade ends with it.
   Future<void> stop();
 
-  /// Stops what plays, if a player was ever created, so the exit does not
-  /// wait on libmpv tearing down a live stream and its video output.
+  /// Stops what plays, if anything ever played, so the exit does not wait on
+  /// the player tearing down a live stream and its video output.
   Future<void> stopForExit();
 
   /// Plays, if paused.

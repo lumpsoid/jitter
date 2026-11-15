@@ -18,12 +18,12 @@ import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/media_session.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/player/player_command_performer.dart';
+import 'package:jitter/player/player_engine.dart';
 import 'package:jitter/search/search_holder.dart';
 import 'package:jitter/settings/settings_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:media_kit/media_kit.dart';
 import 'package:rinf/rinf.dart';
 
 /// Starts Rust, subscribes every holder (each then sends its ready signal,
@@ -34,7 +34,7 @@ Future<void> main() async {
   await initializeRust(assignRustSignal);
   _logErrors();
   sendDisplaysProbe(PlatformDispatcher.instance);
-  MediaKit.ensureInitialized();
+  MediaKitEngine.ensureInitialized();
 
   // Playback
   final player = MediaKitEngine();
@@ -116,7 +116,7 @@ void _logErrors() {
 /// A failure is logged: the app plays in front without it.
 Future<void> _startMediaSession(
   PlaybackHolder playback,
-  MediaKitEngine player,
+  PlayerEngine player,
 ) async {
   try {
     final session = await AudioService.init(
