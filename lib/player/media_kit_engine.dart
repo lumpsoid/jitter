@@ -52,6 +52,9 @@ DartLogLevel _logLevel(String level) => switch (level) {
 /// player page shows [controller]. The player is created on first use, so
 /// building this needs no libmpv.
 class MediaKitEngine implements PlayerEngine {
+  /// Sets media_kit up; call once, before the first engine is built.
+  static void ensureInitialized() => MediaKit.ensureInitialized();
+
   Player get _player => _created ??= _create();
   Player? _created;
   MpvProbes? _probes;
