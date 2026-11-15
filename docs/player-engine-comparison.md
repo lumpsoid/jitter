@@ -88,7 +88,7 @@ Without it, mpv's Lua scripts crash. See the first item under
   It is a profile build, because Flutter drops dev-dependency plugins
   (fvp) from release builds. The run publishes a prerelease
   `test-windows-bench-<sha7>`.
-- Results: pending a tester.
+- Results: see [Windows results](#windows-results).
 
 ## Results
 
@@ -324,6 +324,59 @@ Reading:
 - **fvp and ExoPlayer cost about the same**: app CPU 88 to 96 %, system
   about 33 %, PSS 181 to 223 MB.
 
+## Windows results
+
+- Machine: Windows 10 Pro, build 26200, 24 logical cores. The GPU
+  model was not logged.
+- Build 6ebbc3f, profile mode. Bench window 1707 × 996 at device pixel
+  ratio 1.5.
+- Target: live channel lunateac at 1080p60, Source quality. Each engine
+  played 3 streams in a row, with one app launch per engine. Each stream
+  had a 10 s warm-up and a 30 s measured window, with a 3 s gap between
+  streams.
+- CPU % is of one core, so it can go above 100.
+
+| Engine | Stream | CPU % | RSS avg MB | RSS max MB | GPU 3D % | GPU VideoDecode % | Decoder | Drops           |
+|--------|--------|-------|------------|------------|----------|-------------------|---------|-----------------|
+| mpv    | 1      | 17.7  | 773        | 782        | 42.5     | 13.1              | d3d11va | 0 vo, 0 decoder |
+| mpv    | 2      | 13.4  | 778        | 784        | 40.9     | 13.2              | d3d11va | 0 vo, 0 decoder |
+| mpv    | 3      | 8.4   | 779        | 784        | 37.2     | 13.1              | d3d11va | 0 vo, 0 decoder |
+| mpv    | mean   | 13.2  | 777        | –          | 40.2     | 13.1              | –       | –               |
+| fvp    | 1      | 13.3  | 555        | 564        | 42.5     | 12.7              | MFT     | not exposed     |
+| fvp    | 2      | 8.4   | 548        | 564        | 41.4     | 12.7              | MFT     | not exposed     |
+| fvp    | 3      | 6.2   | 546        | 564        | 43.6     | 12.6              | MFT     | not exposed     |
+| fvp    | mean   | 9.3   | 550        | –          | 42.5     | 12.7              | –       | –               |
+
+Reading:
+
+- **CPU and memory**: fvp used less CPU on every stream, 9.3 % against
+  13.2 % on average. Its RSS was about 225 MB lower (550 MB against
+  777 MB). The GPU load was the same: 3D 42.5 % against 40.2 %, and
+  VideoDecode 12.7 % against 13.1 %.
+- **Decoding**: both engines decode in hardware. mpv uses d3d11va. fvp
+  opened the MFT (Media Foundation) video decoder on each stream. Its
+  audio decoder is FFmpeg.
+- **Drops**: mpv dropped no frames, at the video output or the decoder,
+  on all three streams. Its video filter ran at 59.9 fps. fvp has no
+  drop counter, so smoothness is not compared.
+- **D3D 11 device reset**: no reset showed on this machine. With mpv,
+  every device check at every step of the three streams logged "ANGLE's
+  works, media_kit's works". The flush between streams (commit dab2ea0,
+  see [windows-d3d11-device-reset.md](windows-d3d11-device-reset.md))
+  ran each time. The fvp run had no errors and no device problems.
+
+Caveats:
+
+- CPU falls from stream to stream for both engines. The first stream
+  includes start-up cost. Compare the rows per stream, not only the
+  means.
+- `visible=` was `resumed` for mpv but `unknown` for fvp. Flutter gave
+  no lifecycle state in the fvp run, so its window visibility is not
+  confirmed.
+- `position_s` (39 for mpv, 62 for fvp) is each engine's own live
+  position. The two are not comparable.
+- One machine and one channel.
+
 ## Recommendation
 
 - **Windows: fvp is the primary candidate** (decided by the user,
@@ -335,9 +388,10 @@ Reading:
   - Not deal-breakers: the one Linux teardown SIGSEGV (1 of 12 runs),
     and fvp decoding while the window is hidden. The app can turn video
     off when hidden, as it already goes audio-only in the background.
-  - The Windows bench run decides whether fvp avoids the D3D 11 device
-    reset between streams without adding load. Its results go in a
-    `## Windows` section once a tester runs it.
+  - Windows bench, one tested machine: fvp used less CPU and memory
+    than mpv at the same GPU load, and both decode in hardware. The mpv
+    device reset did not show after the dab2ea0 flush, so it is not a
+    deciding factor there. See [Windows results](#windows-results).
 - Android: the data now backs ExoPlayer through the official
   `video_player`. It has the lowest memory, reached 60 frames/s on VOD
   and live, adds no closed-source library, and is maintained by Google.
