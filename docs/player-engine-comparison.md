@@ -414,10 +414,7 @@ Caveats:
   frame step. The page also needs its own controls instead of
   media_kit's.
 - Not measured: X11 matrices, battery drain over time, latency to the
-  live edge,
-  and on Android the battery current and Adreno GPU counters (both need
-  root). The Android `hwdec=mediacodec` with `vo=mediacodec_embed` spike
-  is not run yet: `MediaKitEngine` passes only `hwdec`, and
-  media_kit_video's Android controller re-applies its configured `vo` on
-  every surface change, so the bench needs its own mpv subject with:
-  `VideoControllerConfiguration(vo: 'mediacodec_embed', hwdec: 'mediacodec')`.
+  live edge, and on Android the battery current and Adreno GPU counters
+  (both need root).
+- Dropped: the Android `hwdec=mediacodec` with `vo=mediacodec_embed`
+  spike. Android goes to ExoPlayer, so mpv tuning there would not ship.
