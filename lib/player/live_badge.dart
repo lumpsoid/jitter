@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Marks a stream as live: red at the live edge, grey when [behind] it, as
 /// on YouTube.

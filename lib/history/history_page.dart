@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:jitter/history/history_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// What the history page lists: every visit by day, or each live channel
 /// and VOD once. The page's own choice, not Rust's.

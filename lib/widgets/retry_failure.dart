@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// A failure [message] with a Retry button, centred.
 class RetryFailure extends StatelessWidget {

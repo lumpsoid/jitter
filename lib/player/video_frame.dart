@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:jitter/widgets/focus_ring.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The black 16:9 box the video plays in, labelled "Video player" for a
 /// screen reader and ringed while the focus is anywhere in it.

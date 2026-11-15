@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/shell/home_panes.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../widgets/refresh_key_test.dart' show pressCtrlR;
 

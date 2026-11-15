@@ -1,10 +1,10 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/chat/chat_panel.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/widgets/focus_ring.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets('shows the status lines and the messages', (tester) async {

@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:jitter/categories/category_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
@@ -7,6 +6,7 @@ import 'package:jitter/widgets/escape_goes_back.dart';
 import 'package:jitter/widgets/next_page_footer.dart';
 import 'package:jitter/widgets/refresh_key.dart';
 import 'package:jitter/widgets/retry_failure.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// One category's live streams: the favorites playing it first, then the
 /// rest by viewers, refreshed by pulling down and paged by scrolling.

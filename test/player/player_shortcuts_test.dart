@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/player/player_shortcuts.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Pumps the shortcuts around a button, a text field and a stand-in for
 /// media_kit's video, which handles Space itself while it has the focus.

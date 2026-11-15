@@ -1,9 +1,7 @@
-import 'dart:async';
-
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/widgets/escape_goes_back.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Pumps a home page and pushes [page] over it, in [EscapeGoesBack].
 Future<void> pumpPushed(WidgetTester tester, Widget page) async {
@@ -41,11 +39,9 @@ void main() {
     tester,
   ) async {
     await pumpPushed(tester, const Text('Page'));
-    unawaited(
-      showDialog<void>(
-        context: tester.element(find.text('Page')),
-        builder: (_) => const AlertDialog(content: Text('Dialog')),
-      ),
+    showDialog<void>(
+      context: tester.element(find.text('Page')),
+      builder: (_) => const AlertDialog(content: Text('Dialog')),
     );
     await tester.pumpAndSettle();
 

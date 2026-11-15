@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/app.dart';
 import 'package:jitter/backup/backup_holder.dart';
@@ -19,6 +18,7 @@ import 'package:jitter/settings/settings_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:jitter/top/top_page.dart';
+import 'package:material_ui/material_ui.dart';
 
 JitterApp _app(BootHolder boot, {SettingsHolder? settings}) => JitterApp(
   boot: boot,

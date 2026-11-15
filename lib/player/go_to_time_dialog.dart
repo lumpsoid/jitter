@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/widgets/steam_keyboard.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Asks for a time to go to in the VOD, typed as `1:23:45` or `1h23m` and
 /// sent with Enter or Go. Rust reads it: the dialog closes once [answers]

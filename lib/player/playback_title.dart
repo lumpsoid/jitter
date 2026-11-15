@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:jitter/player/live_badge.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The player page's app bar title: the channel's or the VOD's name, with
 /// a line under it once Rust has sent the [details]: for a live stream a

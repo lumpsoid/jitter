@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/logs/logs_holder.dart';
 import 'package:jitter/logs/logs_page.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:material_ui/material_ui.dart';
 
 const _sessions = LogsUpdateSessions(
   dir: '/data/jitter/logs',

@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/player/video_frame.dart';
 import 'package:jitter/widgets/focus_ring.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// A stand-in for media_kit's video: its own focus, and Space while it
 /// has it.

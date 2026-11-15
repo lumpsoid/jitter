@@ -1,12 +1,12 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
 import 'package:jitter/categories/categories_holder.dart';
 import 'package:jitter/categories/category_tile_view.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/widgets/next_page_footer.dart';
 import 'package:jitter/widgets/paged_scroll_view.dart';
 import 'package:jitter/widgets/retry_failure.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Tiles are at most this wide; the grid adds columns as it widens.
 const double _maxTileWidth = 180;

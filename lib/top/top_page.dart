@@ -1,10 +1,10 @@
-import 'package:flutter/material.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:jitter/top/stream_grid.dart';
 import 'package:jitter/widgets/next_page_footer.dart';
 import 'package:jitter/widgets/retry_failure.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The most-watched live channels: a grid of stream cards, refreshed by
 /// pulling down and paged by scrolling.

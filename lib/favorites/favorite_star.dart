@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// A heart that keeps the channel [channelId] as a favorite or stops
 /// keeping it. Filled while [favorites] lists the channel; Rust looks the

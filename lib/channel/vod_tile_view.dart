@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Width of a VOD's thumbnail in the list.
 const double _thumbnailWidth = 160;

@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/player/scrub.dart';
 import 'package:jitter/player/seek_bar.dart';
 import 'package:jitter/player/vod_phone_controls.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Long enough for a lone tap to be no double tap.
 const _tapSettles = Duration(milliseconds: 400);

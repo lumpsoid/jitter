@@ -1,10 +1,8 @@
-import 'dart:async';
-
-import 'package:flutter/material.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/chat/chat_mode.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Below this width the options open as a bottom sheet, a menu otherwise.
 const double _sheetMaxWidth = 600;
@@ -123,12 +121,10 @@ class PlayerOptions extends StatelessWidget {
     ),
   ];
 
-  void _showSheet(BuildContext context) => unawaited(
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (_) => _OptionsSheet(options: this),
-    ),
+  void _showSheet(BuildContext context) => showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (_) => _OptionsSheet(options: this),
   );
 }
 

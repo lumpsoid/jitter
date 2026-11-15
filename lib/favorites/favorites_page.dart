@@ -1,11 +1,11 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:jitter/favorites/favorite_star.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/stream_card_tile.dart';
 import 'package:jitter/top/stream_grid.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Size of one channel in the offline and not-checked grids.
 const double _channelTileWidth = 104;

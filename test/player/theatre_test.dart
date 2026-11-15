@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/player/theatre.dart';
 import 'package:jitter/widgets/escape_goes_back.dart';
+import 'package:material_ui/material_ui.dart';
 
 const _mediaKit = MethodChannel('com.alexmercerind/media_kit_video');
 

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:audio_service/audio_service.dart';
-import 'package:flutter/material.dart';
 import 'package:jitter/app.dart';
 import 'package:jitter/backup/backup_holder.dart';
 import 'package:jitter/boot/boot_holder.dart';
@@ -23,6 +22,7 @@ import 'package:jitter/search/search_holder.dart';
 import 'package:jitter/settings/settings_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:rinf/rinf.dart';
 

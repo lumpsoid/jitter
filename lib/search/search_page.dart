@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:jitter/categories/categories_page.dart';
 import 'package:jitter/categories/category_tile_view.dart';
@@ -10,6 +9,7 @@ import 'package:jitter/widgets/next_page_footer.dart';
 import 'package:jitter/widgets/paged_scroll_view.dart';
 import 'package:jitter/widgets/retry_failure.dart';
 import 'package:jitter/widgets/steam_keyboard.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Category tiles are at most this wide; the grid adds columns as it
 /// widens.

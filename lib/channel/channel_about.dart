@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// A channel's About tab: its follower count, when Twitch sent one, above
 /// its description whole, or a note that it has none. Pulling down asks

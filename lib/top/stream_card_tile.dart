@@ -1,10 +1,8 @@
-import 'dart:async';
-
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:jitter/favorites/favorite_star.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// One live stream: its thumbnail with the viewer count (and the uptime,
 /// when given) over it, then the title, the channel and the game, with the
@@ -150,33 +148,31 @@ class StreamCardTile extends StatelessWidget {
     );
   }
 
-  void _showActions(BuildContext context) => unawaited(
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (onOpenChannel case final open?)
-              ListTile(
-                leading: const Icon(Icons.person),
-                title: const Text('Open channel'),
-                subtitle: Text(
-                  card.displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  open();
-                },
+  void _showActions(BuildContext context) => showModalBottomSheet<void>(
+    context: context,
+    builder: (sheetContext) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (onOpenChannel case final open?)
+            ListTile(
+              leading: const Icon(Icons.person),
+              title: const Text('Open channel'),
+              subtitle: Text(
+                card.displayName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-            _CopyTile(label: 'Copy stream title', text: card.title),
-            _CopyTile(label: 'Copy channel name', text: card.displayName),
-            if (card.gameName case final game?)
-              _CopyTile(label: 'Copy game name', text: game),
-          ],
-        ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                open();
+              },
+            ),
+          _CopyTile(label: 'Copy stream title', text: card.title),
+          _CopyTile(label: 'Copy channel name', text: card.displayName),
+          if (card.gameName case final game?)
+            _CopyTile(label: 'Copy game name', text: game),
+        ],
       ),
     ),
   );
