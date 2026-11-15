@@ -370,9 +370,9 @@ Caveats:
 - CPU falls from stream to stream for both engines. The first stream
   includes start-up cost. Compare the rows per stream, not only the
   means.
-- `visible=` was `resumed` for mpv but `unknown` for fvp. Flutter gave
-  no lifecycle state in the fvp run, so its window visibility is not
-  confirmed.
+- Both runs played in a visible window filling the screen, as the
+  tester watched. The fvp run logged `visible=unknown` only because
+  Flutter gave the bench no lifecycle state there.
 - `position_s` (39 for mpv, 62 for fvp) is each engine's own live
   position. The two are not comparable.
 - One machine and one channel.
