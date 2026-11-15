@@ -68,4 +68,11 @@ abstract interface class PlayerEngine {
 
   /// Moves the volume by [by] (of 0–100); mid-fade, under the fade.
   Future<void> nudgeVolume(double by);
+
+  /// The user's volume (0–100) now, then each change; under a fade, the one
+  /// it fades from.
+  Live<double> get volumes;
+
+  /// Sets the user's volume to [to] (0–100); mid-fade, under the fade.
+  Future<void> setVolume(double to);
 }

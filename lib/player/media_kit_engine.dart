@@ -316,6 +316,19 @@ class MediaKitEngine implements PlayerEngine {
   Future<void> nudgeVolume(double by) =>
       _player.setVolume(_volume.nudge(by, current: _player.state.volume));
 
+  /// The user's volume now, then each change; under a fade, the one it fades
+  /// from.
+  @override
+  Live<double> get volumes => Live(
+    now: () => _volume.user(current: _player.state.volume),
+    changes: () => _player.stream.volume.map((v) => _volume.user(current: v)),
+  );
+
+  /// Sets the user's volume; mid-fade, under the fade.
+  @override
+  Future<void> setVolume(double to) =>
+      _player.setVolume(_volume.set(to, current: _player.state.volume));
+
   Future<void> _setVolume(double? volume) async {
     if (volume != null) await _player.setVolume(volume);
   }
