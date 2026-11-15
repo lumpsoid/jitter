@@ -59,4 +59,28 @@ void main() {
     expect(volume.nudge(10, current: 40), 45);
     expect(volume.end(), 90);
   });
+
+  test('set moves the user volume, within 0–100', () {
+    final volume = FadedVolume();
+
+    expect(volume.set(30, current: 80), 30);
+    expect(volume.set(150, current: 80), 100);
+    expect(volume.set(-5, current: 80), 0);
+  });
+
+  test('set mid-fade sets the user volume under the fade', () {
+    final volume = FadedVolume()..fade(0.5, current: 80);
+
+    expect(volume.set(60, current: 40), 30);
+    expect(volume.user(current: 30), 60);
+    expect(volume.end(), 60);
+  });
+
+  test('user is the player volume without a fade, the faded-from one with', () {
+    final volume = FadedVolume();
+
+    expect(volume.user(current: 70), 70);
+    volume.fade(0.5, current: 80);
+    expect(volume.user(current: 40), 80);
+  });
 }

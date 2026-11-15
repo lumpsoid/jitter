@@ -101,6 +101,12 @@ class FvpEngine implements PlayerEngine {
   @override
   Future<void> nudgeVolume(double by) async {}
 
+  @override
+  Live<double> get volumes => Live(now: () => 100, changes: Stream.empty);
+
+  @override
+  Future<void> setVolume(double to) async {}
+
   Future<void> _release() async {
     final previous = _controller.value;
     _controller.value = null;
