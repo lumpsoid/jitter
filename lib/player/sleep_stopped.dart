@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The sleep timer stopped the player: said on the black video box, legible
 /// on black, with a Resume button that takes the focus. A live region, so a

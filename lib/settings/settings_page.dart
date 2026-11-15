@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:jitter/backup/backup_holder.dart';
 import 'package:jitter/backup/backup_tiles.dart';
 import 'package:jitter/logs/logs_holder.dart';
 import 'package:jitter/logs/logs_page.dart';
 import 'package:jitter/settings/settings_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The user's settings: the theme, how chat loads and draws emotes, and
 /// the quality a player opens at. Each control sends its change to Rust

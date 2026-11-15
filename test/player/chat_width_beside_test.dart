@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/player/now_playing.dart';
 import 'package:jitter/player/player_layout.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   test('a 16:9 window gives the chat its share of the width', () {

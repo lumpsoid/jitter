@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/chat/chat_mode.dart';
 import 'package:jitter/chat/chat_panel.dart';
@@ -32,6 +31,7 @@ import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/widgets/escape_goes_back.dart';
 import 'package:jitter/widgets/last_pointer.dart';
 import 'package:jitter/widgets/refresh_key.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 /// How often the page reports the player's position; Rust throttles saves.

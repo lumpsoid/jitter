@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:jitter/widgets/refresh_key.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// One pane of [HomePanes]: a top-level page under its title, and what
 /// Ctrl+R refreshes on it (`null`: nothing).

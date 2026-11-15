@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/player/live_mode_slot.dart';
 import 'package:jitter/player/rewind_messages.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// What the slot asked of Rust.
 class Sent {

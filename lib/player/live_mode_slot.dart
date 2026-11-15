@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:jitter/player/live_badge.dart';
 import 'package:jitter/player/rewind_messages.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:material_ui/material_ui.dart';
 
 const _white = Color(0xFFFFFFFF);
 const _muted = Color(0x8AFFFFFF);

@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:rinf/rinf.dart';
 
 import 'bench_run.dart';

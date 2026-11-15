@@ -1,7 +1,5 @@
-import 'dart:async';
-
-import 'package:flutter/material.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Below this width the chapters open as a bottom sheet, a menu otherwise,
 /// as the player's options do.
@@ -50,26 +48,24 @@ class ChapterButton extends StatelessWidget {
     child: InkWell(onTap: onTap, child: child),
   );
 
-  void _showSheet(BuildContext context) => unawaited(
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheet) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            for (final (index, chapter) in chapters.indexed)
-              ListTile(
-                leading: _check(checked: chapter.current),
-                title: Text(chapter.game),
-                trailing: Text(chapter.start),
-                onTap: () {
-                  Navigator.pop(sheet);
-                  onGoTo(index);
-                },
-              ),
-          ],
-        ),
+  void _showSheet(BuildContext context) => showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheet) => SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        children: [
+          for (final (index, chapter) in chapters.indexed)
+            ListTile(
+              leading: _check(checked: chapter.current),
+              title: Text(chapter.game),
+              trailing: Text(chapter.start),
+              onTap: () {
+                Navigator.pop(sheet);
+                onGoTo(index);
+              },
+            ),
+        ],
       ),
     ),
   );

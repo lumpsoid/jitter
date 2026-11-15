@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/chat/chat_holder.dart';
@@ -7,6 +6,7 @@ import 'package:jitter/player/player_layout.dart';
 import 'package:jitter/player/player_shortcuts.dart';
 import 'package:jitter/player/video_frame.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// A chat with one message holding a link.
 ChatHolder _chat() => ChatHolder(sendTheme: (_) {})

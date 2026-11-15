@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:jitter/widgets/retry_failure.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// A playback failure on the black video box: its [message], legible on
 /// black, with a Retry button. A live region, so a screen reader announces

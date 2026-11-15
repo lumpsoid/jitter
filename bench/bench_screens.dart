@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The setup form: what to play, on which engine, and for how long. The
 /// fields belong to the bench app, which reads them when Run is pressed.

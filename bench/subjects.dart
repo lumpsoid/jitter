@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
 import 'package:fvp/fvp.dart' as fvp;
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/player_engine.dart';
 import 'package:logging/logging.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:video_player/video_player.dart';

@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:jitter/player/video_zoom.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// While [zoom] is zoomed in, how far, as a button back to the whole
 /// picture; nothing otherwise.

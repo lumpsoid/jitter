@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:jitter/chat/chat_entry.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/logs/rust_log.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/widgets/focus_ring.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 /// Scrolled further up than this, the list stops following new messages.
@@ -73,12 +73,10 @@ class _ChatPanelState extends State<ChatPanel> {
   void _toLatest() => _scroll.jumpTo(0);
 
   /// Opens the sheet of what [line]'s sender wrote in the chat.
-  void _showChatter(ChatLine line) => unawaited(
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => _ChatterSheet(chat: widget.chat, tapped: line),
-    ),
+  void _showChatter(ChatLine line) => showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => _ChatterSheet(chat: widget.chat, tapped: line),
   );
 
   /// Scrolls for a key while the messages (or a link in them) have the

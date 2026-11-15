@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:jitter/widgets/retry_failure.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Under a paged list: a spinner while the next page loads, its failure with
 /// a Retry, otherwise nothing.

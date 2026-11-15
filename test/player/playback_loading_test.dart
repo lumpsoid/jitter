@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/player/playback_loading.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets('loading is a live region labelled for a screen reader', (

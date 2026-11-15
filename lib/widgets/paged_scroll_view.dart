@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Scrolled this close to the end, the view asks for the next page.
 const double _nextPageExtent = 800;

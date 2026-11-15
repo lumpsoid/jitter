@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:rinf/rinf.dart';
 
 /// The settings as Rust last sent them. Lives for the app's lifetime: the

@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/widgets/refresh_key.dart';
+import 'package:material_ui/material_ui.dart';
 
 Future<void> pressCtrlR(WidgetTester tester, {bool shift = false}) async {
   await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);

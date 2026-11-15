@@ -1,10 +1,10 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/stream_card_tile.dart';
 import 'package:jitter/widgets/paged_scroll_view.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Cards are at most this wide; the grid adds columns as it widens.
 const double _maxCardWidth = 360;

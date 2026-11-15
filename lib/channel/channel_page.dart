@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:jitter/channel/channel_about.dart';
 import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/channel/vod_tile_view.dart';
@@ -7,6 +6,7 @@ import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/widgets/escape_goes_back.dart';
 import 'package:jitter/widgets/refresh_key.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Scrolled this close to the end, the list asks for the next page.
 const double _nextPageExtent = 800;

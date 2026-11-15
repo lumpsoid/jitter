@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
 import 'package:jitter/player/scrub.dart';
 import 'package:jitter/player/seek_bar.dart';
 import 'package:jitter/player/vod_keys.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 /// How long the controls stay after the last finger lifts.

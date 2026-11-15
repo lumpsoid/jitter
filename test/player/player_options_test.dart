@@ -1,9 +1,9 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/player/player_options.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:material_ui/material_ui.dart';
 
 const _qualities = [
   QualityOption(name: 'source', label: '1080p60'),

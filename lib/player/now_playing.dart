@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:jitter/player/chapter_button.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The strip over the player page's video: the stream's or the VOD's
 /// [title], cut to a line with the whole of it on hover or long press, and

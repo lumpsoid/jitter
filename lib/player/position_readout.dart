@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:jitter/player/go_to_time_dialog.dart';
 import 'package:jitter/player/live.dart';
 import 'package:jitter/player/seek_bar.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Where a VOD plays and how long it is (`1:23:45 / 6:00:00`), in
 /// media_kit's controls in place of their position indicator. A tap or a
@@ -59,12 +59,10 @@ class _PositionReadoutState extends State<PositionReadout> {
     super.dispose();
   }
 
-  void _open() => unawaited(
-    showDialog<void>(
-      context: context,
-      builder: (_) =>
-          GoToTimeDialog(answers: widget.answers(), onSubmit: widget.onGoTo),
-    ),
+  void _open() => showDialog<void>(
+    context: context,
+    builder: (_) =>
+        GoToTimeDialog(answers: widget.answers(), onSubmit: widget.onGoTo),
   );
 
   @override

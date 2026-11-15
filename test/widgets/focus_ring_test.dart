@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/widgets/focus_ring.dart';
+import 'package:material_ui/material_ui.dart';
 
 DecoratedBox _box(WidgetTester tester) => tester.widget<DecoratedBox>(
   find.descendant(

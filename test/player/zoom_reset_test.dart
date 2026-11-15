@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/player/video_zoom.dart';
 import 'package:jitter/player/zoom_reset.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets('shows how far it is zoomed, and resets on a tap', (

@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// From this width the chat sits beside the video, below it otherwise.
 const double _chatBesideMinWidth = 840;

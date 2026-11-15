@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:ui' show AppExitResponse;
 
-import 'package:flutter/material.dart';
 import 'package:jitter/backup/backup_holder.dart';
 import 'package:jitter/boot/boot_failure_page.dart';
 import 'package:jitter/boot/boot_holder.dart';
@@ -20,6 +19,7 @@ import 'package:jitter/shell/app_shell.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:jitter/widgets/last_pointer.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:rinf/rinf.dart';
 
 /// The app: a spinner until Rust has booted, its failure with a Retry, or
