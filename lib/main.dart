@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:audio_service/audio_service.dart';
@@ -14,6 +15,7 @@ import 'package:jitter/history/history_holder.dart';
 import 'package:jitter/logs/display_probe.dart';
 import 'package:jitter/logs/logs_holder.dart';
 import 'package:jitter/logs/rust_log.dart';
+import 'package:jitter/player/fvp_engine_setup.dart';
 import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/media_session.dart';
 import 'package:jitter/player/playback_holder.dart';
@@ -34,10 +36,15 @@ Future<void> main() async {
   await initializeRust(assignRustSignal);
   _logErrors();
   sendDisplaysProbe(PlatformDispatcher.instance);
-  MediaKitEngine.ensureInitialized();
 
   // Playback
-  final player = MediaKitEngine();
+  final PlayerEngine player;
+  if (picksFvp(Platform.environment)) {
+    player = startFvpEngine();
+  } else {
+    MediaKitEngine.ensureInitialized();
+    player = MediaKitEngine();
+  }
   PlayerCommandPerformer(player)
       .listen(PlayerCommand.rustSignalStream.map((pack) => pack.message));
   final playback = PlaybackHolder()..connect();
