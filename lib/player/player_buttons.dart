@@ -249,7 +249,6 @@ class _VolumeButtonState extends State<VolumeButton> {
       ),
       child: Slider(
         value: _volume.clamp(0, 100),
-        min: 0,
         max: 100,
         onChanged: widget.onSetVolume,
       ),
