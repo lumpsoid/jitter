@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:jitter/player/live.dart';
 
 /// The video player a `PlayerCommand` drives: the border a test replaces
@@ -75,4 +76,8 @@ abstract interface class PlayerEngine {
 
   /// Sets the user's volume to [to] (0–100); mid-fade, under the fade.
   Future<void> setVolume(double to);
+
+  /// The video's picture, for the page to lay its controls over;
+  /// [zoom] wraps the picture alone (not the black around it).
+  Widget surface(Widget Function(Widget picture) zoom);
 }

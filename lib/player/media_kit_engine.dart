@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:jitter/logs/rust_log.dart';
 import 'package:jitter/player/faded_volume.dart';
 import 'package:jitter/player/live.dart';
@@ -328,6 +329,13 @@ class MediaKitEngine implements PlayerEngine {
   @override
   Future<void> setVolume(double to) =>
       _player.setVolume(_volume.set(to, current: _player.state.volume));
+
+  /// The picture of [controller], under [zoom]; media_kit's own controls are
+  /// off, so the page's overlays stand above it. `null` is what
+  /// `NoVideoControls` is, but it is typed `dynamic` here.
+  @override
+  Widget surface(Widget Function(Widget picture) zoom) =>
+      Video(controller: controller, controls: null, pictureBuilder: zoom);
 
   Future<void> _setVolume(double? volume) async {
     if (volume != null) await _player.setVolume(volume);

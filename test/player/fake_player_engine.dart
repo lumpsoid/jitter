@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:jitter/player/live.dart';
 import 'package:jitter/player/player_engine.dart';
 
@@ -72,4 +73,8 @@ class FakePlayerEngine implements PlayerEngine {
 
   @override
   Future<void> setVolume(double to) async {}
+
+  @override
+  Widget surface(Widget Function(Widget picture) zoom) =>
+      zoom(const SizedBox.expand(key: Key('fake surface')));
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:jitter/player/live.dart';
 import 'package:jitter/player/player_engine.dart';
 import 'package:video_player/video_player.dart';
@@ -106,6 +107,26 @@ class FvpEngine implements PlayerEngine {
 
   @override
   Future<void> setVolume(double to) async {}
+
+  /// The playing picture under [zoom], letterboxed in black as media_kit's
+  /// `Video` is. Its layout is the bench's own `AspectRatio` picture, centred
+  /// so the picture keeps its aspect ratio in the black.
+  @override
+  Widget surface(Widget Function(Widget picture) zoom) =>
+      ValueListenableBuilder<VideoPlayerController?>(
+        valueListenable: _controller,
+        builder: (_, controller, _) => controller == null
+            ? const ColoredBox(color: Color(0xFF000000))
+            : ColoredBox(
+                color: const Color(0xFF000000),
+                child: Center(
+                  child: AspectRatio(
+                    aspectRatio: controller.value.aspectRatio,
+                    child: zoom(VideoPlayer(controller)),
+                  ),
+                ),
+              ),
+      );
 
   Future<void> _release() async {
     final previous = _controller.value;

@@ -88,6 +88,9 @@ class _FakeEngine implements PlayerEngine {
 
   @override
   Future<void> setVolume(double to) async {}
+
+  @override
+  Widget surface(Widget Function(Widget picture) zoom) => const SizedBox();
 }
 
 class _FakeSubject implements BenchSubject {
