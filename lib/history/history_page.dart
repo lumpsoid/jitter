@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:jitter/history/history_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:jitter/widgets/loading_mark.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// What the history page lists: every visit by day, or each live channel
@@ -93,7 +94,7 @@ class _HistoryPageState extends State<HistoryPage> {
       builder: (context, _) {
         final history = widget.history.history;
         if (history == null) {
-          return const Center(child: CircularProgressIndicator());
+          return const LoadingMark();
         }
         return CustomScrollView(
           slivers: [

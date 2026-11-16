@@ -4,6 +4,7 @@ import 'package:jitter/logs/logs_holder.dart';
 import 'package:jitter/settings/settings_holder.dart';
 import 'package:jitter/settings/settings_page.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:jitter/widgets/loading_mark.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'fixtures.dart';
@@ -35,10 +36,12 @@ void main() {
     holder = SettingsHolder(send: (signal) => sent.add(signal.change));
   });
 
-  testWidgets('spins until the settings arrive', (tester) async {
+  testWidgets('shows the loading mark until the settings arrive', (
+    tester,
+  ) async {
     await pumpPage(tester, holder);
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(LoadingMark), findsOneWidget);
   });
 
   testWidgets('shows every setting as Rust sent it', (tester) async {

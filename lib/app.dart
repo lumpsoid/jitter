@@ -19,6 +19,7 @@ import 'package:jitter/shell/app_shell.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:jitter/widgets/last_pointer.dart';
+import 'package:jitter/widgets/loading_mark.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:rinf/rinf.dart';
 
@@ -158,9 +159,7 @@ class _JitterAppState extends State<JitterApp> {
         child: ListenableBuilder(
           listenable: widget.boot,
           builder: (context, _) => switch (widget.boot.status) {
-            BootPending() => const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            ),
+            BootPending() => const Scaffold(body: LoadingMark()),
             BootError(:final message) => BootFailurePage(
               message: message,
               onRetry: widget.boot.boot,
