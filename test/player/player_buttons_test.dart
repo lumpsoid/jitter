@@ -28,8 +28,7 @@ void main() {
     await pumpButton(
       tester,
       PlayPauseButton(
-        playing: true,
-        playings: () => playings.stream,
+        playing: Live(now: () => true, changes: () => playings.stream),
         onPressed: () {},
       ),
     );
@@ -47,8 +46,7 @@ void main() {
     await pumpButton(
       tester,
       PlayPauseButton(
-        playing: false,
-        playings: () => playings.stream,
+        playing: Live(now: () => false, changes: () => playings.stream),
         onPressed: () {},
       ),
     );
@@ -66,8 +64,7 @@ void main() {
     await pumpButton(
       tester,
       PlayPauseButton(
-        playing: true,
-        playings: () => playings.stream,
+        playing: Live(now: () => true, changes: () => playings.stream),
         onPressed: () {},
       ),
     );
@@ -82,13 +79,42 @@ void main() {
     expect(progressOf(tester), 0);
   });
 
+  testWidgets('play/pause mounted after a hide starts where the player plays', (
+    tester,
+  ) async {
+    // The page shows the button only while controls show, so each show mounts
+    // a new one; the player has started since the page built.
+    final shown = ValueNotifier<bool>(false);
+    addTearDown(shown.dispose);
+    var playing = false;
+    await pumpButton(
+      tester,
+      ValueListenableBuilder<bool>(
+        valueListenable: shown,
+        builder: (context, show, _) => show
+            ? PlayPauseButton(
+                playing: Live(now: () => playing, changes: Stream<bool>.empty),
+                onPressed: () {},
+              )
+            : const SizedBox(),
+      ),
+    );
+    playing = true;
+
+    shown.value = true;
+    await tester.pump();
+
+    expect(progressOf(tester), 1);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(progressOf(tester), 1);
+  });
+
   testWidgets('tapping play/pause calls onPressed once', (tester) async {
     var presses = 0;
     await pumpButton(
       tester,
       PlayPauseButton(
-        playing: false,
-        playings: Stream<bool>.empty,
+        playing: Live(now: () => false, changes: Stream<bool>.empty),
         onPressed: () => presses++,
       ),
     );
