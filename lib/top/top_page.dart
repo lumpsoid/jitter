@@ -2,6 +2,7 @@ import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:jitter/top/stream_grid.dart';
+import 'package:jitter/widgets/loading_mark.dart';
 import 'package:jitter/widgets/next_page_footer.dart';
 import 'package:jitter/widgets/retry_failure.dart';
 import 'package:material_ui/material_ui.dart';
@@ -54,7 +55,7 @@ class TopPage extends StatelessWidget {
           onOpenStream: onOpenStream,
           onOpenChannel: onOpenChannel,
         ),
-        _ => const Center(child: CircularProgressIndicator()),
+        _ => const LoadingMark(),
       },
     );
   }

@@ -18,6 +18,7 @@ import 'package:jitter/settings/settings_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:jitter/top/top_page.dart';
+import 'package:jitter/widgets/loading_mark.dart';
 import 'package:material_ui/material_ui.dart';
 
 JitterApp _app(BootHolder boot, {SettingsHolder? settings}) => JitterApp(
@@ -49,10 +50,12 @@ SettingsUpdateSnapshot _settings(AppTheme theme) => SettingsUpdateSnapshot(
 );
 
 void main() {
-  testWidgets('spins until booted', (tester) async {
+  testWidgets('shows the loading mark until booted', (tester) async {
     await tester.pumpWidget(_app(BootHolder()));
+    await tester.pump();
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(LoadingMark), findsOneWidget);
+    expect(tester.binding.hasScheduledFrame, isFalse);
   });
 
   testWidgets('shows a boot failure with Retry', (tester) async {

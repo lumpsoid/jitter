@@ -4,6 +4,7 @@ import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/browse_holder.dart';
 import 'package:jitter/top/top_page.dart';
+import 'package:jitter/widgets/loading_mark.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'fixtures.dart';
@@ -33,10 +34,10 @@ Future<void> pumpPage(
 }
 
 void main() {
-  testWidgets('spins until the first page', (tester) async {
+  testWidgets('shows the loading mark until the first page', (tester) async {
     await pumpPage(tester, BrowseHolder());
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(LoadingMark), findsOneWidget);
   });
 
   testWidgets('a failed first page shows its message with Retry', (

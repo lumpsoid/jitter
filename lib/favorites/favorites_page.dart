@@ -5,6 +5,7 @@ import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:jitter/top/stream_card_tile.dart';
 import 'package:jitter/top/stream_grid.dart';
+import 'package:jitter/widgets/loading_mark.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// Size of one channel in the offline and not-checked grids.
@@ -64,7 +65,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
       builder: (context, _) {
         final favorites = widget.favorites.favorites;
         if (favorites == null) {
-          return const Center(child: CircularProgressIndicator());
+          return const LoadingMark();
         }
         return RefreshIndicator(
           onRefresh: widget.favorites.refresh,

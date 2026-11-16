@@ -6,6 +6,7 @@ import 'package:jitter/logs/logs_holder.dart';
 import 'package:jitter/logs/logs_page.dart';
 import 'package:jitter/settings/settings_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:jitter/widgets/loading_mark.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// The user's settings: the theme, how chat loads and draws emotes, and
@@ -56,7 +57,7 @@ class _SettingsPageState extends State<SettingsPage> {
       builder: (context, _) {
         final settings = widget.settings.settings;
         if (settings == null) {
-          return const Center(child: CircularProgressIndicator());
+          return const LoadingMark();
         }
         final holder = widget.settings;
         return ListView(

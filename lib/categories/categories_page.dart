@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:jitter/categories/categories_holder.dart';
 import 'package:jitter/categories/category_tile_view.dart';
 import 'package:jitter/src/bindings/bindings.dart';
+import 'package:jitter/widgets/loading_mark.dart';
 import 'package:jitter/widgets/next_page_footer.dart';
 import 'package:jitter/widgets/paged_scroll_view.dart';
 import 'package:jitter/widgets/retry_failure.dart';
@@ -43,7 +44,7 @@ class CategoriesPage extends StatelessWidget {
           more: more,
           onOpenCategory: onOpenCategory,
         ),
-        _ => const Center(child: CircularProgressIndicator()),
+        _ => const LoadingMark(),
       },
     );
   }
