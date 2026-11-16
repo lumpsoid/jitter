@@ -12,8 +12,7 @@ const double _swipeSlant = 0.5;
 
 /// Calls [onSwipe] when one finger goes down [child], steeply, and lifts.
 /// Only while [zoom] is none: zoomed, a drag moves the picture. From raw
-/// pointer moves, as `ZoomGestures` reads its drag: media_kit's mobile
-/// controls take a one-finger drag in the gesture arena.
+/// pointer moves, as `ZoomGestures` reads its drag.
 class SwipeDown extends StatefulWidget {
   const new({
     required this.zoom,

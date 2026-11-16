@@ -25,8 +25,8 @@ const _playedColor = Color(0xFFFF0000);
 /// drag that keeps still this long shows its frame.
 const _rest = Duration(milliseconds: 150);
 
-/// A VOD's seek bar, in media_kit's controls in place of their own
-/// and drawn like it. A click seeks to the spot and a drag follows the
+/// A VOD's seek bar, in the player's controls, drawn like media_kit's.
+/// A click seeks to the spot and a drag follows the
 /// pointer; held Shift slows the drag to a tenth and Shift and Ctrl to a
 /// hundredth, and so does taking the pointer or a finger a band or two
 /// away from the bar ([ScrubSpeed]); the slower of the two wins. A slowed
@@ -222,8 +222,8 @@ class _SeekBarState extends State<SeekBar> {
     _tell();
   }
 
-  /// media_kit's desktop controls hide a while after the mouse last hovered
-  /// over them, and a pressed mouse does not hover: a long, slow drag would
+  /// The desktop controls hide a while after the mouse last moved over them,
+  /// and a pressed mouse does not hover: a long, slow drag would
   /// hide them, this bar with them. Each move of a mouse's drag is passed
   /// to what is under it as a hover too, which keeps them shown. A phone's
   /// controls hide a while after the tap that showed them, drag or not.

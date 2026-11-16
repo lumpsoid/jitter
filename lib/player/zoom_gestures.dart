@@ -92,9 +92,8 @@ class _ZoomGesturesState extends State<ZoomGestures> {
   }
 
   /// A drag by one pointer or a pinch by two, from their raw moves rather
-  /// than gestures: media_kit's mobile controls always take a one-finger
-  /// drag in the gesture arena, even with their drag gestures off, and
-  /// take it before a pinch would win there.
+  /// than gestures, so no gesture over the picture can take them in the
+  /// arena first.
   void _onMove(PointerMoveEvent event) {
     if (!_down.containsKey(event.pointer)) return;
     final before = _down.values.toList();

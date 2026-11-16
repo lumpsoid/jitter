@@ -7,8 +7,8 @@ import 'package:jitter/src/bindings/bindings.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// Where a VOD plays and how long it is (`1:23:45 / 6:00:00`), in
-/// media_kit's controls in place of their position indicator. A tap or a
-/// click opens a [GoToTimeDialog] to type an exact time to go to.
+/// the player's controls, in place of media_kit's position indicator.
+/// A tap or a click opens a [GoToTimeDialog] to type an exact time to go to.
 class PositionReadout extends StatefulWidget {
   const new({
     required this.positions,

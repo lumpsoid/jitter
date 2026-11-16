@@ -5,7 +5,7 @@ import 'package:flutter/widgets.dart';
 /// chat, `m` mute, `f` fullscreen, `t` theatre, Space play/pause, `+` (or
 /// `=`) and `-` zoom in and out, `0` the whole picture. Not while a text
 /// field has the focus, so it can be typed in. A key the focused widget
-/// handles itself (media_kit's video takes Space and `f`) does not reach
+/// handles itself (the desktop controls take Space and `f`) does not reach
 /// these, so it fires once.
 class PlayerShortcuts extends StatelessWidget {
   const new({
