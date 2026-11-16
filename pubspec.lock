@@ -278,7 +278,7 @@ packages:
     source: sdk
     version: "0.0.0"
   fvp:
-    dependency: "direct dev"
+    dependency: "direct main"
     description:
       name: fvp
       sha256: "1ee9df424ace41988c2e10ed01f35b170d9ef00c62330acd1b97f007ca56ec99"
@@ -398,7 +398,7 @@ packages:
     source: hosted
     version: "1.0.1"
   logging:
-    dependency: "direct dev"
+    dependency: "direct main"
     description:
       name: logging
       sha256: c8245ada5f1717ed44271ed1c26b8ce85ca3228fd2ffdb75468ab01979309d61
@@ -904,7 +904,7 @@ packages:
     source: hosted
     version: "11.0.0"
   video_player:
-    dependency: "direct dev"
+    dependency: "direct main"
     description:
       name: video_player
       sha256: "07ae1e03f2d4c8e2e9a75ee678f90acbc4506d4458a9c628512d119a1eee5754"
