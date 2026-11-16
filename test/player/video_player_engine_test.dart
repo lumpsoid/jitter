@@ -7,11 +7,12 @@ import 'package:jitter/src/bindings/bindings.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
 /// The initialized event a player sends once its media has loaded.
-VideoEvent _initialized() => VideoEvent(
-  eventType: VideoEventType.initialized,
-  duration: const Duration(minutes: 1),
-  size: const Size(1920, 1080),
-);
+VideoEvent _initialized({Duration duration = const Duration(minutes: 1)}) =>
+    VideoEvent(
+      eventType: VideoEventType.initialized,
+      duration: duration,
+      size: const Size(1920, 1080),
+    );
 
 /// A platform that records the calls a controller makes and plays the events
 /// a test pushes, so the engine runs with no player behind it.
@@ -71,13 +72,16 @@ class _FakePlatform extends VideoPlayerPlatform {
   /// `initialize()` waits until [finishInitialize].
   bool holdInitialize = false;
 
+  /// The length the next player reports once its media has loaded.
+  Duration nextDuration = const Duration(minutes: 1);
+
   @override
   Stream<VideoEvent> videoEventsFor(int playerId) {
     final events = StreamController<VideoEvent>();
     if (failInitialize) {
       events.addError(PlatformException(code: 'init', message: 'no stream'));
     } else if (!holdInitialize) {
-      events.add(_initialized());
+      events.add(_initialized(duration: nextDuration));
     }
     _events[playerId] = events;
     return events.stream;
@@ -500,5 +504,16 @@ void main() {
     expect(fake.calls, isNot(contains('play')));
     expect(fake.calls, contains('dispose 1'));
     expect(engine.isPlaying, isFalse);
+  });
+
+  test('a live stream, whose length is unbounded, reports no length', () async {
+    // mdk reports a live stream's length as INT64_MAX microseconds.
+    fake.nextDuration = const Duration(microseconds: 9223372036854775807);
+    await _open(engine, url);
+
+    expect(engine.duration, Duration.zero);
+    expect(engine.durations.now(), Duration.zero);
+
+    await engine.stop();
   });
 }

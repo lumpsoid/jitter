@@ -174,9 +174,10 @@ class VideoPlayerEngine implements PlayerEngine {
   );
 
   @override
-  Duration get duration => _state?.duration ?? Duration.zero;
+  Duration get duration => _lengthOf(_state);
 
-  /// How long the media is: zero until it has loaded.
+  /// How long the media is: zero until it has loaded, and zero for a live
+  /// stream, whose length is unbounded.
   @override
   Live<Duration> get durations => Live(
     now: () => duration,
@@ -363,6 +364,17 @@ class VideoPlayerEngine implements PlayerEngine {
     });
     out.onCancel = changes.cancel;
   });
+}
+
+/// Longer than any Twitch VOD (48 h). mdk reports a live stream's length as
+/// unbounded, the largest duration it can hold, which is no length at all.
+const _unboundedAbove = Duration(days: 1000);
+
+/// The media's length from [state]: zero with no state, and zero when the
+/// length is unbounded.
+Duration _lengthOf(VideoPlayerValue? state) {
+  final length = state?.duration ?? Duration.zero;
+  return length > _unboundedAbove ? Duration.zero : length;
 }
 
 void _sendBuffering(PlayerBuffering signal) => signal.sendSignalToRust();
