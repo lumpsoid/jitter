@@ -163,6 +163,14 @@ from those to core, never back.
 3. Core does not know Twitch's wire formats; twitch does not decide.
 4. No panics in Rust (`unwrap`/`expect`/`panic!`); return `Result`.
 
+## Flutter rules
+
+- Fade with colour alpha, not `Opacity`, `AnimatedOpacity` or
+  `FadeTransition`: opacity draws the subtree offscreen, which on Impeller's
+  GLES backend (Linux) stalled the video for up to 118 ms per fade of the
+  player controls. Opacity only where alpha cannot reach, such as an image.
+  (user, 2026-11-16)
+
 ## Gates
 
 `make check` (`scripts/check.sh`, which CI runs too) runs all of them in

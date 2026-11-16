@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:jitter/player/controls_fade.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// How long the controls stay after the last mouse move over the video.
@@ -13,14 +14,6 @@ const _doubleClick = Duration(milliseconds: 400);
 
 const _clear = Color(0x00000000);
 const _white = Color(0xFFFFFFFF);
-
-/// Darkens the bottom of the video behind the bar.
-const _shade = LinearGradient(
-  begin: Alignment.topCenter,
-  end: Alignment.bottomCenter,
-  stops: [0.5, 1.0],
-  colors: [_clear, Color(0x61000000)],
-);
 
 /// The desktop controls over a player's video, in place of media_kit's
 /// `MaterialDesktopVideoControls`. A mouse move over the video shows the
@@ -66,12 +59,18 @@ class DesktopControls extends StatefulWidget {
   State<DesktopControls> createState() => _DesktopControlsState();
 }
 
-class _DesktopControlsState extends State<DesktopControls> {
+class _DesktopControlsState extends State<DesktopControls>
+    with SingleTickerProviderStateMixin {
   /// Whether the bar is shown, or fading in or out.
   bool _visible = false;
 
   /// Whether the bar is built: through the fade out too, then not.
   bool _built = false;
+
+  late final AnimationController _controller;
+
+  /// The fade the bar's colours follow: 0 hidden, 1 shown.
+  late final CurvedAnimation _fadeCurve;
 
   Timer? _hide;
 
@@ -85,6 +84,13 @@ class _DesktopControlsState extends State<DesktopControls> {
   @override
   void initState() {
     super.initState();
+    _controller = AnimationController(vsync: this, duration: _fade)
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.dismissed) {
+          setState(() => _built = false);
+        }
+      });
+    _fadeCurve = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
     _bufferings = widget.bufferings().listen(
       (buffering) => setState(() => _buffering = buffering),
     );
@@ -95,6 +101,8 @@ class _DesktopControlsState extends State<DesktopControls> {
     _hide?.cancel();
     _clickWindow?.cancel();
     unawaited(_bufferings.cancel());
+    _fadeCurve.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -106,13 +114,17 @@ class _DesktopControlsState extends State<DesktopControls> {
         _visible = true;
         _built = true;
       });
+      _controller.forward();
     }
     _hide = Timer(_hideAfter, _hideNow);
   }
 
   void _hideNow() {
     _hide?.cancel();
-    if (_visible) setState(() => _visible = false);
+    if (_visible) {
+      setState(() => _visible = false);
+      _controller.reverse();
+    }
   }
 
   void _onTapUp(TapUpDetails _) {
@@ -151,24 +163,14 @@ class _DesktopControlsState extends State<DesktopControls> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    AnimatedOpacity(
-                      opacity: _visible ? 1 : 0,
-                      duration: _fade,
-                      curve: Curves.easeInOut,
-                      onEnd: () {
-                        if (!_visible) setState(() => _built = false);
-                      },
+                    ControlsFade(
+                      notifier: _fadeCurve,
                       child: _built
                           ? IgnorePointer(
                               ignoring: !_visible,
                               child: Stack(
                                 fit: StackFit.expand,
-                                children: [
-                                  const DecoratedBox(
-                                    decoration: BoxDecoration(gradient: _shade),
-                                  ),
-                                  _bar(),
-                                ],
+                                children: [const _Shade(), _bar()],
                               ),
                             )
                           : const SizedBox.shrink(),
@@ -188,12 +190,10 @@ class _DesktopControlsState extends State<DesktopControls> {
                                   ),
                                   duration: _fade,
                                   builder: (context, value, _) => value > 0
-                                      ? Opacity(
-                                          opacity: value,
-                                          child:
-                                              const CircularProgressIndicator(
-                                                color: _white,
-                                              ),
+                                      ? CircularProgressIndicator(
+                                          color: _white.withValues(
+                                            alpha: value,
+                                          ),
                                         )
                                       : const SizedBox.shrink(),
                                 ),
@@ -228,4 +228,23 @@ class _DesktopControlsState extends State<DesktopControls> {
       ],
     ),
   );
+}
+
+/// Darkens the bottom of the video behind the bar, fading with the bar.
+class _Shade extends StatelessWidget {
+  const new();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          stops: const [0.5, 1.0],
+          colors: [_clear, fadedColor(context, const Color(0x61000000))],
+        ),
+      ),
+    );
+  }
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jitter/player/controls_fade.dart';
 import 'package:jitter/player/desktop_controls.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -51,18 +52,33 @@ Future<void> fadeThrough(WidgetTester tester) async {
   }
 }
 
-/// The opacity the bar is drawn at now, read from its AnimatedOpacity's fade.
-double barOpacity(WidgetTester tester) {
-  final fade = find.ancestor(
-    of: find.text('bar'),
-    matching: find.byType(AnimatedOpacity),
-  );
+/// How far the bar has faded in now, read from the [ControlsFade] above it:
+/// 0 hidden, 1 shown.
+double barFade(WidgetTester tester) {
   return tester
-      .widget<FadeTransition>(
-        find.descendant(of: fade, matching: find.byType(FadeTransition)),
+      .widget<ControlsFade>(
+        find.ancestor(
+          of: find.text('bar'),
+          matching: find.byType(ControlsFade),
+        ),
       )
-      .opacity
+      .notifier!
       .value;
+}
+
+/// Expects no layer in the controls that draws a subtree offscreen to fade
+/// it: opacity on Impeller's GLES backend stalled the video for each fade.
+void expectNoOpacityLayers(WidgetTester tester) {
+  for (final layer in [AnimatedOpacity, Opacity, FadeTransition]) {
+    expect(
+      find.descendant(
+        of: find.byType(DesktopControls),
+        matching: find.byType(layer),
+      ),
+      findsNothing,
+      reason: '$layer',
+    );
+  }
 }
 
 void main() {
@@ -97,22 +113,25 @@ void main() {
     await tester.pump();
 
     expect(find.text('bar'), findsOneWidget);
-    expect(
-      tester
-          .widget<AnimatedOpacity>(
-            find.ancestor(
-              of: find.text('bar'),
-              matching: find.byType(AnimatedOpacity),
-            ),
-          )
-          .opacity,
-      1,
-    );
-    expect(barOpacity(tester), lessThan(1));
+    expect(barFade(tester), lessThan(1));
 
     await fadeThrough(tester);
 
-    expect(barOpacity(tester), 1);
+    expect(barFade(tester), 1);
+  });
+
+  testWidgets('the controls draw no opacity layer, with the bar shown', (
+    tester,
+  ) async {
+    await pumpControls(tester);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: _outside);
+    await mouse.moveTo(_centre);
+    await tester.pump();
+    await fadeThrough(tester);
+
+    expect(find.text('bar'), findsOneWidget);
+    expectNoOpacityLayers(tester);
   });
 
   testWidgets('another move within 3 s starts the 3 s again', (tester) async {
@@ -260,5 +279,19 @@ void main() {
     await fadeThrough(tester);
 
     expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
+
+  testWidgets('the controls draw no opacity layer, with the spinner shown', (
+    tester,
+  ) async {
+    final buffering = StreamController<bool>();
+    addTearDown(buffering.close);
+    await pumpControls(tester, bufferings: () => buffering.stream);
+
+    buffering.add(true);
+    await fadeThrough(tester);
+
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expectNoOpacityLayers(tester);
   });
 }

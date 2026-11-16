@@ -6,6 +6,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter/gestures.dart';
+import 'package:jitter/player/controls_fade.dart';
 import 'package:jitter/player/live.dart';
 import 'package:jitter/player/zoom_gestures.dart';
 import 'package:material_ui/material_ui.dart';
@@ -83,12 +84,12 @@ class _PlayPauseButtonState extends State<PlayPauseButton>
     return IconButton(
       onPressed: widget.onPressed,
       iconSize: widget.size,
-      color: _white,
+      color: fadedColor(context, _white),
       icon: AnimatedIcon(
         progress: _animation,
         icon: AnimatedIcons.play_pause,
         size: widget.size,
-        color: _white,
+        color: fadedColor(context, _white),
       ),
     );
   }
@@ -115,7 +116,7 @@ class FullscreenButton extends StatelessWidget {
     return IconButton(
       onPressed: onPressed,
       iconSize: size,
-      color: _white,
+      color: fadedColor(context, _white),
       icon: Icon(fullscreen ? Icons.fullscreen_exit : Icons.fullscreen),
     );
   }
@@ -201,27 +202,31 @@ class _VolumeButtonState extends State<VolumeButton> {
               IconButton(
                 onPressed: widget.onToggleMute,
                 iconSize: widget.size * 0.8,
-                color: _white,
+                color: fadedColor(context, _white),
                 icon: AnimatedSwitcher(
                   duration: _volumeDuration,
                   child: Icon(icon, key: ValueKey(icon)),
                 ),
               ),
-              AnimatedOpacity(
-                opacity: _hovered ? 1 : 0,
+              AnimatedContainer(
+                width: _hovered ? _lead + _sliderWidth + _tail : _lead,
                 duration: _volumeDuration,
-                child: AnimatedContainer(
-                  width: _hovered ? _lead + _sliderWidth + _tail : _lead,
-                  duration: _volumeDuration,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        const SizedBox(width: _lead),
-                        SizedBox(width: _sliderWidth, child: _slider()),
-                        const SizedBox(width: _tail),
-                      ],
-                    ),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      const SizedBox(width: _lead),
+                      SizedBox(
+                        width: _sliderWidth,
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween<double>(end: _hovered ? 1 : 0),
+                          duration: _volumeDuration,
+                          builder: (context, shown, _) =>
+                              _slider(context, shown),
+                        ),
+                      ),
+                      const SizedBox(width: _tail),
+                    ],
                   ),
                 ),
               ),
@@ -232,13 +237,18 @@ class _VolumeButtonState extends State<VolumeButton> {
     );
   }
 
-  Widget _slider() {
+  /// The slider, its colours faded by [shown] (0 hidden, 1 shown) and by the
+  /// controls' fade. The overlay stays clear.
+  Widget _slider(BuildContext context, double shown) {
+    Color fade(Color color) =>
+        fadedColor(context, color.withValues(alpha: color.a * shown));
+
     return SliderTheme(
       data: SliderThemeData(
         trackHeight: 1.2,
-        inactiveTrackColor: const Color(0x3DFFFFFF),
-        activeTrackColor: _white,
-        thumbColor: _white,
+        inactiveTrackColor: fade(const Color(0x3DFFFFFF)),
+        activeTrackColor: fade(_white),
+        thumbColor: fade(_white),
         thumbShape: const RoundSliderThumbShape(
           enabledThumbRadius: 6,
           elevation: 0,
