@@ -224,16 +224,18 @@ void main() {
         onNudge: (_) {},
       ),
     );
+
+    // How far the slider is shown now: its track's alpha, 0 hidden, 1 shown.
     double shown() {
-      return tester
-          .widget<FadeTransition>(
-            find.descendant(
-              of: find.byType(AnimatedOpacity),
-              matching: find.byType(FadeTransition),
+      final theme = tester
+          .widgetList<SliderTheme>(
+            find.ancestor(
+              of: find.byType(Slider),
+              matching: find.byType(SliderTheme),
             ),
           )
-          .opacity
-          .value;
+          .first;
+      return theme.data.activeTrackColor!.a;
     }
 
     expect(shown(), 0);
