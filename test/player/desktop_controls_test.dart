@@ -165,6 +165,52 @@ void main() {
     expect(count, 1);
   });
 
+  testWidgets(
+    'a given focus node holds the keys over a sibling that autofocuses',
+    (tester) async {
+      var count = 0;
+      final focusNode = FocusNode();
+      addTearDown(focusNode.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                // Takes the focus first, as the page's own shortcuts do.
+                const Focus(
+                  autofocus: true,
+                  child: SizedBox(width: 10, height: 10),
+                ),
+                Expanded(
+                  child: DesktopControls(
+                    keys: {
+                      const SingleActivator(LogicalKeyboardKey.space): () =>
+                          count++,
+                    },
+                    bottomBar: const [Text('bar')],
+                    bufferings: Stream<bool>.empty,
+                    onToggleFullscreen: () {},
+                    focusNode: focusNode,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      expect(focusNode.hasFocus, isFalse);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      expect(count, 0);
+
+      focusNode.requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+
+      expect(count, 1);
+    },
+  );
+
   testWidgets('two quick clicks on the video toggle fullscreen once', (
     tester,
   ) async {

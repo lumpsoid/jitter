@@ -4,13 +4,16 @@ import 'package:flutter/foundation.dart';
 import 'package:jitter/chat/chat_holder.dart';
 import 'package:jitter/chat/chat_mode.dart';
 import 'package:jitter/chat/chat_panel.dart';
+import 'package:jitter/player/desktop_controls.dart';
+import 'package:jitter/player/fullscreen.dart';
+import 'package:jitter/player/live_keys.dart';
 import 'package:jitter/player/live_mode_slot.dart';
-import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/now_playing.dart';
 import 'package:jitter/player/playback_failure.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/player/playback_loading.dart';
 import 'package:jitter/player/playback_title.dart';
+import 'package:jitter/player/player_buttons.dart';
 import 'package:jitter/player/player_engine.dart';
 import 'package:jitter/player/player_layout.dart';
 import 'package:jitter/player/player_options.dart';
@@ -21,6 +24,7 @@ import 'package:jitter/player/seek_bar.dart';
 import 'package:jitter/player/sleep_stopped.dart';
 import 'package:jitter/player/swipe_down.dart';
 import 'package:jitter/player/theatre.dart';
+import 'package:jitter/player/touch_controls.dart';
 import 'package:jitter/player/video_frame.dart';
 import 'package:jitter/player/video_zoom.dart';
 import 'package:jitter/player/vod_keys.dart';
@@ -29,11 +33,9 @@ import 'package:jitter/player/zoom_gestures.dart';
 import 'package:jitter/player/zoom_reset.dart';
 import 'package:jitter/player/zoomed_picture.dart';
 import 'package:jitter/src/bindings/bindings.dart';
-import 'package:jitter/widgets/escape_goes_back.dart';
 import 'package:jitter/widgets/last_pointer.dart';
 import 'package:jitter/widgets/refresh_key.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 
 /// How often the page reports the player's position; Rust throttles saves.
 const _reportEvery = Duration(seconds: 1);
@@ -42,7 +44,7 @@ const _reportEvery = Duration(seconds: 1);
 /// media_kit's volume button does.
 const double _wheelVolumeStep = 5;
 
-/// media_kit's desktop button bar height, its default.
+/// The desktop controls' button bar height, as media_kit's.
 const double _buttonBarHeight = 56;
 
 /// Plays [target]: sends `Play` when it opens and `LeavePlayer` when it
@@ -82,12 +84,21 @@ class PlayerPage extends StatefulWidget {
 class _PlayerPageState extends State<PlayerPage> {
   late final Timer _reporter;
 
-  /// The video, for the fullscreen key; unattached until playback is ready.
-  final _videoKey = GlobalKey<VideoState>();
+  /// Keeps the video's frame, and the picture in it, across fullscreen's
+  /// change of layout.
+  final GlobalKey _frameKey = GlobalKey();
 
   /// Whether the page is in theatre: no app bar, the screen fullscreen.
   /// The page's own layout, not Rust's: it is gone when the page closes.
   bool _theatre = false;
+
+  /// Whether the video has the whole screen: no app bar, no chat, the screen
+  /// fullscreen. The page's own layout, like theatre's.
+  bool _fullscreen = false;
+
+  /// The keyboard's focus on the controls, given at once in fullscreen, so
+  /// their keys work: the page's shortcuts hold it otherwise.
+  final _controlsFocus = FocusNode();
 
   /// The zoom into the picture; the page's own, like theatre.
   final ValueNotifier<VideoZoom> _zoom = ValueNotifier(VideoZoom.none);
@@ -172,8 +183,7 @@ class _PlayerPageState extends State<PlayerPage> {
       ZoomedPicture(zoom: _zoom, child: picture);
 
   /// [controls] under the zoom's gestures and reset, and the rewind's
-  /// messages over them: within media_kit's controls, so its fullscreen
-  /// route, which builds only the controls anew, has them too.
+  /// messages over them.
   Widget _zoomable(Widget controls) => RewindMessages(
     answers: () => RewindAnswer.rustSignalStream.map((pack) => pack.message),
     child: Stack(
@@ -190,27 +200,124 @@ class _PlayerPageState extends State<PlayerPage> {
     ),
   );
 
-  /// A VOD's controls: the page's own after a touch ([VodPhoneControls]),
-  /// media_kit's desktop ones themed by [_Controls] after a mouse.
-  Widget _vodControls(VideoState video, Widget mode) => _ByLastPointer(
+  /// The play/pause button, for either controls.
+  PlayPauseButton _playPause({double size = 28}) => PlayPauseButton(
+    playing: widget.player.isPlaying,
+    playings: () => widget.player.playing,
+    onPressed: () => unawaited(widget.player.togglePlaying()),
+    size: size,
+  );
+
+  /// The fullscreen button, for either controls.
+  FullscreenButton _fullscreenButton({double size = 28}) => FullscreenButton(
+    fullscreen: _fullscreen,
+    onPressed: _toggleFullscreen,
+    size: size,
+  );
+
+  /// The volume button, for either controls; it keeps its own wheel.
+  VolumeButton _volume() => VolumeButton(
+    volumes: widget.player.volumes,
+    onToggleMute: () => unawaited(widget.player.toggleMute()),
+    onSetVolume: (to) => unawaited(widget.player.setVolume(to)),
+    onNudge: (by) => unawaited(widget.player.nudgeVolume(by)),
+  );
+
+  /// Clear of the screen's notches and corners in fullscreen, as media_kit's
+  /// controls are. [context] must be under theatre's SafeArea, which has
+  /// taken its own inset already.
+  EdgeInsets _controlsPadding(BuildContext context) =>
+      _fullscreen ? MediaQuery.paddingOf(context) : EdgeInsets.zero;
+
+  /// A VOD's controls: the page's own after a touch ([VodPhoneControls]);
+  /// after a mouse, [DesktopControls] with the page's seek bar over the
+  /// buttons, and the readout and [mode] (shown once rewound) after the
+  /// volume. [vodKeys] are its keys. The wheel over the video sets the volume
+  /// through the page ([ZoomGestures]); the volume button keeps its own wheel.
+  Widget _vodControls(BuildContext context, Widget mode) => _ByLastPointer(
     touch: VodPhoneControls(
-      playPause: const MaterialPlayOrPauseButton(iconSize: 48),
+      playPause: _playPause(size: 48),
       readout: _readout(fontSize: 14),
-      fullscreen: const MaterialFullscreenButton(),
+      fullscreen: _fullscreenButton(size: 24),
       bar: _seekBar(),
       mode: mode,
       bufferings: () => widget.player.bufferings,
       onSeekBy: (by) => unawaited(widget.player.seekBy(by)),
     ),
-    mouse: MaterialDesktopVideoControls(video),
+    mouse: DesktopControls(
+      keys: vodKeys(
+        onTogglePlay: () => unawaited(widget.player.togglePlaying()),
+        onPlay: () => unawaited(widget.player.play()),
+        onPause: () => unawaited(widget.player.pause()),
+        onSeekBy: (by) => unawaited(widget.player.seekBy(by)),
+        onStepFrame: (forward) =>
+            unawaited(widget.player.stepFrame(forward: forward)),
+        onNudgeVolume: (by) => unawaited(widget.player.nudgeVolume(by)),
+        onToggleFullscreen: _toggleFullscreen,
+        onExitFullscreen: _exitFullscreen,
+      ),
+      barHeight: _buttonBarHeight + seekBarHeight,
+      bottomBar: [
+        Expanded(
+          child: Column(
+            children: [
+              _seekBar(),
+              Expanded(
+                child: Row(
+                  children: [
+                    _playPause(),
+                    _volume(),
+                    _readout(fontSize: 12),
+                    mode,
+                    const Spacer(),
+                    _fullscreenButton(),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+      bufferings: () => widget.player.bufferings,
+      onToggleFullscreen: _toggleFullscreen,
+      padding: _controlsPadding(context),
+      focusNode: _controlsFocus,
+    ),
     zoom: _zoom,
   );
 
-  /// A live stream's controls: media_kit's mobile ones after a touch, its
-  /// desktop ones after a mouse, both themed by [_Controls].
-  Widget _liveControls(VideoState video) => _ByLastPointer(
-    touch: MaterialVideoControls(video),
-    mouse: MaterialDesktopVideoControls(video),
+  /// A live stream's controls: the page's own after a touch ([TouchControls],
+  /// with [mode] first on the left); after a mouse, [DesktopControls] with
+  /// [mode] after the volume. [liveKeys] are its keys. The wheel over the
+  /// video sets the volume through the page, as for a VOD.
+  Widget _liveControls(BuildContext context, Widget mode) => _ByLastPointer(
+    touch: TouchControls(
+      center: _playPause(size: 48),
+      bottomBar: [mode, const Spacer(), _fullscreenButton(size: 24)],
+      bufferings: () => widget.player.bufferings,
+      padding: _controlsPadding(context),
+    ),
+    mouse: DesktopControls(
+      keys: liveKeys(
+        onTogglePlay: () => unawaited(widget.player.togglePlaying()),
+        onPlay: () => unawaited(widget.player.play()),
+        onPause: () => unawaited(widget.player.pause()),
+        onNudgeVolume: (by) => unawaited(widget.player.nudgeVolume(by)),
+        onToggleFullscreen: _toggleFullscreen,
+        onExitFullscreen: _exitFullscreen,
+      ),
+      bottomBar: [
+        _playPause(),
+        _volume(),
+        mode,
+        const Spacer(),
+        _fullscreenButton(),
+      ],
+      bufferings: () => widget.player.bufferings,
+      onToggleFullscreen: _toggleFullscreen,
+      padding: _controlsPadding(context),
+      focusNode: _controlsFocus,
+    ),
     zoom: _zoom,
   );
 
@@ -219,10 +326,31 @@ class _PlayerPageState extends State<PlayerPage> {
 
   void _turnOffSleep() => const TurnOffSleepTimer().sendSignalToRust();
 
-  void _toggleFullscreen() =>
-      unawaited(_videoKey.currentState?.toggleFullscreen());
+  void _toggleFullscreen() {
+    setState(() => _fullscreen = !_fullscreen);
+    if (_fullscreen) _focusControls();
+  }
 
-  void _toggleTheatre() => setState(() => _theatre = !_theatre);
+  /// Gives the keyboard to the controls once the fullscreen layout is built.
+  /// Nothing after a touch, when there are no controls to take it.
+  void _focusControls() => WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (_controlsFocus.context != null) _controlsFocus.requestFocus();
+  });
+
+  void _exitFullscreen() => setState(() => _fullscreen = false);
+
+  /// Theatre's key waits in fullscreen: the video has the whole screen, and
+  /// leaving theatre would take the window out of fullscreen under it.
+  void _toggleTheatre() {
+    if (_fullscreen) return;
+    setState(() => _theatre = !_theatre);
+  }
+
+  /// The chat's key waits in fullscreen too, where there is no chat.
+  void _toggleChat() {
+    if (_fullscreen) return;
+    widget.chat.toggle();
+  }
 
   void _exitTheatre() => setState(() => _theatre = false);
 
@@ -232,6 +360,7 @@ class _PlayerPageState extends State<PlayerPage> {
   void dispose() {
     _reporter.cancel();
     _zoom.dispose();
+    _controlsFocus.dispose();
     LeavePlayer(
       target: widget.target,
       positionS: widget.player.position.inSeconds,
@@ -245,7 +374,7 @@ class _PlayerPageState extends State<PlayerPage> {
     return RefreshKey(
       onRefresh: _refresh,
       child: PlayerShortcuts(
-        onToggleChat: widget.chat.toggle,
+        onToggleChat: _toggleChat,
         onToggleMute: () => unawaited(widget.player.toggleMute()),
         onToggleFullscreen: _toggleFullscreen,
         onTogglePlay: () => unawaited(widget.player.togglePlaying()),
@@ -261,8 +390,20 @@ class _PlayerPageState extends State<PlayerPage> {
               PlaybackUpdateReady(:final details) => details,
               _ => null,
             };
+            final video = VideoFrame(
+              key: _frameKey,
+              // The video, the failure's Retry or the sleep timer's
+              // Resume; not the spinner.
+              childTakesFocus: switch (state) {
+                PlaybackUpdateReady() ||
+                PlaybackUpdateFailed() ||
+                PlaybackUpdateSlept() => true,
+                _ => false,
+              },
+              child: _video(state),
+            );
             return Scaffold(
-              appBar: _theatre
+              appBar: _theatre || _fullscreen
                   ? null
                   : AppBar(
                       title: PlaybackTitle(
@@ -283,33 +424,33 @@ class _PlayerPageState extends State<PlayerPage> {
                     ),
               body: Theatre(
                 on: _theatre,
-                onExit: _exitTheatre,
-                child: PlayerLayout(
-                  // Theatre leaves the video alone, as it does the app bar.
-                  // Shown from the open, so the video stays put when the
-                  // details come.
-                  nowPlaying: _theatre
-                      ? null
-                      : NowPlaying(
-                          title: details?.title,
-                          game: details?.game,
-                          chapters: details?.chapters ?? const [],
-                          onGoToChapter: _goToChapter,
+                // A route's Back reaches every PopScope on it, so in
+                // fullscreen one Back, or theatre's exit button, leaves
+                // fullscreen only.
+                onExit: _fullscreen ? _exitFullscreen : _exitTheatre,
+                child: Fullscreen(
+                  on: _fullscreen,
+                  theatre: _theatre,
+                  onExit: _exitFullscreen,
+                  child: _fullscreen
+                      ? ColoredBox(color: const Color(0xFF000000), child: video)
+                      : PlayerLayout(
+                          // Theatre leaves the video alone, as it does the
+                          // app bar. Shown from the open, so the video stays
+                          // put when the details come.
+                          nowPlaying: _theatre
+                              ? null
+                              : NowPlaying(
+                                  title: details?.title,
+                                  game: details?.game,
+                                  chapters: details?.chapters ?? const [],
+                                  onGoToChapter: _goToChapter,
+                                ),
+                          video: video,
+                          chat: widget.chat.mode == ChatMode.shown
+                              ? ChatPanel(chat: widget.chat)
+                              : null,
                         ),
-                  video: VideoFrame(
-                    // The video, the failure's Retry or the sleep timer's
-                    // Resume; not the spinner.
-                    childTakesFocus: switch (state) {
-                      PlaybackUpdateReady() ||
-                      PlaybackUpdateFailed() ||
-                      PlaybackUpdateSlept() => true,
-                      _ => false,
-                    },
-                    child: _video(state),
-                  ),
-                  chat: widget.chat.mode == ChatMode.shown
-                      ? ChatPanel(chat: widget.chat)
-                      : null,
                 ),
               ),
             );
@@ -320,35 +461,20 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Widget _video(PlaybackUpdate state) => switch (state) {
-    PlaybackUpdateReady(:final live, :final rewind) => Video(
-      key: _videoKey,
-      // Until the engine hands out its own video surface (engine-02).
-      controller: (widget.player as MediaKitEngine).controller,
-      pictureBuilder: _zoomedPicture,
-      // The theme sits inside the controls, not around the video:
-      // media_kit's fullscreen route copies the theme around the video
-      // once, on entering, but builds the controls anew at each change,
-      // and a rewind turns a live stream's controls into a VOD's.
-      controls: (video) => _zoomable(
-        _Controls(
-          live: live,
-          player: widget.player,
-          mode: _mode(rewind),
-          bar: _seekBar(),
-          readout: _readout(fontSize: 12),
-          onToggleFullscreen: _toggleFullscreen,
-          onExitFullscreen: () =>
-              unawaited(_videoKey.currentState?.exitFullscreen()),
-          child: live
-              ? _liveControls(video)
-              : _vodControls(video, _mode(rewind)),
+    PlaybackUpdateReady(:final live, :final rewind) => Stack(
+      fit: StackFit.expand,
+      children: [
+        widget.player.surface(_zoomedPicture),
+        Builder(
+          // Under theatre's SafeArea, so the controls' padding is the
+          // screen's inset left after it.
+          builder: (context) => _zoomable(
+            live
+                ? _liveControls(context, _mode(rewind))
+                : _vodControls(context, _mode(rewind)),
+          ),
         ),
-      ),
-      // Leaving media_kit's fullscreen from theatre goes back to
-      // theatre's screen, not out of fullscreen.
-      onExitFullscreen: _theatre
-          ? returnToTheatreScreen
-          : defaultExitNativeFullscreen,
+      ],
     ),
     PlaybackUpdateFailed(:final message) => PlaybackFailure(
       message: message,
@@ -359,128 +485,11 @@ class _PlayerPageState extends State<PlayerPage> {
   };
 }
 
-/// media_kit's controls, themed (play/pause, volume, fullscreen; on desktop
-/// space, `f` and the arrow keys, a VOD's as [vodKeys] has them). A live
-/// stream has no seek bar and no position. A VOD after a mouse has the
-/// page's [SeekBar] and [PositionReadout] among media_kit's buttons; after
-/// a touch it has the page's own controls instead ([VodPhoneControls]). A live
-/// stream's [LiveModeSlot] sits left, after volume, or after the readout
-/// once rewound (`live` is false then, so it has a VOD's controls).
-/// On desktop media_kit's wheel and drag for the volume over the video are
-/// off: the page's own wheel sets the volume, through the sleep timer's
-/// fade, and the drag moves the zoomed picture. The wheel over the volume
-/// button is the button's alone.
-class _Controls extends StatelessWidget {
-  const new({
-    required this.live,
-    required this.player,
-    required this.mode,
-    required this.bar,
-    required this.readout,
-    required this.onToggleFullscreen,
-    required this.onExitFullscreen,
-    required this.child,
-  });
-
-  final bool live;
-  final PlayerEngine player;
-
-  /// A live stream's [LiveModeSlot]; renders nothing for a VOD.
-  final Widget mode;
-
-  /// A VOD's seek bar and readout, for desktop.
-  final Widget bar;
-  final Widget readout;
-
-  /// For a VOD's keys, `f` and Escape: media_kit's own go through the
-  /// controls, which a key map cannot reach.
-  final VoidCallback onToggleFullscreen;
-  final VoidCallback onExitFullscreen;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    if (!live) {
-      // media_kit's own buttons, with the page's seek bar over them as
-      // part of the button bar, so a click on it is not a click on the
-      // video; the volume button keeps its wheel.
-      final desktop = MaterialDesktopVideoControlsThemeData(
-        modifyVolumeOnScroll: false,
-        displaySeekBar: false,
-        keyboardShortcuts: vodKeys(
-          onTogglePlay: () => unawaited(player.togglePlaying()),
-          onPlay: () => unawaited(player.play()),
-          onPause: () => unawaited(player.pause()),
-          onSeekBy: (by) => unawaited(player.seekBy(by)),
-          onStepFrame: (forward) =>
-              unawaited(player.stepFrame(forward: forward)),
-          onNudgeVolume: (by) => unawaited(player.nudgeVolume(by)),
-          onToggleFullscreen: onToggleFullscreen,
-          onExitFullscreen: onExitFullscreen,
-        ),
-        buttonBarHeight: _buttonBarHeight + seekBarHeight,
-        bottomButtonBar: [
-          Expanded(
-            child: Column(
-              children: [
-                bar,
-                Expanded(
-                  child: Row(
-                    children: [
-                      const MaterialDesktopSkipPreviousButton(),
-                      const MaterialDesktopPlayOrPauseButton(),
-                      const MaterialDesktopSkipNextButton(),
-                      const KeepsWheel(child: MaterialDesktopVolumeButton()),
-                      readout,
-                      mode,
-                      const Spacer(),
-                      const MaterialDesktopFullscreenButton(),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      );
-      return MaterialDesktopVideoControlsTheme(
-        normal: desktop,
-        fullscreen: desktop,
-        child: child,
-      );
-    }
-    final mobile = MaterialVideoControlsThemeData(
-      displaySeekBar: false,
-      bottomButtonBar: [mode, const Spacer(), const MaterialFullscreenButton()],
-    );
-    final desktop = MaterialDesktopVideoControlsThemeData(
-      displaySeekBar: false,
-      modifyVolumeOnScroll: false,
-      bottomButtonBar: [
-        const MaterialDesktopPlayOrPauseButton(),
-        const KeepsWheel(child: MaterialDesktopVolumeButton()),
-        mode,
-        const Spacer(),
-        const MaterialDesktopFullscreenButton(),
-      ],
-    );
-    return MaterialVideoControlsTheme(
-      normal: mobile,
-      fullscreen: mobile,
-      child: MaterialDesktopVideoControlsTheme(
-        normal: desktop,
-        fullscreen: desktop,
-        child: child,
-      ),
-    );
-  }
-}
-
 /// The [touch] controls after a touch, the [mouse] ones after a mouse
 /// ([LastPointer]). Under the touch ones a swipe down goes back a level,
-/// as Back does: out of media_kit's fullscreen, else off the page (out of
-/// theatre first). In fullscreen Escape leaves it too: the mouse ones'
-/// keys have their own Escape, the touch ones have no keys.
+/// as Back does: out of fullscreen, else off the page (out of theatre
+/// first). Escape goes back as Back does, through the route's
+/// EscapeGoesBack; the mouse ones' keys have their own Escape too.
 class _ByLastPointer extends StatelessWidget {
   const new({required this.touch, required this.mouse, required this.zoom});
 
@@ -488,21 +497,13 @@ class _ByLastPointer extends StatelessWidget {
   final Widget mouse;
   final ValueListenable<VideoZoom> zoom;
 
-  void _back(BuildContext context) => unawaited(
-    isFullscreen(context)
-        ? exitFullscreen(context)
-        : Navigator.maybePop(context),
-  );
+  /// Back leaves the top level: the PopScopes of [Fullscreen] and [Theatre]
+  /// take it.
+  void _back(BuildContext context) => Navigator.maybePop(context);
 
   @override
   Widget build(BuildContext context) {
     if (!LastPointer.isTouch(context)) return mouse;
-    final swipeable = SwipeDown(
-      zoom: zoom,
-      onSwipe: () => _back(context),
-      child: touch,
-    );
-    if (!isFullscreen(context)) return swipeable;
-    return EscapeGoesBack(onEscape: () => _back(context), child: swipeable);
+    return SwipeDown(zoom: zoom, onSwipe: () => _back(context), child: touch);
   }
 }

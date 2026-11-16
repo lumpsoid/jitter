@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:jitter/player/fullscreen.dart';
 import 'package:jitter/player/scrub.dart';
 import 'package:jitter/player/seek_bar.dart';
 import 'package:jitter/player/vod_keys.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 
 /// How long the controls stay after the last finger lifts.
 const _hideAfter = Duration(seconds: 3);
@@ -41,7 +41,7 @@ const _white = Color(0xFFFFFFFF);
 /// clear of the finger, with how far it has gone and how slowed it is
 /// ([ScrubNotification]).
 ///
-/// The parts are given: media_kit's [playPause] and [fullscreen] buttons,
+/// The parts are given: the page's [playPause] and [fullscreen] buttons,
 /// the page's [readout], seek [bar] and, for a rewound live stream, its
 /// [mode]; these controls only show and hide them.
 class VodPhoneControls extends StatefulWidget {
@@ -287,7 +287,7 @@ class _VodPhoneControlsState extends State<VodPhoneControls> {
         bottom: 0,
         child: Padding(
           // Clear of the screen's notches, bars and corners in fullscreen.
-          padding: isFullscreen(context)
+          padding: Fullscreen.isOn(context)
               ? MediaQuery.paddingOf(context).clamp(
                   _fullscreenMargin,
                   const EdgeInsets.all(double.infinity),
