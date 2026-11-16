@@ -112,7 +112,7 @@ void main() {
         child: ZoomGestures(
           zoom: zoom,
           onWheel: (_) {},
-          // As media_kit's mobile controls: both drags, always on.
+          // A competitor in the arena: both drags, always on.
           child: GestureDetector(
             onHorizontalDragUpdate: (_) {},
             onVerticalDragUpdate: (_) {},
@@ -176,7 +176,7 @@ void main() {
         child: ZoomGestures(
           zoom: zoom,
           onWheel: (_) {},
-          // As media_kit's mobile controls: both drags, always on.
+          // A competitor in the arena: both drags, always on.
           child: GestureDetector(
             onHorizontalDragUpdate: (_) {},
             onVerticalDragUpdate: (_) {},

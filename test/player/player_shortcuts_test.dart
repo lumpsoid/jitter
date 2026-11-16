@@ -4,8 +4,8 @@ import 'package:jitter/player/player_shortcuts.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// Pumps the shortcuts around a button, a text field and a stand-in for
-/// media_kit's video, which handles Space itself while it has the focus.
-/// Returns what was pressed, by name, in order.
+/// the player's controls, which handle Space themselves while they have
+/// the focus. Returns what was pressed, by name, in order.
 Future<List<String>> pumpShortcuts(
   WidgetTester tester, {
   FocusNode? video,

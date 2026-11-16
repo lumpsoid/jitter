@@ -13,10 +13,8 @@ const _white = Color(0xFFFFFFFF);
 /// Rust's [answers] once, and whatever [show] is told, such as why a rewind
 /// isn't possible. A new message replaces the one showing.
 ///
-/// It sits in the controls' own stack, around them: media_kit's fullscreen
-/// route builds the controls anew and has no `Scaffold` for a `SnackBar`,
-/// and its button bar is unmounted while hidden, which would miss an answer
-/// arriving then.
+/// It sits around the controls, in the video's own stack, so it shows over
+/// the video in every layout, fullscreen included.
 class RewindMessages extends StatefulWidget {
   const new({required this.answers, required this.child, super.key});
 

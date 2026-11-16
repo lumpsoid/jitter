@@ -65,7 +65,8 @@ class _HostState extends State<_Host> {
         }),
         child: Column(
           children: [
-            // Like media_kit's video, which takes Escape while focused.
+            // Like the player's desktop controls, which take Escape
+            // while focused.
             Focus(
               onKeyEvent: (_, event) =>
                   event.logicalKey == LogicalKeyboardKey.escape

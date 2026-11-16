@@ -5,9 +5,9 @@ import 'package:material_ui/material_ui.dart';
 /// screen reader and ringed while the focus is anywhere in it.
 ///
 /// It is one Tab stop. While [childTakesFocus] that stop is the child's own
-/// (media_kit's video, whose keys — Space, `f`, the arrows — only reach it
-/// while it has the focus; or the failure's Retry); otherwise, while the
-/// stream loads, the box itself is the stop.
+/// (the player's controls, whose keys — Space, `f`, the arrows — only reach
+/// them while they have the focus; or the failure's Retry); otherwise,
+/// while the stream loads, the box itself is the stop.
 class VideoFrame extends StatefulWidget {
   const new({required this.childTakesFocus, required this.child, super.key});
 
@@ -36,8 +36,8 @@ class _VideoFrameState extends State<VideoFrame> {
     if (mounted && _focus.hasPrimaryFocus) _childStop?.requestFocus();
   }
 
-  /// The child's own Tab stop: the outermost one in the box, so media_kit's
-  /// video rather than one of its buttons.
+  /// The child's own Tab stop: the outermost one in the box, so the controls
+  /// rather than one of their buttons.
   FocusNode? get _childStop {
     bool isStop(FocusNode node) => node.canRequestFocus && !node.skipTraversal;
     for (final node in _focus.traversalDescendants) {

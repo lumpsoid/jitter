@@ -25,7 +25,7 @@ Future<void> exitTheatreScreen() => switch (defaultTargetPlatform) {
   _ => defaultExitNativeFullscreen(),
 };
 
-/// Leaves media_kit's fullscreen back into theatre: its landscape lock
+/// Leaves the player's fullscreen back into theatre: its landscape lock
 /// lifted, the screen still in theatre.
 Future<void> returnToTheatreScreen() async {
   await SystemChrome.setPreferredOrientations([]);

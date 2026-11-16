@@ -18,7 +18,8 @@ void main() {
   ) async {
     await pumpPushed(
       tester,
-      // Like media_kit's video, which takes Escape while focused.
+      // Like the player's desktop controls, which take Escape
+      // while focused.
       Focus(
         autofocus: true,
         onKeyEvent: (_, event) => event.logicalKey == LogicalKeyboardKey.escape

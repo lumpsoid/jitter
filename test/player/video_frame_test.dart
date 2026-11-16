@@ -4,8 +4,8 @@ import 'package:jitter/player/video_frame.dart';
 import 'package:jitter/widgets/focus_ring.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// A stand-in for media_kit's video: its own focus, and Space while it
-/// has it.
+/// A stand-in for the player's controls: their own focus, and Space while
+/// they have it.
 class _FakeVideo extends StatelessWidget {
   const new({required this.played});
 
