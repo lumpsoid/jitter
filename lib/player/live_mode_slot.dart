@@ -1,3 +1,4 @@
+import 'package:jitter/player/controls_fade.dart';
 import 'package:jitter/player/live_badge.dart';
 import 'package:jitter/player/rewind_messages.dart';
 import 'package:jitter/src/bindings/bindings.dart';
@@ -59,9 +60,12 @@ class _Busy extends StatelessWidget {
   const new();
 
   @override
-  Widget build(BuildContext context) => const SizedBox.square(
+  Widget build(BuildContext context) => SizedBox.square(
     dimension: 16,
-    child: CircularProgressIndicator(strokeWidth: 2, color: _white),
+    child: CircularProgressIndicator(
+      strokeWidth: 2,
+      color: fadedColor(context, _white),
+    ),
   );
 }
 
@@ -96,8 +100,8 @@ class _RewindButton extends StatelessWidget {
     final button = TextButton.icon(
       onPressed: onPressed,
       style: TextButton.styleFrom(
-        foregroundColor: muted ? _muted : _white,
-        disabledForegroundColor: _white,
+        foregroundColor: fadedColor(context, muted ? _muted : _white),
+        disabledForegroundColor: fadedColor(context, _white),
       ),
       icon: onPressed == null ? const _Busy() : const Icon(Icons.history),
       label: const Text('Rewind'),
@@ -122,8 +126,8 @@ class _BackToLive extends StatelessWidget {
     child: TextButton(
       onPressed: onPressed,
       style: TextButton.styleFrom(
-        foregroundColor: _white,
-        disabledForegroundColor: _white,
+        foregroundColor: fadedColor(context, _white),
+        disabledForegroundColor: fadedColor(context, _white),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

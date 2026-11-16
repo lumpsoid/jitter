@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:jitter/player/controls_fade.dart';
 import 'package:jitter/player/finger_slack.dart';
 import 'package:jitter/player/live.dart';
 import 'package:jitter/player/scrub.dart';
@@ -286,6 +287,8 @@ class _SeekBarState extends State<SeekBar> {
                           buffered: _fraction(_buffer),
                           hovered: hovered,
                           active: hovered != null || scrub != null,
+                          trackColor: fadedColor(context, _trackColor),
+                          playedColor: fadedColor(context, _playedColor),
                         ),
                       ),
                     ),
@@ -319,17 +322,17 @@ class _Bubble extends StatelessWidget {
           translation: const Offset(-0.5, 0),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: const Color(0xCC000000),
+              color: fadedColor(context, const Color(0xCC000000)),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
               child: Text(
                 speed.isEmpty ? clock(time) : '${clock(time)}  $speed',
-                style: const TextStyle(
-                  color: Color(0xFFFFFFFF),
+                style: TextStyle(
+                  color: fadedColor(context, const Color(0xFFFFFFFF)),
                   fontSize: 12,
-                  fontFeatures: [FontFeature.tabularFigures()],
+                  fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
             ),
@@ -385,12 +388,16 @@ class _BarPainter extends CustomPainter {
     required this.buffered,
     required this.hovered,
     required this.active,
+    required this.trackColor,
+    required this.playedColor,
   });
 
   final double played;
   final double buffered;
   final double? hovered;
   final bool active;
+  final Color trackColor;
+  final Color playedColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -398,12 +405,12 @@ class _BarPainter extends CustomPainter {
     final top = (size.height - height) / 2;
     Rect upTo(double fraction) =>
         Rect.fromLTWH(0, top, size.width * fraction, height);
-    final paint = Paint()..color = _trackColor;
+    final paint = Paint()..color = trackColor;
     canvas
       ..drawRect(upTo(1), paint)
       ..drawRect(upTo(buffered), paint);
     if (hovered case final hovered?) canvas.drawRect(upTo(hovered), paint);
-    canvas.drawRect(upTo(played), paint..color = _playedColor);
+    canvas.drawRect(upTo(played), paint..color = playedColor);
     if (active) {
       canvas.drawCircle(
         Offset(size.width * played, size.height / 2),
@@ -418,5 +425,7 @@ class _BarPainter extends CustomPainter {
       old.played != played ||
       old.buffered != buffered ||
       old.hovered != hovered ||
-      old.active != active;
+      old.active != active ||
+      old.trackColor != trackColor ||
+      old.playedColor != playedColor;
 }

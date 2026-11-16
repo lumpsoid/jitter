@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:jitter/player/controls_fade.dart';
 import 'package:jitter/player/go_to_time_dialog.dart';
 import 'package:jitter/player/live.dart';
 import 'package:jitter/player/seek_bar.dart';
@@ -81,7 +82,7 @@ class _PositionReadoutState extends State<PositionReadout> {
               style: TextStyle(
                 height: 1,
                 fontSize: widget.fontSize,
-                color: const Color(0xFFFFFFFF),
+                color: fadedColor(context, const Color(0xFFFFFFFF)),
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
