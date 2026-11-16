@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/player/live.dart';
 import 'package:jitter/player/player_command_performer.dart';
@@ -84,6 +85,9 @@ class _FakeEngine implements PlayerEngine {
 
   @override
   Future<void> setVolume(double to) async {}
+
+  @override
+  Widget surface(Widget Function(Widget picture) zoom) => const SizedBox();
 }
 
 void main() {
