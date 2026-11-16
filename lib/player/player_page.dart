@@ -6,6 +6,7 @@ import 'package:jitter/chat/chat_mode.dart';
 import 'package:jitter/chat/chat_panel.dart';
 import 'package:jitter/player/desktop_controls.dart';
 import 'package:jitter/player/fullscreen.dart';
+import 'package:jitter/player/live.dart';
 import 'package:jitter/player/live_keys.dart';
 import 'package:jitter/player/live_mode_slot.dart';
 import 'package:jitter/player/now_playing.dart';
@@ -202,8 +203,10 @@ class _PlayerPageState extends State<PlayerPage> {
 
   /// The play/pause button, for either controls.
   PlayPauseButton _playPause({double size = 28}) => PlayPauseButton(
-    playing: widget.player.isPlaying,
-    playings: () => widget.player.playing,
+    playing: Live(
+      now: () => widget.player.isPlaying,
+      changes: () => widget.player.playing,
+    ),
     onPressed: () => unawaited(widget.player.togglePlaying()),
     size: size,
   );

@@ -27,21 +27,19 @@ const _sliderWidth = 52.0;
 const _tail = 18.0;
 
 /// media_kit's play/pause button: its icon turns from play into pause, or
-/// back, as [playings] say the player plays or pauses. It starts where
-/// [playing] is, with no animation on mount.
+/// back, as [playing] says the player plays or pauses. It starts where
+/// [playing] is now, with no animation on mount.
 class PlayPauseButton extends StatefulWidget {
   const new({
     required this.playing,
-    required this.playings,
     required this.onPressed,
     this.size = 28,
     super.key,
   });
 
-  final bool playing;
-
-  /// Whether it plays now, then each change; a new stream each call.
-  final Stream<bool> Function() playings;
+  /// Whether the player plays: read when the button mounts, so it starts
+  /// where the player is, then follows each change without a jump.
+  final Live<bool> playing;
 
   final VoidCallback onPressed;
 
@@ -61,10 +59,10 @@ class _PlayPauseButtonState extends State<PlayPauseButton>
     super.initState();
     _animation = AnimationController(
       vsync: this,
-      value: widget.playing ? 1 : 0,
+      value: widget.playing.now() ? 1 : 0,
       duration: _playPauseDuration,
     );
-    _playings = widget.playings().listen((playing) {
+    _playings = widget.playing.changes().listen((playing) {
       if (playing) {
         _animation.forward();
       } else {
