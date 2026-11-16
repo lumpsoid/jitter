@@ -40,6 +40,7 @@ class DesktopControls extends StatefulWidget {
     required this.onToggleFullscreen,
     this.barHeight = 56,
     this.padding = EdgeInsets.zero,
+    this.focusNode,
     super.key,
   });
 
@@ -56,6 +57,10 @@ class DesktopControls extends StatefulWidget {
 
   /// Keeps the bar clear of the video's edges.
   final EdgeInsets padding;
+
+  /// Lets the page put the keyboard on the controls: the focus the keys are
+  /// held by. Null, the controls take the focus on their own at first.
+  final FocusNode? focusNode;
 
   @override
   State<DesktopControls> createState() => _DesktopControlsState();
@@ -132,6 +137,7 @@ class _DesktopControlsState extends State<DesktopControls> {
       child: CallbackShortcuts(
         bindings: widget.keys,
         child: Focus(
+          focusNode: widget.focusNode,
           autofocus: true,
           child: Material(
             color: _clear,

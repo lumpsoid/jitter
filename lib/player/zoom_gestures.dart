@@ -25,7 +25,7 @@ class ZoomGestures extends StatefulWidget {
 
 /// Keeps the wheel over [child] from [ZoomGestures]: it claims each wheel
 /// event before they can, and leaves it to [child]'s own handling
-/// (media_kit's volume button sets the volume on it directly).
+/// (the volume button nudges the volume with it).
 class KeepsWheel extends StatelessWidget {
   const new({required this.child, super.key});
 
