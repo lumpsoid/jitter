@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:fvp/fvp.dart' show FvpCreateCancellation;
+import 'package:jitter/logs/rust_log.dart';
 import 'package:jitter/player/faded_volume.dart';
 import 'package:jitter/player/live.dart';
 import 'package:jitter/player/player_engine.dart';
@@ -14,7 +16,7 @@ class VideoPlayerEngine implements PlayerEngine {
   /// [stepFrames] steps the paused picture by that many frames, back when
   /// negative. `video_player` has no frame step of its own, so with none,
   /// [stepFrame] does nothing.
-  new({this.sendBuffering = _sendBuffering, this.stepFrames});
+  new({this.sendBuffering = _sendBuffering, this.stepFrames, this.log = _log});
 
   /// Sends the buffering reports; tests without Rust replace it.
   final void Function(PlayerBuffering) sendBuffering;
@@ -23,6 +25,20 @@ class VideoPlayerEngine implements PlayerEngine {
   /// no frame step.
   final Future<void> Function(VideoPlayerController controller, int frames)?
   stepFrames;
+
+  /// Logs a load that failed; tests without Rust replace it.
+  final void Function(String) log;
+
+  /// Counts each `open`, `stop` and `stopForExit`. A load whose number is no
+  /// longer this one has been superseded, so it is dropped, never played.
+  int _generation = 0;
+
+  /// The load in flight, cancelled by the command that supersedes it.
+  FvpCreateCancellation? _loading;
+
+  /// Where the load starts: the Open's `start`, or a seek made while it
+  /// loads, which replaces it.
+  Duration _start = Duration.zero;
 
   final ValueNotifier<VideoPlayerController?> _controller =
       ValueNotifier<VideoPlayerController?>(null);
@@ -46,29 +62,30 @@ class VideoPlayerEngine implements PlayerEngine {
   VideoPlayerValue? get _state => _controller.value?.value;
 
   /// Ends any fade first, so the new media plays at the user's volume.
+  ///
+  /// Returns once loading has started, not when the picture shows, so a slow
+  /// load does not hold up the commands queued behind it. A failed load is
+  /// logged. A load a later `open`, `stop` or `stopForExit` supersedes is
+  /// dropped, never played.
   @override
   Future<void> open(String url, {required Duration start}) async {
+    final generation = ++_generation;
+    _cancelLoad();
     await _release();
     await _setPlayerVolume(_volume.end());
+    if (generation != _generation) return;
+    _start = start;
     final next = VideoPlayerController.networkUrl(Uri.parse(url));
-    try {
-      await next.initialize();
-    } on Object {
-      await next.dispose();
-      rethrow;
-    }
-    if (start > Duration.zero) {
-      await next.seekTo(start);
-    }
-    await next.setVolume(_playerVolume / 100);
-    await next.play();
-    _publish(next);
+    final cancellation = _loading = FvpCreateCancellation();
+    unawaited(_load(next, cancellation, generation));
   }
 
   /// Stops, then ends a fade: silent until stopped, the user's volume
   /// after.
   @override
   Future<void> stop() async {
+    _generation += 1;
+    _cancelLoad();
     await _release();
     await _setPlayerVolume(_volume.end());
   }
@@ -76,7 +93,11 @@ class VideoPlayerEngine implements PlayerEngine {
   /// Stops what plays, if anything ever played, so the exit does not wait on
   /// the platform tearing down a live stream.
   @override
-  Future<void> stopForExit() => _release();
+  Future<void> stopForExit() {
+    _generation += 1;
+    _cancelLoad();
+    return _release();
+  }
 
   @override
   Future<void> play() async {
@@ -108,15 +129,22 @@ class VideoPlayerEngine implements PlayerEngine {
 
   @override
   Future<void> seek(Duration to) async {
+    // A load still starting has no controller yet: its start moves instead.
+    if (_controller.value == null && _loading != null) {
+      _start = to;
+      return;
+    }
     await _controller.value?.seekTo(to);
   }
 
   /// Moves the position by [by], within the media: not before its start,
-  /// nor past its end, which would end it.
+  /// nor past its end, which would end it. While no controller is published
+  /// it does nothing: a load still starting has no position to step from.
   @override
-  Future<void> seekBy(Duration by) {
+  Future<void> seekBy(Duration by) async {
+    if (_controller.value == null) return;
     final to = position + by;
-    return seek(
+    await seek(
       to < Duration.zero
           ? Duration.zero
           : to > duration
@@ -228,6 +256,50 @@ class VideoPlayerEngine implements PlayerEngine {
     await _controller.value?.setVolume(to / 100);
   }
 
+  /// Loads [next], publishes it, then starts it. A load a later command
+  /// supersedes before it is published is dropped. Once published, the
+  /// controller belongs to [_release], so a superseded load leaves it there.
+  /// Only a current load's failure is logged. A controller that fails before
+  /// it is published is disposed without being awaited: a create that threw
+  /// never completes, so its dispose never does.
+  Future<void> _load(
+    VideoPlayerController next,
+    FvpCreateCancellation cancellation,
+    int generation,
+  ) async {
+    var published = false;
+    try {
+      await cancellation.run(next.initialize);
+      if (generation != _generation) {
+        next.dispose().ignore();
+        return;
+      }
+      _loading = null;
+      _publish(next);
+      published = true;
+      if (_start > Duration.zero) {
+        await next.seekTo(_start);
+      }
+      if (generation != _generation) return;
+      // Read after the waits, so a fade set meanwhile counts.
+      await next.setVolume(_playerVolume / 100);
+      if (generation != _generation) return;
+      await next.play();
+    } on Object catch (error) {
+      if (!published) next.dispose().ignore();
+      if (generation == _generation) {
+        _loading = null;
+        log('$error');
+      }
+    }
+  }
+
+  /// Cancels the load in flight, if any, so its wait ends at once.
+  void _cancelLoad() {
+    _loading?.cancel();
+    _loading = null;
+  }
+
   /// Takes [next] for the playing controller, and tells the streams.
   void _publish(VideoPlayerController next) {
     _buffering = false;
@@ -294,3 +366,5 @@ class VideoPlayerEngine implements PlayerEngine {
 }
 
 void _sendBuffering(PlayerBuffering signal) => signal.sendSignalToRust();
+
+void _log(String message) => logToRust(DartLogLevel.error, 'player', message);

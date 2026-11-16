@@ -5,6 +5,7 @@ import 'package:jitter/player/live.dart';
 /// with a fake. `MediaKitEngine` is the real one.
 abstract interface class PlayerEngine {
   /// Plays [url] from [start], at the user's volume.
+  /// Returns once loading has started, not when the picture shows.
   Future<void> open(String url, {required Duration start});
 
   /// Stops; a fade ends with it.
