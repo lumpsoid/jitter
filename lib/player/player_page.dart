@@ -18,6 +18,7 @@ import 'package:jitter/player/player_buttons.dart';
 import 'package:jitter/player/player_engine.dart';
 import 'package:jitter/player/player_layout.dart';
 import 'package:jitter/player/player_options.dart';
+import 'package:jitter/player/player_sends.dart';
 import 'package:jitter/player/player_shortcuts.dart';
 import 'package:jitter/player/position_readout.dart';
 import 'package:jitter/player/rewind_messages.dart';
@@ -58,6 +59,7 @@ class PlayerPage extends StatefulWidget {
     required this.player,
     required this.chat,
     required this.onOpenChannel,
+    this.sends = const PlayerSends(),
     super.key,
   });
 
@@ -77,6 +79,9 @@ class PlayerPage extends StatefulWidget {
   /// Opens the channel being watched (a VOD's owner) by login, from the
   /// app bar title.
   final ValueChanged<String> onOpenChannel;
+
+  /// The page's sends to Rust; tests without Rust replace them.
+  final PlayerSends sends;
 
   @override
   State<PlayerPage> createState() => _PlayerPageState();
@@ -114,45 +119,48 @@ class _PlayerPageState extends State<PlayerPage> {
   /// Asks Rust to load [PlayerPage.target]: on open, and again on Retry
   /// or on the sleep timer's Resume; Rust answers with `PlaybackUpdate`,
   /// loading first.
-  void _play() => Play(target: widget.target).sendSignalToRust();
+  void _play() => widget.sends.play(Play(target: widget.target));
 
   /// Ctrl+R: a page playing shows what plays afresh, the player and the
   /// chat left as they are; a failed page tries again, as its Retry does.
   void _refresh() => switch (widget.playback.state) {
-    PlaybackUpdateReady() => RefreshPlayback(
-      target: widget.target,
-    ).sendSignalToRust(),
+    PlaybackUpdateReady() => widget.sends.refreshPlayback(
+      RefreshPlayback(target: widget.target),
+    ),
     PlaybackUpdateFailed() => _play(),
     _ => null,
   };
 
-  void _reportPosition() => PlayerPosition(
-    target: widget.target,
-    positionS: widget.player.position.inSeconds,
-    durationS: widget.player.duration.inSeconds,
-  ).sendSignalToRust();
+  void _reportPosition() => widget.sends.playerPosition(
+    PlayerPosition(
+      target: widget.target,
+      positionS: widget.player.position.inSeconds,
+      durationS: widget.player.duration.inSeconds,
+    ),
+  );
 
-  void _selectQuality(String name) => SelectQuality(
-    name: name,
-    positionS: widget.player.position.inSeconds,
-  ).sendSignalToRust();
+  void _selectQuality(String name) => widget.sends.selectQuality(
+    SelectQuality(name: name, positionS: widget.player.position.inSeconds),
+  );
 
   /// Asks Rust to read a typed time and seek there; the dialog it was
   /// typed in hears the answer.
-  void _goTo(String text) => GoToTime(
-    text: text,
-    durationS: widget.player.duration.inSeconds,
-  ).sendSignalToRust();
+  void _goTo(String text) => widget.sends.goToTime(
+    GoToTime(text: text, durationS: widget.player.duration.inSeconds),
+  );
 
   /// Asks Rust to seek to the start of a VOD's chapter.
-  void _goToChapter(int index) => GoToChapter(index: index).sendSignalToRust();
+  void _goToChapter(int index) =>
+      widget.sends.goToChapter(GoToChapter(index: index));
 
   /// Asks Rust to rewind the live stream into its recording; Rust answers
   /// with `PlaybackUpdate`, or with a `RewindAnswer` when it can't.
-  void _rewind() => RewindStream(target: widget.target).sendSignalToRust();
+  void _rewind() =>
+      widget.sends.rewindStream(RewindStream(target: widget.target));
 
   /// Asks Rust to go from the rewound recording back to the live edge.
-  void _backToLive() => BackToLive(target: widget.target).sendSignalToRust();
+  void _backToLive() =>
+      widget.sends.backToLive(BackToLive(target: widget.target));
 
   /// A live stream's mode, for either controls; nothing for a VOD.
   LiveModeSlot _mode(PlaybackRewind rewind) => LiveModeSlot(
@@ -325,9 +333,10 @@ class _PlayerPageState extends State<PlayerPage> {
   );
 
   void _armSleep(int minutes) =>
-      ArmSleepTimer(minutes: minutes).sendSignalToRust();
+      widget.sends.armSleepTimer(ArmSleepTimer(minutes: minutes));
 
-  void _turnOffSleep() => const TurnOffSleepTimer().sendSignalToRust();
+  void _turnOffSleep() =>
+      widget.sends.turnOffSleepTimer(const TurnOffSleepTimer());
 
   void _toggleFullscreen() {
     setState(() => _fullscreen = !_fullscreen);
@@ -364,11 +373,13 @@ class _PlayerPageState extends State<PlayerPage> {
     _reporter.cancel();
     _zoom.dispose();
     _controlsFocus.dispose();
-    LeavePlayer(
-      target: widget.target,
-      positionS: widget.player.position.inSeconds,
-      durationS: widget.player.duration.inSeconds,
-    ).sendSignalToRust();
+    widget.sends.leavePlayer(
+      LeavePlayer(
+        target: widget.target,
+        positionS: widget.player.position.inSeconds,
+        durationS: widget.player.duration.inSeconds,
+      ),
+    );
     super.dispose();
   }
 
