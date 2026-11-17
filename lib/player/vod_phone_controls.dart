@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:jitter/player/controls_fade.dart';
 import 'package:jitter/player/fullscreen.dart';
 import 'package:jitter/player/scrub.dart';
 import 'package:jitter/player/seek_bar.dart';
@@ -76,13 +77,17 @@ class VodPhoneControls extends StatefulWidget {
   State<VodPhoneControls> createState() => _VodPhoneControlsState();
 }
 
-class _VodPhoneControlsState extends State<VodPhoneControls> {
+class _VodPhoneControlsState extends State<VodPhoneControls>
+    with SingleTickerProviderStateMixin {
   /// Whether the controls are shown, or fading in.
   bool _visible = false;
 
   /// Whether they are built: through the fade out too, then not, so a
   /// hidden bar does not rebuild at each position.
   bool _built = false;
+
+  /// The fade the controls' colours follow, 0 hidden and 1 shown; linear.
+  late final AnimationController _controller;
 
   Timer? _hide;
 
@@ -106,6 +111,15 @@ class _VodPhoneControlsState extends State<VodPhoneControls> {
   @override
   void initState() {
     super.initState();
+    _controller = AnimationController(vsync: this, duration: _fade)
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.dismissed) {
+          setState(() {
+            _built = false;
+            _scrub = null;
+          });
+        }
+      });
     _bufferings = widget.bufferings().listen(
       (buffering) => setState(() => _buffering = buffering),
     );
@@ -116,6 +130,7 @@ class _VodPhoneControlsState extends State<VodPhoneControls> {
     _hide?.cancel();
     _flashing?.cancel();
     unawaited(_bufferings.cancel());
+    _controller.dispose();
     super.dispose();
   }
 
@@ -124,12 +139,16 @@ class _VodPhoneControlsState extends State<VodPhoneControls> {
       _visible = true;
       _built = true;
     });
+    _controller.forward();
     _hideLater();
   }
 
   void _hideNow() {
     _hide?.cancel();
-    setState(() => _visible = false);
+    if (_visible) {
+      setState(() => _visible = false);
+      _controller.reverse();
+    }
   }
 
   /// Hides them [_hideAfter] from now, unless a finger is down.
@@ -215,29 +234,21 @@ class _VodPhoneControlsState extends State<VodPhoneControls> {
                   constraints.maxWidth,
                 ),
               ),
-            if (_built)
-              AnimatedOpacity(
-                opacity: _visible ? 1 : 0,
-                duration: _fade,
-                onEnd: () {
-                  if (!_visible) {
-                    setState(() {
-                      _built = false;
-                      _scrub = null;
-                    });
-                  }
-                },
-                child: IgnorePointer(
-                  ignoring: !_visible,
-                  child: NotificationListener<ScrubNotification>(
-                    onNotification: (notification) {
-                      setState(() => _scrub = notification.reading);
-                      return true;
-                    },
-                    child: _controls(),
-                  ),
-                ),
-              ),
+            ControlsFade(
+              notifier: _controller,
+              child: _built
+                  ? IgnorePointer(
+                      ignoring: !_visible,
+                      child: NotificationListener<ScrubNotification>(
+                        onNotification: (notification) {
+                          setState(() => _scrub = notification.reading);
+                          return true;
+                        },
+                        child: _controls(),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
             if (_buffering)
               const IgnorePointer(
                 child: Center(child: CircularProgressIndicator(color: _white)),
@@ -269,9 +280,7 @@ class _VodPhoneControlsState extends State<VodPhoneControls> {
   /// one.
   Widget _controls() => Stack(
     children: [
-      const Positioned.fill(
-        child: IgnorePointer(child: ColoredBox(color: _backdrop)),
-      ),
+      const Positioned.fill(child: IgnorePointer(child: _Backdrop())),
       if (!_buffering) Center(child: widget.playPause),
       if (_scrub case final scrub?)
         // Up, away from the finger on the bar and from the spinner.
@@ -319,6 +328,15 @@ class _VodPhoneControlsState extends State<VodPhoneControls> {
   );
 }
 
+/// Dims the picture behind the controls, fading with them.
+class _Backdrop extends StatelessWidget {
+  const new();
+
+  @override
+  Widget build(BuildContext context) =>
+      ColoredBox(color: fadedColor(context, _backdrop));
+}
+
 /// A drag's time, big; under it how far it has gone, and how slowed it is
 /// or how to slow it.
 class _ScrubReadout extends StatelessWidget {
@@ -334,7 +352,7 @@ class _ScrubReadout extends StatelessWidget {
     const figures = [FontFeature.tabularFigures()];
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: _backdrop,
+        color: fadedColor(context, _backdrop),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Padding(
@@ -344,8 +362,8 @@ class _ScrubReadout extends StatelessWidget {
           children: [
             Text(
               clock(scrub.target),
-              style: const TextStyle(
-                color: _white,
+              style: TextStyle(
+                color: fadedColor(context, _white),
                 fontSize: 32,
                 fontWeight: FontWeight.w500,
                 fontFeatures: figures,
@@ -353,8 +371,8 @@ class _ScrubReadout extends StatelessWidget {
             ),
             Text(
               '${signedClock(scrub.offset)}  ·  $speed',
-              style: const TextStyle(
-                color: _white,
+              style: TextStyle(
+                color: fadedColor(context, _white),
                 fontSize: 14,
                 fontFeatures: figures,
               ),
