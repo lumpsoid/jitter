@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:jitter/player/controls_fade.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// How long the controls stay after the last tap that showed them.
@@ -49,12 +50,18 @@ class TouchControls extends StatefulWidget {
   State<TouchControls> createState() => _TouchControlsState();
 }
 
-class _TouchControlsState extends State<TouchControls> {
+class _TouchControlsState extends State<TouchControls>
+    with SingleTickerProviderStateMixin {
   /// Whether the controls are shown, or fading in or out.
   bool _visible = false;
 
   /// Whether the controls are built: through the fade out too, then not.
   bool _built = false;
+
+  late final AnimationController _controller;
+
+  /// The fade the controls' colours follow: 0 hidden, 1 shown.
+  late final CurvedAnimation _fadeCurve;
 
   Timer? _hide;
 
@@ -64,6 +71,13 @@ class _TouchControlsState extends State<TouchControls> {
   @override
   void initState() {
     super.initState();
+    _controller = AnimationController(vsync: this, duration: _fade)
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.dismissed) {
+          setState(() => _built = false);
+        }
+      });
+    _fadeCurve = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
     _bufferings = widget.bufferings().listen(
       (buffering) => setState(() => _buffering = buffering),
     );
@@ -73,6 +87,8 @@ class _TouchControlsState extends State<TouchControls> {
   void dispose() {
     _hide?.cancel();
     unawaited(_bufferings.cancel());
+    _fadeCurve.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -90,12 +106,16 @@ class _TouchControlsState extends State<TouchControls> {
       _visible = true;
       _built = true;
     });
+    _controller.forward();
     _hide = Timer(_hideAfter, _hideNow);
   }
 
   void _hideNow() {
     _hide?.cancel();
-    setState(() => _visible = false);
+    if (_visible) {
+      setState(() => _visible = false);
+      _controller.reverse();
+    }
   }
 
   @override
@@ -125,13 +145,8 @@ class _TouchControlsState extends State<TouchControls> {
                   onPointerDown: (_) => _onTap(),
                 ),
               ),
-              AnimatedOpacity(
-                opacity: _visible ? 1 : 0,
-                duration: _fade,
-                curve: Curves.easeInOut,
-                onEnd: () {
-                  if (!_visible) setState(() => _built = false);
-                },
+              ControlsFade(
+                notifier: _fadeCurve,
                 child: _built
                     ? IgnorePointer(ignoring: !_visible, child: _controls())
                     : const SizedBox.shrink(),
@@ -151,11 +166,8 @@ class _TouchControlsState extends State<TouchControls> {
                             ),
                             duration: _fade,
                             builder: (context, value, _) => value > 0
-                                ? Opacity(
-                                    opacity: value,
-                                    child: const CircularProgressIndicator(
-                                      color: _white,
-                                    ),
+                                ? CircularProgressIndicator(
+                                    color: _white.withValues(alpha: value),
                                   )
                                 : const SizedBox.shrink(),
                           ),
@@ -178,19 +190,17 @@ class _TouchControlsState extends State<TouchControls> {
     fit: StackFit.expand,
     children: [
       // Decoration only: a tap on the dimmed video must reach the listener.
-      IgnorePointer(child: Container(color: _scrim)),
+      const IgnorePointer(child: _Scrim()),
       Padding(
         padding: widget.padding,
         child: Column(
           children: [
             const SizedBox(height: _barHeight),
             Expanded(
-              child: AnimatedOpacity(
-                opacity: _buffering ? 0 : 1,
-                duration: _fade,
-                curve: Curves.easeInOut,
-                child: Center(child: widget.center),
-              ),
+              // Gone while buffering, not faded: it takes no press then.
+              child: _buffering
+                  ? const SizedBox.shrink()
+                  : Center(child: widget.center),
             ),
             Container(
               height: _barHeight,
@@ -202,4 +212,13 @@ class _TouchControlsState extends State<TouchControls> {
       ),
     ],
   );
+}
+
+/// Dims the video behind the controls, fading with them.
+class _Scrim extends StatelessWidget {
+  const new();
+
+  @override
+  Widget build(BuildContext context) =>
+      ColoredBox(color: fadedColor(context, _scrim));
 }

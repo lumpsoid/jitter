@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jitter/player/controls_fade.dart';
 import 'package:jitter/player/touch_controls.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -53,25 +54,33 @@ Future<void> fadeThrough(WidgetTester tester) async {
   }
 }
 
-/// The opacity the bar is drawn at now. The nearest FadeTransition above the
-/// bar is the controls' fade; the page route's transition is further out.
-double barOpacity(WidgetTester tester) {
-  final fades = tester.widgetList<FadeTransition>(
-    find.ancestor(of: find.text('bar'), matching: find.byType(FadeTransition)),
-  );
-  return fades.first.opacity.value;
+/// How far the bar has faded in now, read from the [ControlsFade] above it:
+/// 0 hidden, 1 shown.
+double barFade(WidgetTester tester) {
+  return tester
+      .widget<ControlsFade>(
+        find.ancestor(
+          of: find.text('bar'),
+          matching: find.byType(ControlsFade),
+        ),
+      )
+      .notifier!
+      .value;
 }
 
-/// The opacity the centre button is drawn at now. Its AnimatedOpacity is the
-/// nearest one above it; the controls' is further out.
-double centreOpacity(WidgetTester tester) {
-  final fades = tester.widgetList<AnimatedOpacity>(
-    find.ancestor(
-      of: find.byKey(_centreKey),
-      matching: find.byType(AnimatedOpacity),
-    ),
-  );
-  return fades.first.opacity;
+/// Expects no layer in the controls that draws a subtree offscreen to fade
+/// it: opacity on Impeller's GLES backend stalled the video for each fade.
+void expectNoOpacityLayers(WidgetTester tester) {
+  for (final layer in [AnimatedOpacity, Opacity, FadeTransition]) {
+    expect(
+      find.descendant(
+        of: find.byType(TouchControls),
+        matching: find.byType(layer),
+      ),
+      findsNothing,
+      reason: '$layer',
+    );
+  }
 }
 
 void main() {
@@ -115,11 +124,23 @@ void main() {
     await tester.pump();
 
     expect(find.text('bar'), findsOneWidget);
-    expect(barOpacity(tester), lessThan(1));
+    expect(barFade(tester), lessThan(1));
 
     await fadeThrough(tester);
 
-    expect(barOpacity(tester), 1);
+    expect(barFade(tester), 1);
+  });
+
+  testWidgets('the controls draw no opacity layer, with the bar shown', (
+    tester,
+  ) async {
+    await pumpControls(tester);
+    await tester.tapAt(_beside);
+    await tester.pump();
+    await fadeThrough(tester);
+
+    expect(find.text('bar'), findsOneWidget);
+    expectNoOpacityLayers(tester);
   });
 
   testWidgets('a tap on the centre button presses it and keeps the controls', (
@@ -158,6 +179,8 @@ void main() {
       await pumpControls(tester, onPressed: () => pressed++);
       await tester.tapAt(_beside);
       await tester.pump();
+      // Lets the fade in start, so the hide below fades out, not at once.
+      await tester.pump(const Duration(milliseconds: 150));
       await tester.tapAt(_beside);
       await tester.pump(const Duration(milliseconds: 50));
 
@@ -188,12 +211,26 @@ void main() {
     await tester.pump();
 
     expect(find.text('bar'), findsOneWidget);
-    expect(centreOpacity(tester), 0);
+    expect(find.byKey(_centreKey), findsNothing);
 
     buffering.add(false);
     await fadeThrough(tester);
 
     expect(find.byType(CircularProgressIndicator), findsNothing);
-    expect(centreOpacity(tester), 1);
+    expect(find.byKey(_centreKey), findsOneWidget);
+  });
+
+  testWidgets('the controls draw no opacity layer, with the spinner shown', (
+    tester,
+  ) async {
+    final buffering = StreamController<bool>();
+    addTearDown(buffering.close);
+    await pumpControls(tester, bufferings: () => buffering.stream);
+
+    buffering.add(true);
+    await fadeThrough(tester);
+
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expectNoOpacityLayers(tester);
   });
 }
