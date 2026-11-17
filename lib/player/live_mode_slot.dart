@@ -99,9 +99,12 @@ class _RewindButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final button = TextButton.icon(
       onPressed: onPressed,
+      // The label and icon follow the fade frame by frame: the button's own
+      // 200 ms colour tween would trail the controls' fade.
       style: TextButton.styleFrom(
         foregroundColor: fadedColor(context, muted ? _muted : _white),
         disabledForegroundColor: fadedColor(context, _white),
+        animationDuration: Duration.zero,
       ),
       icon: onPressed == null ? const _Busy() : const Icon(Icons.history),
       label: const Text('Rewind'),
@@ -128,6 +131,7 @@ class _BackToLive extends StatelessWidget {
       style: TextButton.styleFrom(
         foregroundColor: fadedColor(context, _white),
         disabledForegroundColor: fadedColor(context, _white),
+        animationDuration: Duration.zero,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

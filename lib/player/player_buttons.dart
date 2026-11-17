@@ -13,6 +13,13 @@ import 'package:material_ui/material_ui.dart';
 
 const _white = Color(0xFFFFFFFF);
 
+/// The buttons' icons take their colour from the fade frame by frame. A
+/// button's own colour tween is 200 ms, and each fade tick would restart it,
+/// so the icon would trail the controls' fade.
+final ButtonStyle _colourFollowsFade = IconButton.styleFrom(
+  animationDuration: Duration.zero,
+);
+
 /// How long the play/pause icon takes to turn into the other.
 const _playPauseDuration = Duration(milliseconds: 200);
 
@@ -84,6 +91,7 @@ class _PlayPauseButtonState extends State<PlayPauseButton>
     return IconButton(
       onPressed: widget.onPressed,
       iconSize: widget.size,
+      style: _colourFollowsFade,
       color: fadedColor(context, _white),
       icon: AnimatedIcon(
         progress: _animation,
@@ -116,6 +124,7 @@ class FullscreenButton extends StatelessWidget {
     return IconButton(
       onPressed: onPressed,
       iconSize: size,
+      style: _colourFollowsFade,
       color: fadedColor(context, _white),
       icon: Icon(fullscreen ? Icons.fullscreen_exit : Icons.fullscreen),
     );
@@ -202,6 +211,7 @@ class _VolumeButtonState extends State<VolumeButton> {
               IconButton(
                 onPressed: widget.onToggleMute,
                 iconSize: widget.size * 0.8,
+                style: _colourFollowsFade,
                 color: fadedColor(context, _white),
                 icon: AnimatedSwitcher(
                   duration: _volumeDuration,

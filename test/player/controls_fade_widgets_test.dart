@@ -5,6 +5,7 @@ import 'package:jitter/player/controls_fade.dart';
 import 'package:jitter/player/live.dart';
 import 'package:jitter/player/live_badge.dart';
 import 'package:jitter/player/live_mode_slot.dart';
+import 'package:jitter/player/player_buttons.dart';
 import 'package:jitter/player/position_readout.dart';
 import 'package:jitter/player/rewind_messages.dart';
 import 'package:jitter/player/seek_bar.dart';
@@ -186,5 +187,83 @@ void main() {
     );
     final foreground = button.style!.foregroundColor!.resolve(const {});
     expect(foreground!.a, closeTo(0.5, 0.01));
+  });
+
+  testWidgets('a button icon follows the fade with no lag of its own', (
+    tester,
+  ) async {
+    final fade = AnimationController(vsync: const TestVSync(), value: 1);
+    addTearDown(fade.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: ControlsFade(
+              notifier: fade,
+              child: FullscreenButton(fullscreen: false, onPressed: () {}),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    fade.value = 0.5;
+    await tester.pump();
+
+    final icon = tester.widget<RichText>(
+      find.descendant(
+        of: find.byType(FullscreenButton),
+        matching: find.byType(RichText),
+      ),
+    );
+    expect(icon.text.style!.color!.a, closeTo(0.5, 0.01));
+  });
+
+  testWidgets('the rewind button label and icon follow the fade with no lag', (
+    tester,
+  ) async {
+    final fade = AnimationController(vsync: const TestVSync(), value: 1);
+    addTearDown(fade.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Material(
+          color: Colors.black,
+          child: SizedBox(
+            width: 800,
+            height: 450,
+            child: RewindMessages(
+              answers: () => const Stream.empty(),
+              child: Align(
+                alignment: Alignment.bottomLeft,
+                child: ControlsFade(
+                  notifier: fade,
+                  child: LiveModeSlot(
+                    rewind: const PlaybackRewindOffered(),
+                    onRewind: () {},
+                    onBackToLive: () {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    fade.value = 0.5;
+    await tester.pump();
+
+    final label = tester.widget<RichText>(
+      find.descendant(of: find.text('Rewind'), matching: find.byType(RichText)),
+    );
+    expect(label.text.style!.color!.a, closeTo(0.5, 0.01));
+
+    final icon = tester.widget<RichText>(
+      find.descendant(
+        of: find.byIcon(Icons.history),
+        matching: find.byType(RichText),
+      ),
+    );
+    expect(icon.text.style!.color!.a, closeTo(0.5, 0.01));
   });
 }
