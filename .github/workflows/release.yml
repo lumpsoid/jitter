@@ -7,7 +7,8 @@ on:
 permissions:
   contents: read
 
-# Keep in step with ci.yml, windows.yml and packaging/appimage/Containerfile.
+# Keep in step with ci.yml, windows.yml, android.yml, linux.yml and
+# packaging/appimage/Containerfile.
 env:
   RUST_VERSION: 1.93.1
   FLUTTER_VERSION: 3.47.8
@@ -32,90 +33,27 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
   android:
-    name: Android APK
+    name: Android
     needs: version
-    runs-on: ubuntu-latest
-    env:
-      VERSION: ${{ needs.version.outputs.version }}
-      GH_TOKEN: ${{ github.token }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check the signing secrets
-        env:
-          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        # The release build fails without the key anyway; this names the
-        # missing secret before the long build starts.
-        run: |
-          for name in KEYSTORE STORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
-            if [[ -z ${!name} ]]; then
-              echo "::error::signing secret $name is missing (docs/maintaining.md)"
-              exit 1
-            fi
-          done
-          echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.jks"
-          cat > android/key.properties <<PROPERTIES
-          storeFile=$RUNNER_TEMP/release.jks
-          storePassword=$STORE_PASSWORD
-          keyAlias=$KEY_ALIAS
-          keyPassword=$KEY_PASSWORD
-          PROPERTIES
-      # Built locally and published by the same script (docs/maintaining.md).
-      - name: Fetch the patched libmpv jars
-        run: scripts/libmpv-android.sh fetch
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo install rinf_cli --version "$RINF_VERSION" --locked
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-          cache: true
-      - run: rinf gen
-      - run: flutter build apk --release
-      - name: Check the signature
-        run: |
-          apk=build/app/outputs/flutter-apk/app-release.apk
-          apksigner=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner
-          "$apksigner" verify --print-certs "$apk" | tee certs.txt
-          if grep -q 'CN=Android Debug' certs.txt; then
-            echo "::error::the APK is signed with the debug key"
-            exit 1
-          fi
-          mkdir -p out
-          cp "$apk" "out/jitter-$VERSION-android.apk"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: android
-          path: out/
-          if-no-files-found: error
+    # android.yml's share job asks for write; it only runs when android.yml
+    # is dispatched by hand, but a caller must still allow it.
+    permissions:
+      contents: write
+    uses: ./.github/workflows/android.yml
+    secrets: inherit
+    with:
+      version: ${{ needs.version.outputs.version }}
 
   linux:
-    name: Linux AppImage
+    name: Linux
     needs: version
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      # Builds in podman from packaging/appimage/Containerfile.
-      - run: packaging/appimage/build.sh
-      - run: |
-          mkdir -p out
-          cp dist/Jitter-${{ needs.version.outputs.version }}-x86_64.AppImage \
-            out/jitter-${{ needs.version.outputs.version }}-x86_64.AppImage
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux
-          path: out/
-          if-no-files-found: error
+    # linux.yml's share job asks for write; it only runs when linux.yml is
+    # dispatched by hand, but a caller must still allow it.
+    permissions:
+      contents: write
+    uses: ./.github/workflows/linux.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
 
   windows:
     name: Windows

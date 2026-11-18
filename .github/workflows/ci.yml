@@ -12,7 +12,8 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Keep in step with release.yml, windows.yml and packaging/appimage/Containerfile.
+# Keep in step with release.yml, windows.yml, android.yml, linux.yml and
+# packaging/appimage/Containerfile.
 # RINF_VERSION must match the rinf crate and Dart package (docs/maintaining.md).
 env:
   RUST_VERSION: 1.93.1

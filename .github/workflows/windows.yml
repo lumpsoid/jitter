@@ -3,7 +3,7 @@ name: Windows
 # The Windows build. release.yml calls it for a release; run it by hand
 # (Actions > Windows > Run workflow, pick the branch) for a test build of any
 # branch, to check a fix on Windows or send it to the user who reported the
-# bug. See docs/maintaining.md#windows-test-builds.
+# bug. See docs/maintaining.md#test-builds.
 on:
   workflow_call:
     inputs:
@@ -25,7 +25,8 @@ on:
 permissions:
   contents: read
 
-# Keep in step with ci.yml, release.yml and packaging/appimage/Containerfile.
+# Keep in step with ci.yml, release.yml, android.yml, linux.yml and
+# packaging/appimage/Containerfile.
 env:
   RUST_VERSION: 1.93.1
   FLUTTER_VERSION: 3.47.8

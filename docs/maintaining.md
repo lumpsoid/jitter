@@ -60,28 +60,43 @@ If it fails, fix it on `main`, delete the tag locally and on GitHub
 (`git push origin :refs/tags/vX.Y.Z`), and release again; nothing was
 published.
 
-## Windows test builds
+## Test builds
 
-To check a fix on Windows before it ships, or to send it to the user who
-reported the bug: Actions > Windows > Run workflow, pick the branch. The
-same `.github/workflows/windows.yml` builds the release zip.
+To check a fix on Windows, Linux or Android before it ships, or to send it
+to the user who reported the bug: Actions > Windows, Linux or Android > Run
+workflow, pick the branch. Each is the workflow `release.yml` calls for a
+tag, so a test build is the same build as a release.
 
-With "Publish the zip" ticked (the default), it also publishes the zip as
-the prerelease `test-windows-<short commit>`, which anyone can download
-without a GitHub account; the run's summary links it. The zip is named
-`jitter-X.Y.Z-test.<short commit>-windows-x64.zip`. Without it, the zip is
-only the run's artifact, which needs a GitHub login.
+With the `share` input ticked (the default), the run also publishes its
+file as a prerelease that anyone can download without a GitHub account; the
+run's summary links it. Without it, the file is only the run's artifact,
+which needs a GitHub login.
 
-Tick "bench" to build the player bench (`bench/bench_app.dart`, the dev-only
-GUI player) instead of the app. It is a profile build, not a release, because
-Flutter leaves dev-dependency plugins such as fvp out of release builds. Its
-zip is `jitter-bench-X.Y.Z-test.<short commit>-windows-x64.zip`, published as
-the prerelease `test-windows-bench-<short commit>`, so it never replaces the
+Each prerelease is tagged with the short commit, and its file carries the
+test version:
+
+- Windows: `test-windows-<short commit>`,
+  `jitter-X.Y.Z-test.<short commit>-windows-x64.zip`
+- Linux: `test-linux-<short commit>`,
+  `jitter-X.Y.Z-test.<short commit>-x86_64.AppImage`
+- Android: `test-android-<short commit>`,
+  `jitter-X.Y.Z-test.<short commit>-android.apk`
+
+The Android APK is signed with the release key, so its run needs the
+signing secrets (see [Android signing key](#android-signing-key)). It
+updates an installed Jitter, as a release does.
+
+On the Windows workflow, tick "bench" to build the player bench
+(`bench/bench_app.dart`, the dev-only GUI player) instead of the app. It is
+a profile build, not a release, because Flutter leaves dev-dependency
+plugins such as fvp out of release builds. Its zip is
+`jitter-bench-X.Y.Z-test.<short commit>-windows-x64.zip`, published as the
+prerelease `test-windows-bench-<short commit>`, so it never replaces the
 app's test build of the same commit. Delete it the same way, under its tag.
 
 ```sh
-gh workflow run windows.yml --ref <branch>       # the same, from a shell
-gh release delete test-windows-<commit> --cleanup-tag --yes   # once done
+gh workflow run windows.yml --ref <branch>   # or linux.yml, android.yml
+gh release delete test-<platform>-<commit> --cleanup-tag --yes   # once done
 ```
 
 Delete a test prerelease once the fix has shipped. The workflow must be
@@ -201,12 +216,14 @@ These move together, by hand, in one commit:
 
 - **rinf**: the crate in `native/hub/Cargo.toml`, the Dart package in
   `pubspec.yaml`, and `RINF_VERSION` in `.github/workflows/ci.yml`,
-  `release.yml`, `windows.yml` and `packaging/appimage/Containerfile`.
+  `release.yml`, `windows.yml`, `android.yml` and
+  `packaging/appimage/Containerfile`.
   Then `rinf gen`
   and `make check`. Close Dependabot's pull request for one half and do
   it by hand.
 - **Flutter and Rust toolchains**: `FLUTTER_VERSION` and `RUST_VERSION` in
-  the three workflows and the Containerfile.
+  `ci.yml`, `release.yml`, `windows.yml`, `android.yml` and the
+  Containerfile.
 - **media_kit**: `third_party/` holds patched copies of
   `media_kit_video`, `media_kit_libs_android_video` and
   `media_kit_libs_windows_video`; an update means re-applying the patches

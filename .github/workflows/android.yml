@@ -1,0 +1,146 @@
+name: Android
+
+# The Android APK. release.yml calls it for a release; run it by hand
+# (Actions > Android > Run workflow, pick the branch) for a test build of any
+# branch, to check a fix on Android or send it to the user who reported the
+# bug. See docs/maintaining.md#test-builds.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: The release's version, X.Y.Z
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      share:
+        description: Publish the APK as a test prerelease anyone can download
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# Keep in step with ci.yml, release.yml, windows.yml, linux.yml and
+# packaging/appimage/Containerfile.
+env:
+  RUST_VERSION: 1.93.1
+  FLUTTER_VERSION: 3.47.8
+  RINF_VERSION: 8.11.0
+
+jobs:
+  build:
+    name: Android APK
+    runs-on: ubuntu-latest
+    outputs:
+      apk: ${{ steps.name.outputs.apk }}
+      tag: ${{ steps.name.outputs.tag }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      # A test build is named after its commit, so it can't pass for a release.
+      - name: Name the APK
+        id: name
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          sha=${GITHUB_SHA::7}
+          if [[ -z $VERSION ]]; then
+            full=$(scripts/version.sh show)
+            VERSION="${full%+*}-test.$sha"
+          fi
+          {
+            echo "apk=jitter-$VERSION-android.apk"
+            echo "tag=test-android-$sha"
+          } >> "$GITHUB_OUTPUT"
+      - name: Check the signing secrets
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        # The release build fails without the key anyway; this names the
+        # missing secret before the long build starts.
+        run: |
+          for name in KEYSTORE STORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [[ -z ${!name} ]]; then
+              echo "::error::signing secret $name is missing (docs/maintaining.md)"
+              exit 1
+            fi
+          done
+          echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.jks"
+          cat > android/key.properties <<PROPERTIES
+          storeFile=$RUNNER_TEMP/release.jks
+          storePassword=$STORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          PROPERTIES
+      # Built locally and published by the same script (docs/maintaining.md).
+      - name: Fetch the patched libmpv jars
+        run: scripts/libmpv-android.sh fetch
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install rinf_cli --version "$RINF_VERSION" --locked
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: rinf gen
+      - run: flutter build apk --release
+      - name: Check the signature
+        run: |
+          apk=build/app/outputs/flutter-apk/app-release.apk
+          apksigner=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner
+          "$apksigner" verify --print-certs "$apk" | tee certs.txt
+          if grep -q 'CN=Android Debug' certs.txt; then
+            echo "::error::the APK is signed with the debug key"
+            exit 1
+          fi
+          mkdir -p out
+          cp "$apk" "out/${{ steps.name.outputs.apk }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: out/
+          if-no-files-found: error
+
+  share:
+    name: Publish a test prerelease
+    if: github.event_name == 'workflow_dispatch' && inputs.share
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      APK: ${{ needs.build.outputs.apk }}
+      TAG: ${{ needs.build.outputs.tag }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: android
+          path: out
+      # One prerelease per commit; a re-run replaces its APK.
+      - run: |
+          title="Android test build ${GITHUB_SHA::7} ($GITHUB_REF_NAME)"
+          notes="Not a release: a test build of $GITHUB_REF_NAME at $GITHUB_SHA, to check a fix before it ships. Install the APK by hand. It is signed with the release key, so it updates an installed Jitter."
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber "out/$APK"
+          else
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "$title" --notes "$notes" \
+              "out/$APK"
+          fi
+          url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG"
+          echo "::notice::$url"
+          echo "Test build: $url" >> "$GITHUB_STEP_SUMMARY"
