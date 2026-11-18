@@ -1,0 +1,95 @@
+name: Linux
+
+# The Linux AppImage. release.yml calls it for a release; run it by hand
+# (Actions > Linux > Run workflow, pick the branch) for a test build of any
+# branch, to check a fix on Linux or send it to the user who reported the
+# bug. See docs/maintaining.md#test-builds.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: The release's version, X.Y.Z
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      share:
+        description: Publish the AppImage as a test prerelease anyone can download
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Linux AppImage
+    runs-on: ubuntu-latest
+    outputs:
+      appimage: ${{ steps.name.outputs.appimage }}
+      tag: ${{ steps.name.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      # A test build is named after its commit, so it can't pass for a release.
+      - name: Name the AppImage
+        id: name
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          sha=${GITHUB_SHA::7}
+          if [[ -z $VERSION ]]; then
+            full=$(scripts/version.sh show)
+            VERSION="${full%+*}-test.$sha"
+          fi
+          {
+            echo "appimage=jitter-$VERSION-x86_64.AppImage"
+            echo "tag=test-linux-$sha"
+          } >> "$GITHUB_OUTPUT"
+      # Builds in podman from packaging/appimage/Containerfile, which pins
+      # the toolchains, so this workflow has no env block of its own.
+      - run: packaging/appimage/build.sh
+      # build.sh names the file after the pubspec version, not the test
+      # version, so take it by glob.
+      - name: Copy the AppImage to out
+        env:
+          APPIMAGE: ${{ steps.name.outputs.appimage }}
+        run: |
+          mkdir -p out
+          cp dist/Jitter-*-x86_64.AppImage "out/$APPIMAGE"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: out/
+          if-no-files-found: error
+
+  share:
+    name: Publish a test prerelease
+    if: github.event_name == 'workflow_dispatch' && inputs.share
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      APPIMAGE: ${{ needs.build.outputs.appimage }}
+      TAG: ${{ needs.build.outputs.tag }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux
+          path: out
+      # One prerelease per commit; a re-run replaces its AppImage.
+      - run: |
+          title="Linux test build ${GITHUB_SHA::7} ($GITHUB_REF_NAME)"
+          notes="Not a release: a test build of $GITHUB_REF_NAME at $GITHUB_SHA, to check a fix before it ships. Make it executable (chmod +x) and run it."
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber "out/$APPIMAGE"
+          else
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "$title" --notes "$notes" \
+              "out/$APPIMAGE"
+          fi
+          url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG"
+          echo "::notice::$url"
+          echo "Test build: $url" >> "$GITHUB_STEP_SUMMARY"
