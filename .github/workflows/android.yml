@@ -33,7 +33,6 @@ jobs:
     name: Android APK
     runs-on: ubuntu-latest
     outputs:
-      apk: ${{ steps.name.outputs.apk }}
       tag: ${{ steps.name.outputs.tag }}
     env:
       GH_TOKEN: ${{ github.token }}
@@ -122,7 +121,6 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
-      APK: ${{ needs.build.outputs.apk }}
       TAG: ${{ needs.build.outputs.tag }}
     steps:
       - uses: actions/download-artifact@v4
@@ -133,13 +131,15 @@ jobs:
       - run: |
           title="Android test build ${GITHUB_SHA::7} ($GITHUB_REF_NAME)"
           notes="Not a release: a test build of $GITHUB_REF_NAME at $GITHUB_SHA, to check a fix before it ships. Install the APK by hand. It is signed with the release key, so it updates an installed Jitter."
+          # The build job can't pass the name on: GitHub drops an output containing a secret's value, and the APK name does.
+          apk=(out/*.apk)
           if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber "out/$APK"
+            gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber "${apk[0]}"
           else
             gh release create "$TAG" -R "$GITHUB_REPOSITORY" \
               --target "$GITHUB_SHA" --prerelease --latest=false \
               --title "$title" --notes "$notes" \
-              "out/$APK"
+              "${apk[0]}"
           fi
           url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG"
           echo "::notice::$url"
