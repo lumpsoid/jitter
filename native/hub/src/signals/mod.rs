@@ -23,6 +23,8 @@ mod logs;
 mod playback;
 // Channel
 mod channel;
+// Downloads
+mod downloads;
 // Search
 mod search;
 // Settings
@@ -73,6 +75,11 @@ pub use playback::{
 pub use channel::{
     ChannelLive, ChannelUpdate, OpenChannel, RefreshChannel, SelectVodKind, VodKind, VodTile,
     VodsMore, VodsNextPage, VodsState, VodsUpdate,
+};
+// Downloads
+pub use downloads::{
+    CancelDownload, ChooseDownload, DownloadItem, DownloadState, DownloadsReady, DownloadsUpdate,
+    RemoveDownload, StartDownload,
 };
 // Search
 pub use search::{
