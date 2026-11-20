@@ -1,6 +1,6 @@
 //! Live and VOD playback through usher: token, URL, master playlist.
 
-use jitter_core::models::{ChannelLogin, Playback, VideoId};
+use jitter_core::models::{ChannelLogin, Playback, SegmentList, VideoId};
 use jitter_core::playback::PlaybackTarget;
 use url::form_urlencoded;
 
@@ -81,6 +81,15 @@ impl Twitch {
             return Err(usher_error(status, target));
         }
         Ok(Playback::from_variants(url, hls::parse_master(&body)?))
+    }
+
+    /// Resolves a VOD quality's media playlist into its segment URLs.
+    pub async fn segments(&self, playlist_url: &str) -> Result<SegmentList, TwitchError> {
+        let (status, body) = self.get(playlist_url).await?;
+        if !(200..300).contains(&status) {
+            return Err(TwitchError::Http { status });
+        }
+        hls::parse_media(&body, playlist_url)
     }
 }
 
