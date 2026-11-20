@@ -91,6 +91,15 @@ impl Twitch {
         }
         hls::parse_media(&body, playlist_url)
     }
+
+    /// The bytes of one media segment (or init segment) URL.
+    pub async fn segment(&self, url: &str) -> Result<Vec<u8>, TwitchError> {
+        let (status, bytes) = self.get(url).await?;
+        if !(200..300).contains(&status) {
+            return Err(TwitchError::Http { status });
+        }
+        Ok(bytes)
+    }
 }
 
 fn nonce() -> u32 {
