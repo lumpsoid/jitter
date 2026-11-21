@@ -5,6 +5,7 @@ pub mod backup;
 pub mod categories;
 pub mod category;
 pub mod chat;
+pub mod download;
 pub mod fav;
 pub mod history;
 pub mod play;

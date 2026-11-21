@@ -1,3 +1,4 @@
+import 'package:jitter/player/controls_fade.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// Marks a stream as live: red at the live edge, grey when [behind] it, as
@@ -15,7 +16,7 @@ class LiveBadge extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: behind ? colors.outline : colors.error,
+        color: fadedColor(context, behind ? colors.outline : colors.error),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Padding(
@@ -23,7 +24,10 @@ class LiveBadge extends StatelessWidget {
         child: Text(
           'LIVE',
           style: style?.copyWith(
-            color: behind ? colors.surface : colors.onError,
+            color: fadedColor(
+              context,
+              behind ? colors.surface : colors.onError,
+            ),
             fontWeight: FontWeight.bold,
           ),
         ),

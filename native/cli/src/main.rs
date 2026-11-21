@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
+use commands::download::DownloadArgs;
 use commands::fav::FavCommand;
 use commands::history::HistoryCommand;
 use commands::play::PlayArgs;
@@ -72,6 +73,8 @@ enum Command {
     },
     /// Resolve a live channel or VOD and print its qualities or one URL.
     Play(PlayArgs),
+    /// Download a VOD to one file, joining its segments.
+    Download(DownloadArgs),
     /// Print a channel's live chat, emotes as `[name]`, until interrupted;
     /// or, with `--vod`, a VOD's chat replayed over a stretch of the video.
     Chat {
@@ -138,6 +141,7 @@ async fn run(command: Command) -> commands::Result<()> {
         Command::Fav { command } => commands::fav::run(command).await,
         Command::Vods { login, pages } => commands::vods::run(&login, pages).await,
         Command::Play(args) => commands::play::run(args).await,
+        Command::Download(args) => commands::download::run(args).await,
         Command::Chat {
             login,
             vod,

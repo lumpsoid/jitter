@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:jitter/player/controls_fade.dart';
 import 'package:jitter/player/go_to_time_dialog.dart';
 import 'package:jitter/player/live.dart';
 import 'package:jitter/player/seek_bar.dart';
@@ -7,8 +8,8 @@ import 'package:jitter/src/bindings/bindings.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// Where a VOD plays and how long it is (`1:23:45 / 6:00:00`), in
-/// media_kit's controls in place of their position indicator. A tap or a
-/// click opens a [GoToTimeDialog] to type an exact time to go to.
+/// the player's controls, in place of media_kit's position indicator.
+/// A tap or a click opens a [GoToTimeDialog] to type an exact time to go to.
 class PositionReadout extends StatefulWidget {
   const new({
     required this.positions,
@@ -81,7 +82,7 @@ class _PositionReadoutState extends State<PositionReadout> {
               style: TextStyle(
                 height: 1,
                 fontSize: widget.fontSize,
-                color: const Color(0xFFFFFFFF),
+                color: fadedColor(context, const Color(0xFFFFFFFF)),
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),

@@ -163,6 +163,14 @@ from those to core, never back.
 3. Core does not know Twitch's wire formats; twitch does not decide.
 4. No panics in Rust (`unwrap`/`expect`/`panic!`); return `Result`.
 
+## Flutter rules
+
+- Fade with colour alpha, not `Opacity`, `AnimatedOpacity` or
+  `FadeTransition`: opacity draws the subtree offscreen, which on Impeller's
+  GLES backend (Linux) stalled the video for up to 118 ms per fade of the
+  player controls. Opacity only where alpha cannot reach, such as an image.
+  (user, 2026-11-16)
+
 ## Gates
 
 `make check` (`scripts/check.sh`, which CI runs too) runs all of them in
@@ -175,3 +183,29 @@ version. Individually:
 - `flutter analyze` / `flutter test` for the GUI
 
 Releasing and the rest of the maintainer's jobs: [maintaining](./docs/maintaining.md).
+
+<!-- agent-kit:rust begin. Written by agent-kit-repo-setup from agent-kit/conventions/rust-rules.md; edit it there, not here. Put repo-specific exceptions under "## Repo overrides" outside this block. -->
+## Rust builds
+
+Several agents build on this machine at once, so builds share a fixed number
+of build slots.
+
+- **Gate:** `agent-check` runs `cargo fmt --check`, clippy
+  (`--workspace --all-targets -D warnings`) and the tests (nextest, then
+  doctests), stopping at the first failure. It prints one line per step and,
+  for a failure, the errors and the path of the full log. Read that log
+  instead of re-running with more output.
+  - One step: `agent-check clippy`, `agent-check test`.
+  - Some tests: `agent-check test -- -p <crate> <filter>` (args after `--`
+    go to `cargo nextest run`).
+  - One crate: `agent-check -- -p <crate>`; `-p` after `--` narrows clippy
+    as well as the tests.
+  - Formatting: `agent-check --fix fmt`.
+- **Any other compiling cargo command** (`build`, `check`, `clippy`, `test`,
+  `nextest`, `bench`, `doc`) runs as `agent-gated cargo <same args>`. A hook
+  denies the plain `cargo` form. `cargo fmt`, `metadata`, `tree` and `run`
+  stay plain.
+- If `agent-gated` says all slots are busy, wait for it. Don't work around it
+  with `CARGO_TARGET_DIR`, `--target-dir` or `-j`: build intermediates live
+  in the shared cargo build dir, and a private target dir rebuilds the world.
+<!-- agent-kit:rust end -->

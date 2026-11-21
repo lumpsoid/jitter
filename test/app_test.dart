@@ -7,11 +7,11 @@ import 'package:jitter/categories/categories_page.dart';
 import 'package:jitter/categories/category_holder.dart';
 import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/chat/chat_holder.dart';
+import 'package:jitter/downloads/downloads_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/favorites/favorites_page.dart';
 import 'package:jitter/history/history_holder.dart';
 import 'package:jitter/logs/logs_holder.dart';
-import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
 import 'package:jitter/search/search_holder.dart';
 import 'package:jitter/settings/settings_holder.dart';
@@ -20,6 +20,8 @@ import 'package:jitter/top/browse_holder.dart';
 import 'package:jitter/top/top_page.dart';
 import 'package:jitter/widgets/loading_mark.dart';
 import 'package:material_ui/material_ui.dart';
+
+import 'player/fake_player_engine.dart';
 
 JitterApp _app(BootHolder boot, {SettingsHolder? settings}) => JitterApp(
   boot: boot,
@@ -30,11 +32,12 @@ JitterApp _app(BootHolder boot, {SettingsHolder? settings}) => JitterApp(
   history: HistoryHolder(),
   channel: ChannelHolder(),
   playback: PlaybackHolder(),
-  player: MediaKitEngine(),
+  player: FakePlayerEngine(),
   chat: ChatHolder(),
   search: SearchHolder(),
   settings: settings ?? SettingsHolder(),
   backup: BackupHolder(),
+  downloads: DownloadsHolder(),
   logs: LogsHolder(),
 );
 

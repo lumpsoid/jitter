@@ -36,6 +36,18 @@ class FadedVolume {
     return user * _level;
   }
 
+  /// The user's volume, the player now at [current]: under a fade, the one it
+  /// fades from.
+  double user({required double current}) => _user ?? current;
+
+  /// Sets the user's volume to [to] (kept within 0–100), the player now at
+  /// [current]. Mid-fade it sets the user's volume under the fade.
+  double set(double to, {required double current}) {
+    final user = to.clamp(0.0, 100.0);
+    if (_user != null) _user = user;
+    return user * _level;
+  }
+
   /// Mutes, or unmutes back to the volume it was muted at, the player now
   /// at [current]. Mid-fade it mutes the user's volume under the fade.
   double toggleMute({required double current}) {

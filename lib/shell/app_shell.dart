@@ -8,13 +8,14 @@ import 'package:jitter/categories/category_page.dart';
 import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/channel/channel_page.dart';
 import 'package:jitter/chat/chat_holder.dart';
+import 'package:jitter/downloads/downloads_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/favorites/favorites_page.dart';
 import 'package:jitter/history/history_holder.dart';
 import 'package:jitter/history/history_page.dart';
 import 'package:jitter/logs/logs_holder.dart';
-import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
+import 'package:jitter/player/player_engine.dart';
 import 'package:jitter/player/player_page.dart';
 import 'package:jitter/search/search_holder.dart';
 import 'package:jitter/search/search_page.dart';
@@ -78,6 +79,7 @@ class AppShell extends StatefulWidget {
     // Settings
     required this.settings,
     required this.backup,
+    required this.downloads,
     required this.logs,
     super.key,
   });
@@ -93,7 +95,7 @@ class AppShell extends StatefulWidget {
   final HistoryHolder history;
   // Playback: what a page needs to push a `PlayerPage`.
   final PlaybackHolder playback;
-  final MediaKitEngine player;
+  final PlayerEngine player;
   // Channel
   final ChannelHolder channel;
   // Chat: shown on the player page.
@@ -103,6 +105,7 @@ class AppShell extends StatefulWidget {
   // Settings
   final SettingsHolder settings;
   final BackupHolder backup;
+  final DownloadsHolder downloads;
   final LogsHolder logs;
 
   @override
@@ -181,6 +184,7 @@ class _AppShellState extends State<AppShell> {
       page: SettingsPage(
         settings: widget.settings,
         backup: widget.backup,
+        downloads: widget.downloads,
         logs: widget.logs,
       ),
       refresh: null,
@@ -207,6 +211,7 @@ class _AppShellState extends State<AppShell> {
       login: login,
       channel: widget.channel,
       favorites: widget.favorites,
+      downloads: widget.downloads,
       onOpenVod: _openVod,
       onOpenLive: _openLive,
     ),
@@ -220,6 +225,7 @@ class _AppShellState extends State<AppShell> {
           login: login,
           channel: widget.channel,
           favorites: widget.favorites,
+          downloads: widget.downloads,
           onOpenVod: _openVod,
           onOpenLive: _openLive,
         ),

@@ -6,8 +6,8 @@ import 'package:flutter/widgets.dart';
 /// it (theatre's) has its say. Only while the route is on top, so Escape
 /// on a dialog or a menu above it is theirs.
 ///
-/// Read ahead of the focused widget, as a key handler: media_kit's video
-/// takes Escape for its own fullscreen even when not in it. Wrap each
+/// Read ahead of the focused widget, as a key handler: the player's desktop
+/// controls take Escape for their fullscreen even when not in it. Wrap each
 /// pushed page in one; a gamepad's B maps to Escape.
 class EscapeGoesBack extends StatefulWidget {
   const new({required this.child, this.onEscape, super.key});

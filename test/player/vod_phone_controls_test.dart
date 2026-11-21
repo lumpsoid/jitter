@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jitter/player/controls_fade.dart';
 import 'package:jitter/player/scrub.dart';
 import 'package:jitter/player/seek_bar.dart';
 import 'package:jitter/player/vod_phone_controls.dart';
@@ -62,6 +63,35 @@ Future<void> doubleTap(WidgetTester tester, Offset at) async {
   await tester.pump(const Duration(milliseconds: 50));
   await tester.tapAt(at);
   await tester.pump();
+}
+
+/// How far the controls have faded in now, read from the [ControlsFade] above
+/// the bar: 0 hidden, 1 shown.
+double barFade(WidgetTester tester) {
+  return tester
+      .widget<ControlsFade>(
+        find.ancestor(
+          of: find.byKey(const Key('bar')),
+          matching: find.byType(ControlsFade),
+        ),
+      )
+      .notifier!
+      .value;
+}
+
+/// Expects no layer in the controls that draws a subtree offscreen to fade
+/// it: opacity on Impeller's GLES backend stalled the video for each fade.
+void expectNoOpacityLayers(WidgetTester tester) {
+  for (final layer in [AnimatedOpacity, Opacity, FadeTransition]) {
+    expect(
+      find.descendant(
+        of: find.byType(VodPhoneControls),
+        matching: find.byType(layer),
+      ),
+      findsNothing,
+      reason: '$layer',
+    );
+  }
 }
 
 void main() {
@@ -302,5 +332,57 @@ void main() {
     expect(mode.center.dy, readout.center.dy);
     // Away from fullscreen: the row's free space lies between them.
     expect(fullscreen.left - mode.right, greaterThan(200));
+  });
+
+  testWidgets('the controls fade in, not at once', (tester) async {
+    await pumpControls(tester);
+    await tester.tapAt(const Offset(300, 80));
+    // A tap waits out the double tap's window before it shows the controls.
+    await tester.pump(_tapSettles);
+
+    expect(find.text('play'), findsOneWidget);
+    expect(barFade(tester), lessThan(1));
+
+    await tester.pump(_tapSettles);
+
+    expect(barFade(tester), 1);
+  });
+
+  testWidgets('the controls draw no opacity layer', (tester) async {
+    await pumpControls(tester);
+    await tapVideo(tester);
+
+    expect(find.text('play'), findsOneWidget);
+    expectNoOpacityLayers(tester);
+  });
+
+  testWidgets('hiding drops the scrub readout', (tester) async {
+    late BuildContext bar;
+    await pumpControls(
+      tester,
+      bar: Builder(
+        builder: (context) {
+          bar = context;
+          return const SizedBox(height: 36);
+        },
+      ),
+    );
+    await tapVideo(tester);
+
+    ScrubNotification(
+      const ScrubReading(
+        target: Duration(hours: 1, minutes: 30),
+        from: Duration(hours: 1),
+        speed: ScrubSpeed.normal,
+      ),
+    ).dispatch(bar);
+    await tester.pump();
+    expect(find.text('1:30:00'), findsOneWidget);
+
+    await tapVideo(tester);
+    expect(find.text('1:30:00'), findsNothing);
+
+    await tapVideo(tester);
+    expect(find.text('1:30:00'), findsNothing);
   });
 }

@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
-import 'package:jitter/player/media_kit_engine.dart';
 import 'package:jitter/player/playback_holder.dart';
+import 'package:jitter/player/player_engine.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 
 /// How long the player must report "not playing" before the system hears
@@ -21,7 +21,7 @@ class MediaSession extends BaseAudioHandler {
   new(this._playback, this._player);
 
   final PlaybackHolder _playback;
-  final MediaKitEngine _player;
+  final PlayerEngine _player;
   bool _playing = false;
   Timer? _settling;
 

@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -6,17 +7,24 @@ const double _thumbnailWidth = 160;
 
 /// One VOD: its thumbnail with the duration over it and, when playback
 /// would resume part way, a bar of how far; then its title, game and date.
+/// Given [onDownload], a long press, or the menu key (Shift+F10), offers to
+/// download the VOD.
 class VodTileView extends StatelessWidget {
-  const new({required this.vod, this.onTap, super.key});
+  const new({required this.vod, this.onTap, this.onDownload, super.key});
 
   final VodTile vod;
   final VoidCallback? onTap;
+  final VoidCallback? onDownload;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return InkWell(
+    final download = onDownload;
+    final tile = InkWell(
       onTap: onTap,
+      onLongPress: download == null
+          ? null
+          : () => _showActions(context, download),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         child: Row(
@@ -90,7 +98,37 @@ class VodTileView extends StatelessWidget {
         ),
       ),
     );
+    if (download == null) return tile;
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.contextMenu): () =>
+            _showActions(context, download),
+        const SingleActivator(LogicalKeyboardKey.f10, shift: true): () =>
+            _showActions(context, download),
+      },
+      child: tile,
+    );
   }
+
+  void _showActions(BuildContext context, VoidCallback download) =>
+      showModalBottomSheet<void>(
+        context: context,
+        builder: (sheetContext) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.download_outlined),
+                title: const Text('Download'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  download();
+                },
+              ),
+            ],
+          ),
+        ),
+      );
 }
 
 class _DurationBadge extends StatelessWidget {

@@ -1,6 +1,9 @@
 //! Live and VOD playback through usher: token, URL, master playlist.
 
-use jitter_core::models::{ChannelLogin, Playback, VideoId};
+use std::time::Duration;
+
+use futures_util::stream::{self, Stream, StreamExt};
+use jitter_core::models::{ChannelLogin, Playback, SegmentList, VideoId};
 use jitter_core::playback::PlaybackTarget;
 use url::form_urlencoded;
 
@@ -15,6 +18,14 @@ const USHER_VOD: &str = "https://usher.ttvnw.net/vod/v2/";
 
 /// Codecs we ask for, best first.
 const SUPPORTED_CODECS: &str = "av1,h265,h264";
+
+/// Segment requests `segment_bytes` keeps in flight. A few hide each
+/// request's round trip; many more would only crowd the link.
+const SEGMENTS_IN_FLIGHT: usize = 4;
+/// Requests per segment before `segment_bytes` gives up on it.
+const SEGMENT_ATTEMPTS: u32 = 3;
+/// The pause between two requests for one segment.
+const RETRY_PAUSE: Duration = Duration::from_secs(1);
 
 /// The nonce `p` is drawn from `0..NONCE_LIMIT`.
 const NONCE_LIMIT: u32 = 9_999_999;
@@ -81,6 +92,51 @@ impl Twitch {
             return Err(usher_error(status, target));
         }
         Ok(Playback::from_variants(url, hls::parse_master(&body)?))
+    }
+
+    /// Resolves a VOD quality's media playlist into its segment URLs.
+    pub async fn segments(&self, playlist_url: &str) -> Result<SegmentList, TwitchError> {
+        let (status, body) = self.get(playlist_url).await?;
+        if !(200..300).contains(&status) {
+            return Err(TwitchError::Http { status });
+        }
+        hls::parse_media(&body, playlist_url)
+    }
+
+    /// The bytes of one media segment (or init segment) URL.
+    pub async fn segment(&self, url: &str) -> Result<Vec<u8>, TwitchError> {
+        let (status, bytes) = self.get(url).await?;
+        if !(200..300).contains(&status) {
+            return Err(TwitchError::Http { status });
+        }
+        Ok(bytes)
+    }
+
+    /// Each URL's bytes, in the order given, with up to `SEGMENTS_IN_FLIGHT`
+    /// requests running at once. A failed request is tried again, up to
+    /// `SEGMENT_ATTEMPTS` in all, because one transient error should not lose
+    /// a download of ~1000 segments. Its last error is the stream's item.
+    pub fn segment_bytes<'a>(
+        &'a self,
+        urls: &'a [String],
+    ) -> impl Stream<Item = Result<Vec<u8>, TwitchError>> + 'a {
+        stream::iter(urls)
+            .map(|url| self.segment_retrying(url))
+            .buffered(SEGMENTS_IN_FLIGHT)
+    }
+
+    async fn segment_retrying(&self, url: &str) -> Result<Vec<u8>, TwitchError> {
+        let mut attempt = 1;
+        loop {
+            match self.segment(url).await {
+                Ok(bytes) => return Ok(bytes),
+                Err(e) if attempt == SEGMENT_ATTEMPTS => return Err(e),
+                Err(_) => {
+                    attempt += 1;
+                    tokio::time::sleep(RETRY_PAUSE).await;
+                }
+            }
+        }
     }
 }
 

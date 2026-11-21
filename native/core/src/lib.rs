@@ -10,6 +10,8 @@ pub mod channel;
 pub mod chat;
 pub mod chat_panel;
 pub mod chat_replay;
+pub mod download;
+pub mod downloads;
 #[cfg(any(test, feature = "test-fakes"))]
 pub mod fakes;
 pub mod favorites;

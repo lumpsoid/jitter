@@ -1,9 +1,12 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+import 'package:jitter/player/live.dart';
 import 'package:jitter/player/player_engine.dart';
 import 'package:video_player/video_player.dart';
 
 /// The video_player (fvp, libmdk) engine for the load comparison with
-/// `MediaKitEngine`. Dev-only: nothing in `lib/` may import it.
+/// `MediaKitEngine`. Dev-only: nothing in `lib/` may import it. Its extra
+/// members are stubs, because the bench never calls them.
 class FvpEngine implements PlayerEngine {
   final ValueNotifier<VideoPlayerController?> _controller =
       ValueNotifier<VideoPlayerController?>(null);
@@ -53,6 +56,77 @@ class FvpEngine implements PlayerEngine {
 
   @override
   Duration get duration => _controller.value?.value.duration ?? Duration.zero;
+
+  @override
+  Future<void> stopForExit() async {}
+
+  @override
+  Future<void> play() async {}
+
+  @override
+  Future<void> pause() async {}
+
+  @override
+  Future<void> togglePlaying() async {}
+
+  @override
+  bool get isPlaying => _controller.value?.value.isPlaying ?? false;
+
+  @override
+  Stream<bool> get playing => const Stream.empty();
+
+  @override
+  Future<void> seekBy(Duration by) async {}
+
+  @override
+  Future<void> stepFrame({required bool forward}) async {}
+
+  @override
+  Live<Duration> get positions =>
+      Live(now: () => Duration.zero, changes: Stream.empty);
+
+  @override
+  Live<Duration> get durations =>
+      Live(now: () => Duration.zero, changes: Stream.empty);
+
+  @override
+  Stream<bool> get bufferings => const Stream.empty();
+
+  @override
+  Live<Duration> get buffers =>
+      Live(now: () => Duration.zero, changes: Stream.empty);
+
+  @override
+  Future<void> toggleMute() async {}
+
+  @override
+  Future<void> nudgeVolume(double by) async {}
+
+  @override
+  Live<double> get volumes => Live(now: () => 100, changes: Stream.empty);
+
+  @override
+  Future<void> setVolume(double to) async {}
+
+  /// The playing picture under [zoom], letterboxed in black as media_kit's
+  /// `Video` is. Its layout is the bench's own `AspectRatio` picture, centred
+  /// so the picture keeps its aspect ratio in the black.
+  @override
+  Widget surface(Widget Function(Widget picture) zoom) =>
+      ValueListenableBuilder<VideoPlayerController?>(
+        valueListenable: _controller,
+        builder: (_, controller, _) => controller == null
+            ? const ColoredBox(color: Color(0xFF000000))
+            : ColoredBox(
+                color: const Color(0xFF000000),
+                child: Center(
+                  child: AspectRatio(
+                    aspectRatio: controller.value.aspectRatio,
+                    child: zoom(VideoPlayer(controller)),
+                  ),
+                ),
+              ),
+      );
 
   Future<void> _release() async {
     final previous = _controller.value;
