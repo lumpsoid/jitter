@@ -30,6 +30,7 @@ use rinf::{DartSignal, DartSignalPack, RustSignal, SignalReceiver};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
+use tokio::time::Instant;
 
 use crate::format::twitch_error;
 use crate::run::Fetched;
@@ -42,6 +43,10 @@ use crate::signals::{
 const ATTEMPTS: u32 = 3;
 /// The pause between two requests for one segment.
 const RETRY_PAUSE: Duration = Duration::from_secs(1);
+/// The least time between two progress updates of one download. Each one
+/// sends Dart the whole list, and a fast link joins many segments a second;
+/// a count redrawn twice a second reads the same.
+const PROGRESS_EVERY: Duration = Duration::from_millis(500);
 
 /// The downloads: the controller's list, and the writer task of each one
 /// still running.
@@ -418,6 +423,7 @@ async fn write(
     // Cloned so that `record` can borrow the download mutably.
     let urls = download.urls().to_vec();
     let total = urls.len();
+    let mut last_sent: Option<Instant> = None;
     for (index, url) in urls.iter().enumerate() {
         let bytes = tokio::select! {
             bytes = fetch_segment(twitch, url, index + 1, total) => bytes.map_err(Stop::Failed)?,
@@ -430,6 +436,12 @@ async fn write(
         file = next;
         stopped(stop)?;
         download.record(len);
+        let due = last_sent.is_none_or(|at| at.elapsed() >= PROGRESS_EVERY);
+        // The last count always goes out, so the list ends on it.
+        if !due && !download.is_finished() {
+            continue;
+        }
+        last_sent = Some(Instant::now());
         let progress = download.progress();
         if fetch
             .send(Fetched::Downloads(DownloadFetched::Progress {
