@@ -5,12 +5,15 @@ DownloadItem download({
   required String fileName,
   int key = 1,
   DownloadState state = const DownloadStateRunning(),
+  int done = 0,
+  int total = 0,
+  int bytes = 0,
 }) => DownloadItem(
   key: Uint64.parse('$key'),
   videoId: '42',
   fileName: fileName,
-  done: 0,
-  total: 0,
-  bytes: Uint64.parse('0'),
+  done: done,
+  total: total,
+  bytes: Uint64.parse('$bytes'),
   state: state,
 );
