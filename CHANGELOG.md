@@ -6,8 +6,17 @@ All notable changes to Jitter are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-21
+
 ### Added
 
+- Download a VOD: long-press its tile on a channel page, pick a quality,
+  and follow it, cancel it or remove it under Settings → Downloads. From
+  the command line, `jitter download` saves a VOD to one file. A download
+  fetches four segments at once, and one that was interrupted resumes where
+  it stopped instead of starting over.
+- Setting the environment variable `JITTER_ENGINE=fvp` plays video with
+  fvp instead of media_kit on Linux and Windows, to compare the two.
 - Export your favorites, watch history, VOD positions and settings to a
   JSON file, and import one, from Settings → Your data or with
   `jitter export` and `jitter import`. An import adds to what you have and
@@ -25,9 +34,15 @@ All notable changes to Jitter are listed here. The format follows
   draws with stops working, with Windows' reason. On Windows it also
   records the GPU devices' state as each stream stops, opens, loads and
   starts decoding.
+- The app shows a still "Loading…" mark while it starts, instead of
+  spinners.
 
 ### Fixed
 
+- On Linux, the video no longer freezes for a moment each time the player
+  controls fade in or out.
+- The play/pause button no longer flips from play to pause each time the
+  controls show over a stream that is already playing.
 - On Windows, the second stream in a row shows its picture again, instead of
   playing sound over a black video with zero-copy hardware decoding.
 
@@ -100,8 +115,9 @@ The first release: Android, Linux (AppImage) and Windows.
 - The version and commit under Settings and in `jitter --version`.
 - A command-line head, `jitter`, on the same core.
 
-[Unreleased]: https://github.com/lumpsoid/jitter/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/lumpsoid/jitter/compare/v0.2.0...HEAD
 [0.1.0]: https://github.com/lumpsoid/jitter/releases/tag/v0.1.0
 [0.1.1]: https://github.com/lumpsoid/jitter/compare/v0.1.0...v0.1.1
 [0.1.2]: https://github.com/lumpsoid/jitter/compare/v0.1.1...v0.1.2
 [0.1.3]: https://github.com/lumpsoid/jitter/compare/v0.1.2...v0.1.3
+[0.2.0]: https://github.com/lumpsoid/jitter/compare/v0.1.3...v0.2.0
