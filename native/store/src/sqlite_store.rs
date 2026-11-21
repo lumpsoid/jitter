@@ -25,25 +25,29 @@ impl SqliteStore {
     /// to WAL so readers and a writer in other processes do not block each
     /// other, and brings its schema up to date.
     ///
-    /// rusqlite's default 5 s busy timeout is kept: it covers waiting for
-    /// another process's write to finish.
+    /// Opening waits up to `OPEN_WAIT` for another connection's lock, and
+    /// every later call up to `CALL_WAIT`.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, StoreError> {
-        let conn = Connection::open(path).map_err(db_error)?;
+        let mut conn = Connection::open(path).map_err(db_error)?;
+        conn.busy_timeout(OPEN_WAIT).map_err(db_error)?;
         enable_wal(&conn)?;
-        Self::ready(conn)
+        migrations::migrate(&mut conn)?;
+        conn.busy_timeout(CALL_WAIT).map_err(db_error)?;
+        Ok(Self::new(conn))
     }
 
     /// A fresh, migrated database that lives as long as this store and its
     /// clones. In-memory databases have no WAL; nothing else shares them.
     pub fn open_in_memory() -> Result<Self, StoreError> {
-        Self::ready(Connection::open_in_memory().map_err(db_error)?)
+        let mut conn = Connection::open_in_memory().map_err(db_error)?;
+        migrations::migrate(&mut conn)?;
+        Ok(Self::new(conn))
     }
 
-    fn ready(mut conn: Connection) -> Result<Self, StoreError> {
-        migrations::migrate(&mut conn)?;
-        Ok(Self {
+    fn new(conn: Connection) -> Self {
+        Self {
             conn: Arc::new(Mutex::new(conn)),
-        })
+        }
     }
 
     pub(crate) fn conn(&self) -> Result<MutexGuard<'_, Connection>, StoreError> {
@@ -53,9 +57,17 @@ impl SqliteStore {
     }
 }
 
-/// How long `open` keeps retrying the switch to WAL while another
-/// connection is switching the same file; rusqlite's busy timeout.
-const WAL_SWITCH_WAIT: Duration = Duration::from_secs(5);
+/// How long a call waits for another connection's lock: rusqlite's
+/// default busy timeout. It covers another process's write.
+const CALL_WAIT: Duration = Duration::from_secs(5);
+
+/// How long `open` waits for another connection's lock, and keeps retrying
+/// the switch to WAL. Longer than `CALL_WAIT`: another head opening the
+/// same file holds its lock through a migration's commit, or through the
+/// checkpoint when it closes, and both wait on fsync. On a busy SD card
+/// that took more than 5 s, and the second head failed to open with
+/// "database is locked".
+const OPEN_WAIT: Duration = Duration::from_secs(30);
 const WAL_SWITCH_RETRY: Duration = Duration::from_millis(10);
 
 /// Puts the file in WAL mode. The switch reads the header and then upgrades
@@ -64,7 +76,7 @@ const WAL_SWITCH_RETRY: Duration = Duration::from_millis(10);
 /// `SQLITE_BUSY` immediately. The other's switch then completes, so the
 /// loser retries and finds the file already in WAL.
 fn enable_wal(conn: &Connection) -> Result<(), StoreError> {
-    let deadline = Instant::now() + WAL_SWITCH_WAIT;
+    let deadline = Instant::now() + OPEN_WAIT;
     loop {
         match conn
             .pragma_update_and_check(None, "journal_mode", "WAL", |row| row.get::<_, String>(0))
