@@ -17,12 +17,12 @@
 
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{self, Write};
+use std::io::{self, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use futures_util::StreamExt;
-use jitter_core::download::{Download, DownloadProgress};
+use jitter_core::download::{Download, DownloadProgress, PartStart};
 use jitter_core::downloads::{DownloadEntry, DownloadKey, DownloadStatus, DownloadsController};
 use jitter_core::models::{Quality, VideoId};
 use jitter_core::playback::PlaybackTarget;
@@ -374,6 +374,7 @@ enum Stop {
 /// The paths one download writes in its directory.
 struct Files {
     part: PathBuf,
+    checkpoint: PathBuf,
     done: PathBuf,
 }
 
@@ -381,25 +382,70 @@ impl Files {
     fn new(dir: &Path, download: &Download) -> Self {
         Self {
             part: dir.join(download.part_name()),
+            checkpoint: dir.join(download.checkpoint_name()),
             done: dir.join(download.file_name()),
         }
     }
 
-    /// Removes the part file, for a cancelled download. A missing one is
-    /// fine: the writer may have stopped before creating it.
+    /// Removes the part file and its checkpoint, for a cancelled download.
     async fn discard(&self) {
-        let part = self.part.clone();
-        match blocking(move || std::fs::remove_file(part)).await {
-            Ok(()) => {}
-            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
-            Err(e) => log::warn!("removing {}: {e}", self.part.display()),
+        remove_if_there(&self.part).await;
+        remove_if_there(&self.checkpoint).await;
+    }
+}
+
+/// Removes `path`, logging a failure. A missing file is fine: the writer may
+/// have stopped before creating it.
+async fn remove_if_there(path: &Path) {
+    let owned = path.to_owned();
+    match blocking(move || std::fs::remove_file(owned)).await {
+        Ok(()) => {}
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+        Err(e) => log::warn!("removing {}: {e}", path.display()),
+    }
+}
+
+/// Opens the part file where `download` picks up: after an earlier run's
+/// bytes when its checkpoint still fits them, else empty.
+async fn open_part(download: &mut Download, files: &Files) -> io::Result<File> {
+    let (part, checkpoint) = (files.part.clone(), files.checkpoint.clone());
+    let mut resumed = download.clone();
+    let (resumed, file) = blocking(move || {
+        let start = match saved_run(&part, &checkpoint) {
+            Some((saved, part_len)) => resumed.resume(&saved, part_len),
+            None => PartStart::Fresh,
+        };
+        Ok((resumed, open(&part, start)?))
+    })
+    .await?;
+    *download = resumed;
+    Ok(file)
+}
+
+/// The checkpoint's text and the part file's length, when both are there.
+fn saved_run(part: &Path, checkpoint: &Path) -> Option<(String, u64)> {
+    let saved = std::fs::read_to_string(checkpoint).ok()?;
+    let part_len = std::fs::metadata(part).ok()?.len();
+    Some((saved, part_len))
+}
+
+/// The part file, opened for `start`'s next byte.
+fn open(part: &Path, start: PartStart) -> io::Result<File> {
+    match start {
+        PartStart::Fresh => File::create(part),
+        PartStart::Resume { keep } => {
+            let mut file = File::options().write(true).open(part)?;
+            file.set_len(keep)?;
+            file.seek(SeekFrom::End(0))?;
+            Ok(file)
         }
     }
 }
 
 /// Appends each segment to the part file, in order, then renames it to the
 /// final name and returns that name's path. A failure returns before the
-/// rename and leaves the part file where it is.
+/// rename and leaves the part file and its checkpoint where they are, for
+/// the next start of the same download to resume.
 ///
 /// `stop` is checked after every file op, never during one, so nothing this
 /// started is still touching the disk when it returns `Cancelled`.
@@ -411,16 +457,27 @@ async fn write(
     files: &Files,
     stop: &mut watch::Receiver<bool>,
 ) -> Result<String, Stop> {
-    let Files { part, done } = files;
-    let create = part.clone();
-    let mut file = blocking(move || File::create(create))
+    let Files {
+        part,
+        checkpoint,
+        done,
+    } = files;
+    let mut file = open_part(download, files)
         .await
-        .map_err(|e| failed_to(format!("creating {}: {e}", part.display())))?;
+        .map_err(|e| failed_to(format!("opening {}: {e}", part.display())))?;
     stopped(stop)?;
-    // Cloned so that `record` can borrow the download mutably.
-    let urls = download.urls().to_vec();
-    let total = urls.len();
+    let DownloadProgress {
+        done: resumed,
+        total,
+        ..
+    } = download.progress();
     let mut last_sent: Option<Instant> = None;
+    if resumed > 0 {
+        last_sent = Some(Instant::now());
+        send_progress(fetch, key, download)?;
+    }
+    // Cloned so that `record` can borrow the download mutably.
+    let urls = download.remaining().to_vec();
     // Dropping the stream on a return drops its requests in flight.
     let mut segments = std::pin::pin!(twitch.segment_bytes(&urls).enumerate());
     loop {
@@ -434,33 +491,28 @@ async fn write(
         let bytes = bytes.map_err(|e| {
             failed_to(format!(
                 "segment {} of {total}: {}",
-                index + 1,
+                resumed + index + 1,
                 twitch_error(&e)
             ))
         })?;
-        let len = bytes.len();
-        let (next, ()) = on_file(file, move |out| out.write_all(&bytes))
-            .await
-            .map_err(|e| failed_to(format!("writing {}: {e}", part.display())))?;
+        download.record(bytes.len());
+        let (saved, to) = (download.checkpoint(), checkpoint.clone());
+        // The checkpoint only after the bytes it counts are in the part file.
+        let (next, ()) = on_file(file, move |out| {
+            out.write_all(&bytes)?;
+            std::fs::write(to, saved)
+        })
+        .await
+        .map_err(|e| failed_to(format!("writing {}: {e}", part.display())))?;
         file = next;
         stopped(stop)?;
-        download.record(len);
         let due = last_sent.is_none_or(|at| at.elapsed() >= PROGRESS_EVERY);
         // The last count always goes out, so the list ends on it.
         if !due && !download.is_finished() {
             continue;
         }
         last_sent = Some(Instant::now());
-        let progress = download.progress();
-        if fetch
-            .send(Fetched::Downloads(DownloadFetched::Progress {
-                key,
-                progress,
-            }))
-            .is_err()
-        {
-            return Err(failed_to("the app is shutting down"));
-        }
+        send_progress(fetch, key, download)?;
     }
     let (out, ()) = on_file(file, |out| out.sync_all())
         .await
@@ -487,7 +539,22 @@ async fn write(
         }
         return Err(Stop::Cancelled);
     }
+    remove_if_there(checkpoint).await;
     Ok(done.display().to_string())
+}
+
+fn send_progress(
+    fetch: &UnboundedSender<Fetched>,
+    key: DownloadKey,
+    download: &Download,
+) -> Result<(), Stop> {
+    let progress = download.progress();
+    fetch
+        .send(Fetched::Downloads(DownloadFetched::Progress {
+            key,
+            progress,
+        }))
+        .map_err(|_| failed_to("the app is shutting down"))
 }
 
 /// `Cancelled` once the download was told to stop, or its panel is gone.
