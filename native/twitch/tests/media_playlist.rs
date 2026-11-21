@@ -57,6 +57,21 @@ fn fmp4_playlist_has_its_init_segment() {
 }
 
 #[test]
+fn an_unmuted_fmp4_segment_is_left_as_listed() {
+    let body = b"#EXTM3U\n#EXT-X-TARGETDURATION:10\n\
+                 #EXT-X-MAP:URI=\"init-0.mp4\"\n\
+                 #EXTINF:10.000,\n0-unmuted.mp4\n#EXTINF:10.000,\n1-muted.mp4\n\
+                 #EXT-X-ENDLIST\n";
+    assert_eq!(
+        ok(parse_media(body, PLAYLIST)).segments,
+        [
+            format!("{QUALITY}0-unmuted.mp4"),
+            format!("{QUALITY}1-muted.mp4")
+        ]
+    );
+}
+
+#[test]
 fn a_playlist_without_segments_is_decode() {
     let body = b"#EXTM3U\n#EXT-X-TARGETDURATION:10\n#EXT-X-ENDLIST\n";
     assert!(matches!(
