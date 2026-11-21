@@ -51,8 +51,9 @@ pub enum DownloadsUpdate {
         video_id: String,
         qualities: Vec<QualityOption>,
     },
-    /// A request failed, or a download failed to start. One-shot notice.
-    Failed { message: String },
+    /// A request for `video_id` failed, or its download failed to start.
+    /// One-shot notice; tagged so a flow waiting on one VOD skips another's.
+    Failed { video_id: String, message: String },
 }
 
 /// One download in the list.

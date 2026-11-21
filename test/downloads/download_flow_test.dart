@@ -102,10 +102,28 @@ void main() {
     await tester.tap(find.text('go'));
     await tester.pump();
 
-    holder.apply(const DownloadsUpdateFailed(message: 'no such vod'));
+    holder.apply(
+      const DownloadsUpdateFailed(videoId: '42', message: 'no such vod'),
+    );
     await tester.pumpAndSettle();
     expect(find.text('no such vod'), findsOneWidget);
     expect(started, isEmpty);
+  });
+
+  testWidgets('ignores a failure for another VOD', (tester) async {
+    await pumpFlow(tester);
+    await tester.tap(find.text('go'));
+    await tester.pump();
+
+    holder.apply(
+      const DownloadsUpdateFailed(videoId: '7', message: 'not this one'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('not this one'), findsNothing);
+
+    holder.apply(_choices);
+    await tester.pumpAndSettle();
+    expect(find.text('Download in quality'), findsOneWidget);
   });
 
   testWidgets('dismissing the sheet starts nothing', (tester) async {

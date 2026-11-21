@@ -22,16 +22,14 @@ class DownloadsHolder extends ChangeNotifier {
   final void Function(RemoveDownload) sendRemove;
 
   StreamSubscription<RustSignalPack<DownloadsUpdate>>? _subscription;
-  final _choices = StreamController<DownloadsUpdateChoices>.broadcast(
-    sync: true,
-  );
-  final _failures = StreamController<String>.broadcast(sync: true);
 
-  /// The quality menu for a VOD, one answer per `choose`. Not state.
-  Stream<DownloadsUpdateChoices> get choices => _choices.stream;
+  /// Rust's one-shot answers, `Choices` and `Failed`. Not state.
+  final _notices = StreamController<DownloadsUpdate>.broadcast(sync: true);
 
   /// One message per failure Rust reports, for a snackbar each. Not state.
-  Stream<String> get failures => _failures.stream;
+  Stream<String> get failures => _notices.stream
+      .where((notice) => notice is DownloadsUpdateFailed)
+      .map((notice) => (notice as DownloadsUpdateFailed).message);
 
   /// Empty until the first snapshot arrives.
   List<DownloadItem> get downloads => _downloads;
@@ -45,8 +43,21 @@ class DownloadsHolder extends ChangeNotifier {
     const DownloadsReady().sendSignalToRust();
   }
 
-  /// Asks Rust for the quality menu of [videoId]; it arrives on [choices].
-  void choose(String videoId) => sendChoose(ChooseDownload(videoId: videoId));
+  /// Asks Rust for the quality menu of [videoId]. Completes with its
+  /// `Choices`, or with its `Failed` when they cannot be loaded; answers
+  /// for other VODs are skipped.
+  Future<DownloadsUpdate> choose(String videoId) {
+    // Listen before asking: a broadcast stream does not replay an answer.
+    final answer = _notices.stream.firstWhere(
+      (notice) => switch (notice) {
+        DownloadsUpdateChoices(videoId: final id) ||
+        DownloadsUpdateFailed(videoId: final id) => id == videoId,
+        _ => false,
+      },
+    );
+    sendChoose(ChooseDownload(videoId: videoId));
+    return answer;
+  }
 
   void start({
     required String videoId,
@@ -59,24 +70,21 @@ class DownloadsHolder extends ChangeNotifier {
   void remove(Uint64 key) => sendRemove(RemoveDownload(key: key));
 
   /// Folds one update in: a snapshot replaces the downloads; choices and
-  /// failures leave them alone and go out on [choices] and [failures].
+  /// failures leave them alone and go to [choose] and [failures].
   void apply(DownloadsUpdate update) {
     switch (update) {
       case DownloadsUpdateSnapshot(:final downloads):
         _downloads = downloads;
         notifyListeners();
-      case DownloadsUpdateChoices():
-        _choices.add(update);
-      case DownloadsUpdateFailed(:final message):
-        _failures.add(message);
+      case DownloadsUpdateChoices() || DownloadsUpdateFailed():
+        _notices.add(update);
     }
   }
 
   @override
   void dispose() {
     unawaited(_subscription?.cancel());
-    unawaited(_choices.close());
-    unawaited(_failures.close());
+    unawaited(_notices.close());
     super.dispose();
   }
 }

@@ -89,7 +89,7 @@ void main() {
   testWidgets('a failure shows a snackbar', (tester) async {
     await pumpPage(tester);
 
-    holder.apply(const DownloadsUpdateFailed(message: 'boom'));
+    holder.apply(const DownloadsUpdateFailed(videoId: '42', message: 'boom'));
     await tester.pump();
 
     expect(find.text('boom'), findsOneWidget);

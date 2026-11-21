@@ -17,19 +17,13 @@ Future<void> downloadVod(
   Future<String> Function() downloadDir = platformDownloadDir,
   VoidCallback? onView,
 }) async {
-  // Listen before asking: broadcast streams do not replay an answer.
-  final answer = Future.any<Object>([
-    downloads.choices.firstWhere((c) => c.videoId == videoId),
-    downloads.failures.first,
-  ]);
-  downloads.choose(videoId);
-  final result = await answer;
+  final answer = await downloads.choose(videoId);
   if (!context.mounted) return;
-  if (result is String) {
-    _showSnackBar(context, result);
+  if (answer is DownloadsUpdateFailed) {
+    _showSnackBar(context, answer.message);
     return;
   }
-  final qualities = (result as DownloadsUpdateChoices).qualities;
+  final qualities = (answer as DownloadsUpdateChoices).qualities;
   if (qualities.isEmpty) {
     _showSnackBar(context, 'This VOD has no qualities to download.');
     return;

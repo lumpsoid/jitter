@@ -181,7 +181,7 @@ pub fn ready(panel: &DownloadsPanel) {
 pub fn choose(twitch: &Twitch, fetch: &UnboundedSender<Fetched>, signal: ChooseDownload) {
     let video = match parse_video(&signal.video_id) {
         Ok(video) => video,
-        Err(message) => return failed(message),
+        Err(message) => return failed(signal.video_id, message),
     };
     let (twitch, fetch) = (twitch.clone(), fetch.clone());
     tokio::spawn(async move {
@@ -202,7 +202,7 @@ pub fn choose(twitch: &Twitch, fetch: &UnboundedSender<Fetched>, signal: ChooseD
 pub fn start(twitch: &Twitch, fetch: &UnboundedSender<Fetched>, signal: StartDownload) {
     let video = match parse_video(&signal.video_id) {
         Ok(video) => video,
-        Err(message) => return failed(message),
+        Err(message) => return failed(signal.video_id, message),
     };
     let dir = PathBuf::from(signal.dir);
     let quality = signal.quality;
@@ -252,11 +252,11 @@ pub fn on_fetched(
                 qualities: qualities.iter().map(QualityOption::from).collect(),
             }
             .send_signal_to_dart(),
-            Err(e) => failed(format!("Couldn't load the qualities: {e}")),
+            Err(e) => failed(video_id, format!("Couldn't load the qualities: {e}")),
         },
         DownloadFetched::Resolved { video, dir, result } => match result {
             Ok(download) => start_writer(panel, video, dir, download, twitch, fetch),
-            Err(message) => failed(message),
+            Err(message) => failed(video.as_str().to_owned(), message),
         },
         DownloadFetched::Progress { key, progress } => {
             if panel.controller.progress(key, progress) {
@@ -290,16 +290,17 @@ fn start_writer(
     twitch: &Twitch,
     fetch: &UnboundedSender<Fetched>,
 ) {
+    let id = video.as_str().to_owned();
     let done = dir.join(download.file_name());
     if done.exists() {
-        return failed(format!("{} already exists", done.display()));
+        return failed(id, format!("{} already exists", done.display()));
     }
     let part = dir.join(download.part_name());
     if panel.running.values().any(|running| running.part == part) {
-        return failed(format!("still stopping {}", download.file_name()));
+        return failed(id, format!("still stopping {}", download.file_name()));
     }
     let Some(key) = panel.controller.start(video, &download) else {
-        return failed(format!("already downloading {}", download.file_name()));
+        return failed(id, format!("already downloading {}", download.file_name()));
     };
     let (stop, stopped) = watch::channel(false);
     let task = spawn_writer(twitch, fetch, key, download, dir, stopped);
@@ -607,9 +608,10 @@ fn send_snapshot(panel: &DownloadsPanel) {
     .send_signal_to_dart();
 }
 
-/// Tells Dart a request or a start failed: a one-shot notice, not state.
-fn failed(message: String) {
-    DownloadsUpdate::Failed { message }.send_signal_to_dart();
+/// Tells Dart a request or a start for `video_id` failed: a one-shot
+/// notice, not state.
+fn failed(video_id: String, message: String) {
+    DownloadsUpdate::Failed { video_id, message }.send_signal_to_dart();
 }
 
 /// The VOD id Dart sent, or a message saying it is not one.
