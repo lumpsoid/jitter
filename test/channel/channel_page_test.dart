@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/channel/channel_about.dart';
 import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/channel/channel_page.dart';
+import 'package:jitter/downloads/downloads_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:material_ui/material_ui.dart';
@@ -13,6 +14,7 @@ Future<void> pumpPage(
   ChannelHolder channel, {
   ValueChanged<String>? onOpenVod,
   ValueChanged<String>? onOpenLive,
+  List<ChooseDownload>? chosen,
 }) async {
   tester.view.physicalSize = const Size(600, 1200);
   tester.view.devicePixelRatio = 1;
@@ -23,6 +25,7 @@ Future<void> pumpPage(
         login: 'xqc',
         channel: channel,
         favorites: FavoritesHolder(),
+        downloads: DownloadsHolder(sendChoose: chosen?.add ?? (_) {}),
         onOpenVod: onOpenVod,
         onOpenLive: onOpenLive,
       ),
@@ -167,6 +170,23 @@ void main() {
 
     expect(opened, ['1']);
   });
+
+  testWidgets(
+    'long-pressing a VOD and choosing Download asks for its qualities',
+    (tester) async {
+      final chosen = <ChooseDownload>[];
+      final channel = ChannelHolder()
+        ..applyHeader(found())
+        ..applyVods(loadedVods(['1']));
+      await pumpPage(tester, channel, chosen: chosen);
+      await tester.longPress(find.text('Title 1'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Download'));
+      await tester.pump();
+
+      expect(chosen, [const ChooseDownload(videoId: '1')]);
+    },
+  );
 
   testWidgets('tapping the live stream hands on the login', (tester) async {
     final opened = <String>[];
