@@ -30,6 +30,9 @@ sysinfo = { version = "0.38.4", default-features = false, features = ["system"] 
 [dev-dependencies]
 # The fake resume store, for the VOD tiles' resume progress.
 jitter_core = { path = "../core", features = ["test-fakes"] }
+# A local stand-in for the CDN, and a directory, for the download writer.
+tempfile = "3.27.0"
+tokio = { version = "1.45.0", features = ["net", "io-util"] }
 
 # The device probes in the session log: GPU adapters on Windows, the API
 # level on Android.

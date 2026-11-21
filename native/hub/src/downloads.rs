@@ -625,7 +625,12 @@ fn count(n: usize) -> u32 {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Arc, Mutex};
+
     use jitter_core::models::SegmentList;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::{TcpListener, TcpStream};
+    use tokio::sync::mpsc::{self, UnboundedReceiver};
 
     use super::*;
 
@@ -699,6 +704,197 @@ mod tests {
         };
         assert_eq!(message, "segment 2 of 2: HTTP 404");
         assert!(matches!(cancelled.state, DownloadState::Cancelled));
+        Ok(())
+    }
+
+    /// What the stand-in CDN does for one path.
+    #[derive(Clone)]
+    enum Serve {
+        Bytes(&'static [u8]),
+        /// Holds the request open and never answers.
+        Hang,
+    }
+
+    /// A stand-in for the CDN on a local port: serves each path as `routes`
+    /// says, 404 for any other, and records every path asked for.
+    struct Cdn {
+        base: String,
+        asked: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl Cdn {
+        async fn start(routes: &[(&str, Serve)]) -> Result<Self, String> {
+            let listener = TcpListener::bind("127.0.0.1:0")
+                .await
+                .map_err(|e| e.to_string())?;
+            let base = format!(
+                "http://{}",
+                listener.local_addr().map_err(|e| e.to_string())?
+            );
+            let routes: HashMap<String, Serve> = routes
+                .iter()
+                .map(|(path, serve)| ((*path).to_owned(), serve.clone()))
+                .collect();
+            let asked = Arc::new(Mutex::new(Vec::new()));
+            let log = Arc::clone(&asked);
+            tokio::spawn(async move {
+                while let Ok((conn, _)) = listener.accept().await {
+                    tokio::spawn(answer(conn, routes.clone(), Arc::clone(&log)));
+                }
+            });
+            Ok(Self { base, asked })
+        }
+
+        fn url(&self, path: &str) -> String {
+            format!("{}{path}", self.base)
+        }
+
+        fn asked(&self) -> Vec<String> {
+            self.asked
+                .lock()
+                .map(|asked| asked.clone())
+                .unwrap_or_default()
+        }
+    }
+
+    /// Answers one request on `conn`, then closes it.
+    async fn answer(
+        mut conn: TcpStream,
+        routes: HashMap<String, Serve>,
+        asked: Arc<Mutex<Vec<String>>>,
+    ) {
+        let mut head = Vec::new();
+        let mut buf = [0u8; 1024];
+        while !head.windows(4).any(|w| w == b"\r\n\r\n") {
+            match conn.read(&mut buf).await {
+                Ok(0) | Err(_) => return,
+                Ok(n) => head.extend_from_slice(&buf[..n]),
+            }
+        }
+        let head = String::from_utf8_lossy(&head);
+        let path = head.split(' ').nth(1).unwrap_or("").to_owned();
+        if let Ok(mut asked) = asked.lock() {
+            asked.push(path.clone());
+        }
+        let (status, body): (&str, &[u8]) = match routes.get(&path) {
+            Some(Serve::Bytes(body)) => ("200 OK", body),
+            Some(Serve::Hang) => return std::future::pending().await,
+            None => ("404 Not Found", b""),
+        };
+        let reply = format!(
+            "HTTP/1.1 {status}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+            body.len()
+        );
+        let _ = conn.write_all(reply.as_bytes()).await;
+        let _ = conn.write_all(body).await;
+    }
+
+    /// A download of `paths` on `cdn`, named without a channel.
+    fn download_of(cdn: &Cdn, paths: &[&str]) -> Result<Download, String> {
+        let video = VideoId::parse("42").map_err(|e| format!("{e:?}"))?;
+        let list = SegmentList {
+            init: None,
+            segments: paths.iter().map(|path| cdn.url(path)).collect(),
+        };
+        Ok(Download::new(None, &video, "480p", list))
+    }
+
+    /// The next thing the writer sends, failing the test after a while
+    /// rather than hanging it.
+    async fn next_fetched(
+        fetched: &mut UnboundedReceiver<Fetched>,
+    ) -> Result<DownloadFetched, String> {
+        match tokio::time::timeout(Duration::from_secs(20), fetched.recv()).await {
+            Ok(Some(Fetched::Downloads(fetched))) => Ok(fetched),
+            Ok(Some(_)) => Err("the writer sent something else".to_owned()),
+            Ok(None) => Err("the writer's channel closed".to_owned()),
+            Err(_) => Err("the writer sent nothing for 20 s".to_owned()),
+        }
+    }
+
+    /// How the writer ended, skipping its progress.
+    async fn ending(fetched: &mut UnboundedReceiver<Fetched>) -> Result<Ending, String> {
+        loop {
+            if let DownloadFetched::Ended { ending, .. } = next_fetched(fetched).await? {
+                return Ok(ending);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn a_cancel_mid_download_removes_the_part_file_and_its_checkpoint() -> TestResult {
+        let cdn = Cdn::start(&[("/0.ts", Serve::Bytes(b"aaaa")), ("/1.ts", Serve::Hang)]).await?;
+        let download = download_of(&cdn, &["/0.ts", "/1.ts"])?;
+        let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
+        let files = Files::new(dir.path(), &download);
+        let twitch = Twitch::new().map_err(|e| twitch_error(&e))?;
+        let (fetch, mut fetched) = mpsc::unbounded_channel();
+        let (stop, stopped) = watch::channel(false);
+        let key = DownloadKey::new(1);
+        let _task = spawn_writer(
+            &twitch,
+            &fetch,
+            key,
+            download,
+            dir.path().to_owned(),
+            stopped,
+        );
+
+        // The first segment is in; the second never comes.
+        let DownloadFetched::Progress { progress, .. } = next_fetched(&mut fetched).await? else {
+            return Err("expected progress first".to_owned());
+        };
+        assert_eq!(progress.done, 1);
+        assert!(files.part.exists() && files.checkpoint.exists());
+
+        stop.send_replace(true);
+        assert!(matches!(ending(&mut fetched).await?, Ending::Cancelled));
+        assert!(!files.part.exists(), "the part file is left");
+        assert!(!files.checkpoint.exists(), "the checkpoint is left");
+        assert!(!files.done.exists());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn a_restart_resumes_after_the_last_whole_segment() -> TestResult {
+        // The first segment would fail the download if it were fetched again.
+        let cdn = Cdn::start(&[
+            ("/1.ts", Serve::Bytes(b"BBBB")),
+            ("/2.ts", Serve::Bytes(b"CC")),
+        ])
+        .await?;
+        let paths = ["/0.ts", "/1.ts", "/2.ts"];
+        let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
+        let mut earlier = download_of(&cdn, &paths)?;
+        let files = Files::new(dir.path(), &earlier);
+        earlier.record(4);
+        // An earlier run wrote the first segment and half of the second.
+        std::fs::write(&files.checkpoint, earlier.checkpoint()).map_err(|e| e.to_string())?;
+        std::fs::write(&files.part, b"aaaabb").map_err(|e| e.to_string())?;
+
+        let twitch = Twitch::new().map_err(|e| twitch_error(&e))?;
+        let (fetch, mut fetched) = mpsc::unbounded_channel();
+        let (_stop, stopped) = watch::channel(false);
+        let download = download_of(&cdn, &paths)?;
+        let _task = spawn_writer(
+            &twitch,
+            &fetch,
+            DownloadKey::new(1),
+            download,
+            dir.path().to_owned(),
+            stopped,
+        );
+
+        let Ending::Done(path) = ending(&mut fetched).await? else {
+            return Err("the resumed download did not finish".to_owned());
+        };
+        assert_eq!(path, files.done.display().to_string());
+        assert_eq!(
+            std::fs::read(&files.done).map_err(|e| e.to_string())?,
+            b"aaaaBBBBCC"
+        );
+        assert!(!files.part.exists() && !files.checkpoint.exists());
+        assert_eq!(cdn.asked(), ["/1.ts", "/2.ts"]);
         Ok(())
     }
 }
