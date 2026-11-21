@@ -7,6 +7,7 @@ import 'package:jitter/categories/categories_page.dart';
 import 'package:jitter/categories/category_holder.dart';
 import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/chat/chat_holder.dart';
+import 'package:jitter/downloads/downloads_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/favorites/favorites_page.dart';
 import 'package:jitter/history/history_holder.dart';
@@ -36,6 +37,7 @@ JitterApp _app(BootHolder boot, {SettingsHolder? settings}) => JitterApp(
   search: SearchHolder(),
   settings: settings ?? SettingsHolder(),
   backup: BackupHolder(),
+  downloads: DownloadsHolder(),
   logs: LogsHolder(),
 );
 

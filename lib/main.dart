@@ -10,6 +10,7 @@ import 'package:jitter/categories/categories_holder.dart';
 import 'package:jitter/categories/category_holder.dart';
 import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/chat/chat_holder.dart';
+import 'package:jitter/downloads/downloads_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/history/history_holder.dart';
 import 'package:jitter/logs/display_probe.dart';
@@ -68,6 +69,7 @@ Future<void> main() async {
   // Settings
   final settings = SettingsHolder()..connect();
   final backup = BackupHolder()..connect();
+  final downloads = DownloadsHolder()..connect();
   final logs = LogsHolder()..connect();
 
   final boot = BootHolder();
@@ -97,6 +99,7 @@ Future<void> main() async {
       // Settings
       settings: settings,
       backup: backup,
+      downloads: downloads,
       logs: logs,
     ),
   );

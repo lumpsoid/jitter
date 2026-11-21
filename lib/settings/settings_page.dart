@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:jitter/backup/backup_holder.dart';
 import 'package:jitter/backup/backup_tiles.dart';
+import 'package:jitter/downloads/downloads_holder.dart';
+import 'package:jitter/downloads/downloads_page.dart';
 import 'package:jitter/logs/logs_holder.dart';
 import 'package:jitter/logs/logs_page.dart';
 import 'package:jitter/settings/settings_holder.dart';
@@ -12,18 +14,20 @@ import 'package:material_ui/material_ui.dart';
 /// The user's settings: the theme, how chat loads and draws emotes, and
 /// the quality a player opens at. Each control sends its change to Rust
 /// and shows the setting as Rust answers; a change Rust could not store
-/// shows as a snackbar. Backups export and import from here, the app's
-/// logs open from here, and its version shows at the foot.
+/// shows as a snackbar. Backups export and import from here, downloads
+/// and the app's logs open from here, and its version shows at the foot.
 class SettingsPage extends StatefulWidget {
   const new({
     required this.settings,
     required this.backup,
+    required this.downloads,
     required this.logs,
     super.key,
   });
 
   final SettingsHolder settings;
   final BackupHolder backup;
+  final DownloadsHolder downloads;
   final LogsHolder logs;
 
   @override
@@ -148,6 +152,16 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const _Header(label: 'Your data'),
             BackupTiles(backup: widget.backup),
+            ListTile(
+              leading: const Icon(Icons.download_outlined),
+              title: const Text('Downloads'),
+              subtitle: const Text(
+                'VODs saved to this device, and the ones still downloading.',
+              ),
+              onTap: () => unawaited(
+                DownloadsPage.push(context, downloads: widget.downloads),
+              ),
+            ),
             const _Header(label: 'Troubleshooting'),
             ListTile(
               leading: const Icon(Icons.article_outlined),

@@ -8,6 +8,7 @@ import 'package:jitter/categories/category_page.dart';
 import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/channel/channel_page.dart';
 import 'package:jitter/chat/chat_holder.dart';
+import 'package:jitter/downloads/downloads_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/favorites/favorites_page.dart';
 import 'package:jitter/history/history_holder.dart';
@@ -78,6 +79,7 @@ class AppShell extends StatefulWidget {
     // Settings
     required this.settings,
     required this.backup,
+    required this.downloads,
     required this.logs,
     super.key,
   });
@@ -103,6 +105,7 @@ class AppShell extends StatefulWidget {
   // Settings
   final SettingsHolder settings;
   final BackupHolder backup;
+  final DownloadsHolder downloads;
   final LogsHolder logs;
 
   @override
@@ -181,6 +184,7 @@ class _AppShellState extends State<AppShell> {
       page: SettingsPage(
         settings: widget.settings,
         backup: widget.backup,
+        downloads: widget.downloads,
         logs: widget.logs,
       ),
       refresh: null,
