@@ -21,6 +21,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use futures_util::StreamExt;
 use jitter_core::download::{Download, DownloadProgress};
 use jitter_core::downloads::{DownloadEntry, DownloadKey, DownloadStatus, DownloadsController};
 use jitter_core::models::{Quality, VideoId};
@@ -39,10 +40,6 @@ use crate::signals::{
     QualityOption, RemoveDownload, StartDownload,
 };
 
-/// Requests per segment before the download gives up on it.
-const ATTEMPTS: u32 = 3;
-/// The pause between two requests for one segment.
-const RETRY_PAUSE: Duration = Duration::from_secs(1);
 /// The least time between two progress updates of one download. Each one
 /// sends Dart the whole list, and a fast link joins many segments a second;
 /// a count redrawn twice a second reads the same.
@@ -424,11 +421,23 @@ async fn write(
     let urls = download.urls().to_vec();
     let total = urls.len();
     let mut last_sent: Option<Instant> = None;
-    for (index, url) in urls.iter().enumerate() {
-        let bytes = tokio::select! {
-            bytes = fetch_segment(twitch, url, index + 1, total) => bytes.map_err(Stop::Failed)?,
+    // Dropping the stream on a return drops its requests in flight.
+    let mut segments = std::pin::pin!(twitch.segment_bytes(&urls).enumerate());
+    loop {
+        let next = tokio::select! {
+            next = segments.next() => next,
             _ = stop.wait_for(|stop| *stop) => return Err(Stop::Cancelled),
         };
+        let Some((index, bytes)) = next else {
+            break;
+        };
+        let bytes = bytes.map_err(|e| {
+            failed_to(format!(
+                "segment {} of {total}: {}",
+                index + 1,
+                twitch_error(&e)
+            ))
+        })?;
         let len = bytes.len();
         let (next, ()) = on_file(file, move |out| out.write_all(&bytes))
             .await
@@ -491,30 +500,6 @@ fn stopped(stop: &watch::Receiver<bool>) -> Result<(), Stop> {
 
 fn failed_to(message: impl Into<String>) -> Stop {
     Stop::Failed(message.into())
-}
-
-/// One segment's bytes. A failed request is tried again, up to `ATTEMPTS` in
-/// all, because one transient error should not lose a download of ~1000
-/// segments.
-async fn fetch_segment(
-    twitch: &Twitch,
-    url: &str,
-    n: usize,
-    total: usize,
-) -> Result<Vec<u8>, String> {
-    let mut attempt = 1;
-    loop {
-        match twitch.segment(url).await {
-            Ok(bytes) => return Ok(bytes),
-            Err(e) if attempt == ATTEMPTS => {
-                return Err(format!("segment {n} of {total}: {}", twitch_error(&e)));
-            }
-            Err(_) => {
-                attempt += 1;
-                tokio::time::sleep(RETRY_PAUSE).await;
-            }
-        }
-    }
 }
 
 /// Runs `op` on a blocking thread, so a slow disk never stalls the hub's

@@ -1,20 +1,13 @@
-use std::fs::File;
-use std::io::Write;
-use std::path::PathBuf;
-use std::time::Duration;
-
 use clap::Args;
+use futures_util::StreamExt;
 use jitter_core::download::Download;
 use jitter_core::models::Playback;
 use jitter_core::playback::PlaybackTarget;
-use jitter_twitch::Twitch;
+use std::fs::File;
+use std::io::Write;
+use std::path::PathBuf;
 
 use super::{Result, ctx, twitch, video_id};
-
-/// Requests per segment before the download gives up on it.
-const ATTEMPTS: u32 = 3;
-/// The pause between two requests for one segment.
-const RETRY_PAUSE: Duration = Duration::from_secs(1);
 
 #[derive(Args)]
 pub struct DownloadArgs {
@@ -73,8 +66,9 @@ pub async fn run(args: DownloadArgs) -> Result<()> {
     // Cloned so that `record` can borrow the download mutably.
     let urls = download.urls().to_vec();
     let total = urls.len();
-    for (index, url) in urls.iter().enumerate() {
-        let bytes = fetch_segment(&twitch, url, index + 1, total).await?;
+    let mut segments = std::pin::pin!(twitch.segment_bytes(&urls).enumerate());
+    while let Some((index, bytes)) = segments.next().await {
+        let bytes = bytes.map_err(ctx(format!("segment {} of {total}", index + 1)))?;
         file.write_all(&bytes)
             .map_err(ctx(format!("writing {}", part_path.display())))?;
         download.record(bytes.len());
@@ -92,24 +86,6 @@ pub async fn run(args: DownloadArgs) -> Result<()> {
     let _ = writeln!(std::io::stderr());
     println!("{}", done_path.display());
     Ok(())
-}
-
-/// One segment's bytes. A failed request is tried again, up to `ATTEMPTS` in
-/// all, because one transient error should not lose a download of ~1000 segments.
-async fn fetch_segment(twitch: &Twitch, url: &str, n: usize, total: usize) -> Result<Vec<u8>> {
-    let mut attempt = 1;
-    loop {
-        match twitch.segment(url).await {
-            Ok(bytes) => return Ok(bytes),
-            Err(e) if attempt == ATTEMPTS => {
-                return Err(ctx(format!("segment {n} of {total}"))(e));
-            }
-            Err(_) => {
-                attempt += 1;
-                tokio::time::sleep(RETRY_PAUSE).await;
-            }
-        }
-    }
 }
 
 /// `12/1000 parts, 340.2 MiB`, redrawn over the previous line.
