@@ -60,7 +60,11 @@ pub fn parse_media(body: &[u8], playlist_url: &str) -> Result<SegmentList, Twitc
     Ok(SegmentList { init, segments })
 }
 
-/// Twitch lists `<N>-unmuted.ts`, which is not fetchable; `<N>-muted.ts` is.
+/// Twitch's `index-dvr` playlist lists a muted stretch as `<N>-unmuted.ts`,
+/// which is not fetchable (403); `<N>-muted.ts` is. fMP4 needs no rewrite:
+/// `<N>-unmuted.mp4` is fetchable, and the `index-muted-*` playlist the
+/// usher resolves to lists `<N>-muted.ts` and `<N>-muted.mp4` already
+/// (checked against the CDN, 2026-11-21).
 fn fetchable(uri: &str) -> String {
     match uri.strip_suffix(UNMUTED_SUFFIX) {
         Some(stem) => format!("{stem}{MUTED_SUFFIX}"),
