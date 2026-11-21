@@ -7,23 +7,31 @@
 //! byte is written. File writes run on tokio's blocking threads: the hub's
 //! runtime is single-threaded and also carries every UI signal.
 //!
+//! A cancel does not abort the writer: an aborted task leaves its blocking
+//! file op running, which could create or rename a file after the cancel
+//! had cleaned up. The writer is told to stop, stops between file ops, and
+//! removes its own files before it ends.
+//!
 //! The steps follow the CLI's `jitter download`, which this copies rather
 //! than imports.
 
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{self, Write};
+use std::io::{self, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use jitter_core::download::{Download, DownloadProgress};
+use futures_util::StreamExt;
+use jitter_core::download::{Download, DownloadProgress, PartStart};
 use jitter_core::downloads::{DownloadEntry, DownloadKey, DownloadStatus, DownloadsController};
 use jitter_core::models::{Quality, VideoId};
 use jitter_core::playback::PlaybackTarget;
 use jitter_twitch::Twitch;
 use rinf::{DartSignal, DartSignalPack, RustSignal, SignalReceiver};
 use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::watch;
 use tokio::task::JoinHandle;
+use tokio::time::Instant;
 
 use crate::format::twitch_error;
 use crate::run::Fetched;
@@ -32,10 +40,10 @@ use crate::signals::{
     QualityOption, RemoveDownload, StartDownload,
 };
 
-/// Requests per segment before the download gives up on it.
-const ATTEMPTS: u32 = 3;
-/// The pause between two requests for one segment.
-const RETRY_PAUSE: Duration = Duration::from_secs(1);
+/// The least time between two progress updates of one download. Each one
+/// sends Dart the whole list, and a fast link joins many segments a second;
+/// a count redrawn twice a second reads the same.
+const PROGRESS_EVERY: Duration = Duration::from_millis(500);
 
 /// The downloads: the controller's list, and the writer task of each one
 /// still running.
@@ -44,10 +52,12 @@ pub struct DownloadsPanel {
     running: HashMap<DownloadKey, Running>,
 }
 
-/// A running download's writer task, and the part file it writes into,
-/// which a cancel deletes. Dropping it aborts the task.
+/// A download's writer task, from its start until it ends, even when
+/// cancelled: the part file it writes into is not free until then.
+/// Dropping it aborts the task, which only the app's shutdown does early.
 struct Running {
     task: JoinHandle<()>,
+    stop: watch::Sender<bool>,
     part: PathBuf,
 }
 
@@ -76,12 +86,18 @@ pub enum DownloadFetched {
         key: DownloadKey,
         progress: DownloadProgress,
     },
-    /// The writer ended: the final file's path, or why it stopped. Its
-    /// part file is kept when it stopped.
-    Ended {
-        key: DownloadKey,
-        result: Result<String, String>,
-    },
+    /// The writer ended and its files are settled.
+    Ended { key: DownloadKey, ending: Ending },
+}
+
+/// How a writer ended.
+pub enum Ending {
+    /// The final file's path.
+    Done(String),
+    /// Why it failed. The part file is kept.
+    Failed(String),
+    /// It was told to stop, and removed what it had written.
+    Cancelled,
 }
 
 impl DownloadsPanel {
@@ -201,19 +217,15 @@ pub fn start(twitch: &Twitch, fetch: &UnboundedSender<Fetched>, signal: StartDow
     });
 }
 
-/// `CancelDownload`: stops a running download and deletes its part file.
+/// `CancelDownload`: tells a running download's writer to stop. The writer
+/// deletes its part file itself, once no file op of its is in flight.
 pub fn cancel(panel: &mut DownloadsPanel, signal: CancelDownload) {
     let key = DownloadKey::new(signal.key);
     if !panel.controller.cancel(key) {
         return;
     }
-    if let Some(running) = panel.running.remove(&key) {
-        running.task.abort();
-        // Synchronous, unlike the writes: a new download of the same file
-        // must not create its part file before this delete has run.
-        if let Err(e) = std::fs::remove_file(&running.part) {
-            log::warn!("removing {}: {e}", running.part.display());
-        }
+    if let Some(running) = panel.running.get(&key) {
+        running.stop.send_replace(true);
     }
     send_snapshot(panel);
 }
@@ -251,20 +263,25 @@ pub fn on_fetched(
                 send_snapshot(panel);
             }
         }
-        DownloadFetched::Ended { key, result } => {
+        DownloadFetched::Ended { key, ending } => {
             // Dropping the entry aborts its task, which is ending anyway.
             panel.running.remove(&key);
-            match result {
-                Ok(path) => panel.controller.finish(key, path),
-                Err(message) => panel.controller.fail(key, message),
+            let changed = match ending {
+                Ending::Done(path) => panel.controller.finish(key, path),
+                Ending::Failed(message) => panel.controller.fail(key, message),
+                // The cancel already marked it.
+                Ending::Cancelled => false,
             };
-            send_snapshot(panel);
+            if changed {
+                send_snapshot(panel);
+            }
         }
     }
 }
 
-/// Starts a resolved download, unless its file is already in the directory
-/// or already being written. Both are refused before any byte is written.
+/// Starts a resolved download, unless its file is already in the directory,
+/// already being written, or still being cleaned up after a cancel. All
+/// three are refused before any byte is written.
 fn start_writer(
     panel: &mut DownloadsPanel,
     video: VideoId,
@@ -277,12 +294,16 @@ fn start_writer(
     if done.exists() {
         return failed(format!("{} already exists", done.display()));
     }
+    let part = dir.join(download.part_name());
+    if panel.running.values().any(|running| running.part == part) {
+        return failed(format!("still stopping {}", download.file_name()));
+    }
     let Some(key) = panel.controller.start(video, &download) else {
         return failed(format!("already downloading {}", download.file_name()));
     };
-    let part = dir.join(download.part_name());
-    let task = spawn_writer(twitch, fetch, key, download, dir);
-    panel.running.insert(key, Running { task, part });
+    let (stop, stopped) = watch::channel(false);
+    let task = spawn_writer(twitch, fetch, key, download, dir, stopped);
+    panel.running.insert(key, Running { task, stop, part });
     send_snapshot(panel);
 }
 
@@ -326,87 +347,226 @@ fn spawn_writer(
     key: DownloadKey,
     mut download: Download,
     dir: PathBuf,
+    mut stop: watch::Receiver<bool>,
 ) -> JoinHandle<()> {
     let (twitch, fetch) = (twitch.clone(), fetch.clone());
     tokio::spawn(async move {
-        let result = write(&twitch, &fetch, key, &mut download, &dir).await;
+        let files = Files::new(&dir, &download);
+        let ending = match write(&twitch, &fetch, key, &mut download, &files, &mut stop).await {
+            Ok(path) => Ending::Done(path),
+            Err(Stop::Failed(message)) => Ending::Failed(message),
+            Err(Stop::Cancelled) => {
+                files.discard().await;
+                Ending::Cancelled
+            }
+        };
         // The loop is gone: the app is shutting down.
-        let _ = fetch.send(Fetched::Downloads(DownloadFetched::Ended { key, result }));
+        let _ = fetch.send(Fetched::Downloads(DownloadFetched::Ended { key, ending }));
     })
 }
 
-/// Appends each segment to `<name>.part` in `dir`, in order, then renames
-/// the part file to the final name and returns that name's path. A failure
-/// returns before the rename and leaves the part file where it is.
+/// Why `write` returned early.
+enum Stop {
+    Failed(String),
+    Cancelled,
+}
+
+/// The paths one download writes in its directory.
+struct Files {
+    part: PathBuf,
+    checkpoint: PathBuf,
+    done: PathBuf,
+}
+
+impl Files {
+    fn new(dir: &Path, download: &Download) -> Self {
+        Self {
+            part: dir.join(download.part_name()),
+            checkpoint: dir.join(download.checkpoint_name()),
+            done: dir.join(download.file_name()),
+        }
+    }
+
+    /// Removes the part file and its checkpoint, for a cancelled download.
+    async fn discard(&self) {
+        remove_if_there(&self.part).await;
+        remove_if_there(&self.checkpoint).await;
+    }
+}
+
+/// Removes `path`, logging a failure. A missing file is fine: the writer may
+/// have stopped before creating it.
+async fn remove_if_there(path: &Path) {
+    let owned = path.to_owned();
+    match blocking(move || std::fs::remove_file(owned)).await {
+        Ok(()) => {}
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+        Err(e) => log::warn!("removing {}: {e}", path.display()),
+    }
+}
+
+/// Opens the part file where `download` picks up: after an earlier run's
+/// bytes when its checkpoint still fits them, else empty.
+async fn open_part(download: &mut Download, files: &Files) -> io::Result<File> {
+    let (part, checkpoint) = (files.part.clone(), files.checkpoint.clone());
+    let mut resumed = download.clone();
+    let (resumed, file) = blocking(move || {
+        let start = match saved_run(&part, &checkpoint) {
+            Some((saved, part_len)) => resumed.resume(&saved, part_len),
+            None => PartStart::Fresh,
+        };
+        Ok((resumed, open(&part, start)?))
+    })
+    .await?;
+    *download = resumed;
+    Ok(file)
+}
+
+/// The checkpoint's text and the part file's length, when both are there.
+fn saved_run(part: &Path, checkpoint: &Path) -> Option<(String, u64)> {
+    let saved = std::fs::read_to_string(checkpoint).ok()?;
+    let part_len = std::fs::metadata(part).ok()?.len();
+    Some((saved, part_len))
+}
+
+/// The part file, opened for `start`'s next byte.
+fn open(part: &Path, start: PartStart) -> io::Result<File> {
+    match start {
+        PartStart::Fresh => File::create(part),
+        PartStart::Resume { keep } => {
+            let mut file = File::options().write(true).open(part)?;
+            file.set_len(keep)?;
+            file.seek(SeekFrom::End(0))?;
+            Ok(file)
+        }
+    }
+}
+
+/// Appends each segment to the part file, in order, then renames it to the
+/// final name and returns that name's path. A failure returns before the
+/// rename and leaves the part file and its checkpoint where they are, for
+/// the next start of the same download to resume.
+///
+/// `stop` is checked after every file op, never during one, so nothing this
+/// started is still touching the disk when it returns `Cancelled`.
 async fn write(
     twitch: &Twitch,
     fetch: &UnboundedSender<Fetched>,
     key: DownloadKey,
     download: &mut Download,
-    dir: &Path,
-) -> Result<String, String> {
-    let part = dir.join(download.part_name());
-    let done = dir.join(download.file_name());
-    let create = part.clone();
-    let mut file = blocking(move || File::create(create))
+    files: &Files,
+    stop: &mut watch::Receiver<bool>,
+) -> Result<String, Stop> {
+    let Files {
+        part,
+        checkpoint,
+        done,
+    } = files;
+    let mut file = open_part(download, files)
         .await
-        .map_err(|e| format!("creating {}: {e}", part.display()))?;
+        .map_err(|e| failed_to(format!("opening {}: {e}", part.display())))?;
+    stopped(stop)?;
+    let DownloadProgress {
+        done: resumed,
+        total,
+        ..
+    } = download.progress();
+    let mut last_sent: Option<Instant> = None;
+    if resumed > 0 {
+        last_sent = Some(Instant::now());
+        send_progress(fetch, key, download)?;
+    }
     // Cloned so that `record` can borrow the download mutably.
-    let urls = download.urls().to_vec();
-    let total = urls.len();
-    for (index, url) in urls.iter().enumerate() {
-        let bytes = fetch_segment(twitch, url, index + 1, total).await?;
-        let len = bytes.len();
-        let (next, ()) = on_file(file, move |out| out.write_all(&bytes))
-            .await
-            .map_err(|e| format!("writing {}: {e}", part.display()))?;
+    let urls = download.remaining().to_vec();
+    // Dropping the stream on a return drops its requests in flight.
+    let mut segments = std::pin::pin!(twitch.segment_bytes(&urls).enumerate());
+    loop {
+        let next = tokio::select! {
+            next = segments.next() => next,
+            _ = stop.wait_for(|stop| *stop) => return Err(Stop::Cancelled),
+        };
+        let Some((index, bytes)) = next else {
+            break;
+        };
+        let bytes = bytes.map_err(|e| {
+            failed_to(format!(
+                "segment {} of {total}: {}",
+                resumed + index + 1,
+                twitch_error(&e)
+            ))
+        })?;
+        download.record(bytes.len());
+        let (saved, to) = (download.checkpoint(), checkpoint.clone());
+        // The checkpoint only after the bytes it counts are in the part file.
+        let (next, ()) = on_file(file, move |out| {
+            out.write_all(&bytes)?;
+            std::fs::write(to, saved)
+        })
+        .await
+        .map_err(|e| failed_to(format!("writing {}: {e}", part.display())))?;
         file = next;
-        download.record(len);
-        let progress = download.progress();
-        if fetch
-            .send(Fetched::Downloads(DownloadFetched::Progress {
-                key,
-                progress,
-            }))
-            .is_err()
-        {
-            return Err("the app is shutting down".to_owned());
+        stopped(stop)?;
+        let due = last_sent.is_none_or(|at| at.elapsed() >= PROGRESS_EVERY);
+        // The last count always goes out, so the list ends on it.
+        if !due && !download.is_finished() {
+            continue;
         }
+        last_sent = Some(Instant::now());
+        send_progress(fetch, key, download)?;
     }
     let (out, ()) = on_file(file, |out| out.sync_all())
         .await
-        .map_err(|e| format!("syncing {}: {e}", part.display()))?;
+        .map_err(|e| failed_to(format!("syncing {}: {e}", part.display())))?;
     // Closed before the rename: Windows refuses to rename an open file.
     drop(out);
+    stopped(stop)?;
     let (from, to) = (part.clone(), done.clone());
     blocking(move || std::fs::rename(from, to))
         .await
-        .map_err(|e| format!("renaming {} to {}: {e}", part.display(), done.display()))?;
+        .map_err(|e| {
+            failed_to(format!(
+                "renaming {} to {}: {e}",
+                part.display(),
+                done.display()
+            ))
+        })?;
+    if stopped(stop).is_err() {
+        // The cancel landed during the rename. The list already shows the
+        // download as cancelled, so the file it finished goes too.
+        let path = done.clone();
+        if let Err(e) = blocking(move || std::fs::remove_file(path)).await {
+            log::warn!("removing {}: {e}", done.display());
+        }
+        return Err(Stop::Cancelled);
+    }
+    remove_if_there(checkpoint).await;
     Ok(done.display().to_string())
 }
 
-/// One segment's bytes. A failed request is tried again, up to `ATTEMPTS` in
-/// all, because one transient error should not lose a download of ~1000
-/// segments.
-async fn fetch_segment(
-    twitch: &Twitch,
-    url: &str,
-    n: usize,
-    total: usize,
-) -> Result<Vec<u8>, String> {
-    let mut attempt = 1;
-    loop {
-        match twitch.segment(url).await {
-            Ok(bytes) => return Ok(bytes),
-            Err(e) if attempt == ATTEMPTS => {
-                return Err(format!("segment {n} of {total}: {}", twitch_error(&e)));
-            }
-            Err(_) => {
-                attempt += 1;
-                tokio::time::sleep(RETRY_PAUSE).await;
-            }
-        }
+fn send_progress(
+    fetch: &UnboundedSender<Fetched>,
+    key: DownloadKey,
+    download: &Download,
+) -> Result<(), Stop> {
+    let progress = download.progress();
+    fetch
+        .send(Fetched::Downloads(DownloadFetched::Progress {
+            key,
+            progress,
+        }))
+        .map_err(|_| failed_to("the app is shutting down"))
+}
+
+/// `Cancelled` once the download was told to stop, or its panel is gone.
+fn stopped(stop: &watch::Receiver<bool>) -> Result<(), Stop> {
+    match stop.has_changed() {
+        Ok(_) if !*stop.borrow() => Ok(()),
+        _ => Err(Stop::Cancelled),
     }
+}
+
+fn failed_to(message: impl Into<String>) -> Stop {
+    Stop::Failed(message.into())
 }
 
 /// Runs `op` on a blocking thread, so a slow disk never stalls the hub's
