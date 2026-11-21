@@ -17,16 +17,16 @@
 
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{self, Seek, SeekFrom, Write};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use futures_util::StreamExt;
-use jitter_core::download::{Download, DownloadProgress, PartStart};
+use jitter_core::download::{Download, DownloadProgress};
 use jitter_core::downloads::{DownloadEntry, DownloadKey, DownloadStatus, DownloadsController};
 use jitter_core::models::{Quality, VideoId};
 use jitter_core::playback::PlaybackTarget;
-use jitter_twitch::Twitch;
+use jitter_twitch::{Twitch, part_file};
 use rinf::{DartSignal, DartSignalPack, RustSignal, SignalReceiver};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::watch;
@@ -412,35 +412,12 @@ async fn open_part(download: &mut Download, files: &Files) -> io::Result<File> {
     let (part, checkpoint) = (files.part.clone(), files.checkpoint.clone());
     let mut resumed = download.clone();
     let (resumed, file) = blocking(move || {
-        let start = match saved_run(&part, &checkpoint) {
-            Some((saved, part_len)) => resumed.resume(&saved, part_len),
-            None => PartStart::Fresh,
-        };
-        Ok((resumed, open(&part, start)?))
+        let file = part_file::open(&part, &checkpoint, &mut resumed)?;
+        Ok((resumed, file))
     })
     .await?;
     *download = resumed;
     Ok(file)
-}
-
-/// The checkpoint's text and the part file's length, when both are there.
-fn saved_run(part: &Path, checkpoint: &Path) -> Option<(String, u64)> {
-    let saved = std::fs::read_to_string(checkpoint).ok()?;
-    let part_len = std::fs::metadata(part).ok()?.len();
-    Some((saved, part_len))
-}
-
-/// The part file, opened for `start`'s next byte.
-fn open(part: &Path, start: PartStart) -> io::Result<File> {
-    match start {
-        PartStart::Fresh => File::create(part),
-        PartStart::Resume { keep } => {
-            let mut file = File::options().write(true).open(part)?;
-            file.set_len(keep)?;
-            file.seek(SeekFrom::End(0))?;
-            Ok(file)
-        }
-    }
 }
 
 /// Appends each segment to the part file, in order, then renames it to the

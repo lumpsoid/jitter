@@ -1,11 +1,11 @@
 use clap::Args;
 use futures_util::StreamExt;
-use jitter_core::download::{Download, PartStart};
+use jitter_core::download::Download;
 use jitter_core::models::Playback;
 use jitter_core::playback::PlaybackTarget;
-use std::fs::File;
-use std::io::{self, Seek, SeekFrom, Write};
-use std::path::{Path, PathBuf};
+use jitter_twitch::part_file;
+use std::io::Write;
+use std::path::PathBuf;
 
 use super::{Result, ctx, twitch, video_id};
 
@@ -65,12 +65,8 @@ pub async fn run(args: DownloadArgs) -> Result<()> {
     }
     let part_path = dir.join(download.part_name());
     let checkpoint_path = dir.join(download.checkpoint_name());
-    let start = match saved_run(&part_path, &checkpoint_path) {
-        Some((saved, part_len)) => download.resume(&saved, part_len),
-        None => PartStart::Fresh,
-    };
-    let mut file =
-        open(&part_path, start).map_err(ctx(format!("opening {}", part_path.display())))?;
+    let mut file = part_file::open(&part_path, &checkpoint_path, &mut download)
+        .map_err(ctx(format!("opening {}", part_path.display())))?;
     let resumed = download.progress().done;
     if resumed > 0 {
         eprintln!("-- resuming {}", part_path.display());
@@ -106,26 +102,6 @@ pub async fn run(args: DownloadArgs) -> Result<()> {
     let _ = writeln!(std::io::stderr());
     println!("{}", done_path.display());
     Ok(())
-}
-
-/// The checkpoint's text and the part file's length, when both are there.
-fn saved_run(part: &Path, checkpoint: &Path) -> Option<(String, u64)> {
-    let saved = std::fs::read_to_string(checkpoint).ok()?;
-    let part_len = std::fs::metadata(part).ok()?.len();
-    Some((saved, part_len))
-}
-
-/// The part file, opened for `start`'s next byte.
-fn open(part: &Path, start: PartStart) -> io::Result<File> {
-    match start {
-        PartStart::Fresh => File::create(part),
-        PartStart::Resume { keep } => {
-            let mut file = File::options().write(true).open(part)?;
-            file.set_len(keep)?;
-            file.seek(SeekFrom::End(0))?;
-            Ok(file)
-        }
-    }
 }
 
 /// `12/1000 parts, 340.2 MiB`, redrawn over the previous line.
