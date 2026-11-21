@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/downloads/downloads_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
@@ -53,22 +55,32 @@ void main() {
     expect(notifications, 2);
   });
 
-  test('choices go out once and leave the downloads alone', () {
+  test("choose answers with its VOD's choices and leaves the downloads "
+      'alone', () async {
     final before = [download(fileName: 'a.mp4')];
     holder.apply(DownloadsUpdateSnapshot(downloads: before));
-    final received = <DownloadsUpdateChoices>[];
-    holder.choices.listen(received.add);
+    final answer = holder.choose('42');
 
-    holder.apply(
-      const DownloadsUpdateChoices(
-        videoId: '42',
-        qualities: [QualityOption(name: '720p60', label: '720p60')],
-      ),
+    const mine = DownloadsUpdateChoices(
+      videoId: '42',
+      qualities: [QualityOption(name: '720p60', label: '720p60')],
     );
-    expect(received, hasLength(1));
-    expect(received.single.videoId, '42');
+    holder
+      ..apply(const DownloadsUpdateChoices(videoId: '7', qualities: []))
+      ..apply(mine);
+    expect(await answer, mine);
     expect(holder.downloads, equals(before));
     expect(notifications, 1);
+  });
+
+  test("choose answers with its VOD's failure, skipping another's", () async {
+    final answer = holder.choose('42');
+
+    const mine = DownloadsUpdateFailed(videoId: '42', message: 'gone');
+    holder
+      ..apply(const DownloadsUpdateFailed(videoId: '7', message: 'other'))
+      ..apply(mine);
+    expect(await answer, mine);
   });
 
   test('a failure goes out once and leaves the downloads alone', () {
@@ -77,7 +89,7 @@ void main() {
     final received = <String>[];
     holder.failures.listen(received.add);
 
-    holder.apply(const DownloadsUpdateFailed(message: 'x'));
+    holder.apply(const DownloadsUpdateFailed(videoId: '42', message: 'x'));
     expect(received, ['x']);
     expect(holder.downloads, equals(before));
     expect(notifications, 1);
@@ -85,8 +97,8 @@ void main() {
 
   test('each ask sends its signal', () {
     final key = Uint64.parse('7');
+    unawaited(holder.choose('42'));
     holder
-      ..choose('42')
       ..start(videoId: '42', quality: '720p60', dir: '/d')
       ..cancel(key)
       ..remove(key);
