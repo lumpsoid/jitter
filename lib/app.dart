@@ -81,7 +81,7 @@ class JitterApp extends StatefulWidget {
   /// Backups, exported and imported from the settings page.
   final BackupHolder backup;
 
-  /// The downloads page's, opened from the settings page.
+  /// Downloads, listed on a page opened from the settings page.
   final DownloadsHolder downloads;
 
   /// The logs page's, opened from the settings page.
