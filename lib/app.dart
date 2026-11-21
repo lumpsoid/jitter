@@ -8,6 +8,7 @@ import 'package:jitter/categories/categories_holder.dart';
 import 'package:jitter/categories/category_holder.dart';
 import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/chat/chat_holder.dart';
+import 'package:jitter/downloads/downloads_holder.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/history/history_holder.dart';
 import 'package:jitter/logs/logs_holder.dart';
@@ -50,6 +51,7 @@ class JitterApp extends StatefulWidget {
     // Settings
     required this.settings,
     required this.backup,
+    required this.downloads,
     required this.logs,
     super.key,
   });
@@ -78,6 +80,9 @@ class JitterApp extends StatefulWidget {
 
   /// Backups, exported and imported from the settings page.
   final BackupHolder backup;
+
+  /// Downloads, listed on a page opened from the settings page.
+  final DownloadsHolder downloads;
 
   /// The logs page's, opened from the settings page.
   final LogsHolder logs;
@@ -186,6 +191,7 @@ class _JitterAppState extends State<JitterApp> {
               // Settings
               settings: widget.settings,
               backup: widget.backup,
+              downloads: widget.downloads,
               logs: widget.logs,
             ),
           },

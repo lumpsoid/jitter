@@ -68,6 +68,8 @@ use crate::signals::{OpenChannel, RefreshChannel, SelectVodKind, VodsNextPage};
 // Search
 use crate::search::{self, SearchFetched, SearchPanel};
 use crate::signals::{NextSearchPage, RefreshSearch, SearchTyped};
+// Downloads
+use crate::downloads::{self, DownloadFetched, DownloadsInbox, DownloadsPanel};
 // Settings
 use crate::settings;
 use crate::signals::{ChangeSetting, SettingsReady};
@@ -91,6 +93,8 @@ pub struct Controllers {
     chat: ChatPanel,
     // Search
     search: SearchPanel,
+    // Downloads
+    downloads: DownloadsPanel,
     // Settings
     settings: SettingsController,
     // Backup: the store itself, which exports and imports whole.
@@ -126,6 +130,8 @@ impl Controllers {
             chat: ChatPanel::new(*settings.state()),
             // Search
             search: SearchPanel::default(),
+            // Downloads
+            downloads: DownloadsPanel::new(),
             // Settings
             settings,
             // Backup
@@ -209,6 +215,8 @@ pub enum Fetched {
     Chat(ChatFetched),
     // Search
     Search(SearchFetched),
+    // Downloads
+    Downloads(DownloadFetched),
 }
 
 /// Runs until the runtime shuts down. Holds the only receiver of every Dart
@@ -294,6 +302,9 @@ pub async fn run(
     let search_typed = SearchTyped::get_dart_signal_receiver();
     let refresh_search = RefreshSearch::get_dart_signal_receiver();
     let next_search_page = NextSearchPage::get_dart_signal_receiver();
+
+    // Downloads
+    let mut downloads_inbox = DownloadsInbox::new();
 
     // Settings
     let settings_ready = SettingsReady::get_dart_signal_receiver();
@@ -475,6 +486,12 @@ pub async fn run(
             // The same sleep as the chat batch's: pending while nothing waits.
             () = chat::until(search_due_at) => search::settle(&mut c.search, &twitch, &fetch),
 
+            // Downloads: the five signals share one arm (see `DownloadsInbox`);
+            // a download's progress and end come back as `Fetched`.
+            Some(intent) = downloads_inbox.next() => {
+                downloads::handle(&mut c.downloads, &twitch, &fetch, intent);
+            }
+
             // Settings: the chat takes a change at once; playback reads the
             // settings on the next `Play`.
             Some(_) = settings_ready.recv() => settings::ready(&c.settings),
@@ -600,6 +617,10 @@ fn on_fetched(
         Fetched::Chat(fetched) => chat::on_fetched(&mut c.chat, twitch, fetch, fetched),
         // Search
         Fetched::Search(fetched) => search::on_fetched(&mut c.search, fetched),
+        // Downloads
+        Fetched::Downloads(fetched) => {
+            downloads::on_fetched(&mut c.downloads, fetched, twitch, fetch);
+        }
     }
 }
 

@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/backup/backup_holder.dart';
+import 'package:jitter/downloads/downloads_holder.dart';
+import 'package:jitter/downloads/downloads_page.dart';
 import 'package:jitter/logs/logs_holder.dart';
 import 'package:jitter/settings/settings_holder.dart';
 import 'package:jitter/settings/settings_page.dart';
@@ -16,6 +18,7 @@ Future<void> pumpPage(WidgetTester tester, SettingsHolder holder) =>
           body: SettingsPage(
             settings: holder,
             backup: BackupHolder(),
+            downloads: DownloadsHolder(),
             logs: LogsHolder(),
           ),
         ),
@@ -81,6 +84,21 @@ void main() {
 
     await tester.scrollUntilVisible(find.text('0.1.0 (2391c1d)'), 200);
     expect(find.text('0.1.0 (2391c1d)'), findsOneWidget);
+  });
+
+  testWidgets('the downloads tile opens the downloads page', (tester) async {
+    holder.apply(snapshot());
+    await pumpPage(tester, holder);
+
+    await tester.scrollUntilVisible(find.text('Downloads'), 200);
+    await tester.tap(find.text('Downloads'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DownloadsPage), findsOneWidget);
+    expect(
+      find.text('No downloads yet. Long-press a VOD to download it.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('choosing a theme sends it', (tester) async {

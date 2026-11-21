@@ -14,6 +14,8 @@ mod channel;
 mod chat;
 mod favorites;
 mod format;
+// Downloads
+mod downloads;
 // History
 mod history;
 // Logs

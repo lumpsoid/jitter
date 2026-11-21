@@ -1,6 +1,11 @@
+import 'dart:async';
+
 import 'package:jitter/channel/channel_about.dart';
 import 'package:jitter/channel/channel_holder.dart';
 import 'package:jitter/channel/vod_tile_view.dart';
+import 'package:jitter/downloads/download_flow.dart';
+import 'package:jitter/downloads/downloads_holder.dart';
+import 'package:jitter/downloads/downloads_page.dart';
 import 'package:jitter/favorites/favorite_star.dart';
 import 'package:jitter/favorites/favorites_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
@@ -23,6 +28,7 @@ class ChannelPage extends StatefulWidget {
     required this.login,
     required this.channel,
     required this.favorites,
+    required this.downloads,
     this.onOpenVod,
     this.onOpenLive,
     super.key,
@@ -33,6 +39,9 @@ class ChannelPage extends StatefulWidget {
 
   /// Read by the header's favorite star.
   final FavoritesHolder favorites;
+
+  /// Downloads the VODs the user asks for.
+  final DownloadsHolder downloads;
 
   /// Plays the tapped VOD by id. VODs are not tappable without it.
   final ValueChanged<String>? onOpenVod;
@@ -48,6 +57,7 @@ class ChannelPage extends StatefulWidget {
     required String login,
     required ChannelHolder channel,
     required FavoritesHolder favorites,
+    required DownloadsHolder downloads,
     ValueChanged<String>? onOpenVod,
     ValueChanged<String>? onOpenLive,
   }) {
@@ -57,6 +67,7 @@ class ChannelPage extends StatefulWidget {
         login: login,
         channel: channel,
         favorites: favorites,
+        downloads: downloads,
         onOpenVod: onOpenVod,
         onOpenLive: onOpenLive,
       ),
@@ -70,6 +81,7 @@ class ChannelPage extends StatefulWidget {
     required String login,
     required ChannelHolder channel,
     required FavoritesHolder favorites,
+    required DownloadsHolder downloads,
     ValueChanged<String>? onOpenVod,
     ValueChanged<String>? onOpenLive,
   }) {
@@ -79,6 +91,7 @@ class ChannelPage extends StatefulWidget {
         login: login,
         channel: channel,
         favorites: favorites,
+        downloads: downloads,
         onOpenVod: onOpenVod,
         onOpenLive: onOpenLive,
       ),
@@ -89,6 +102,7 @@ class ChannelPage extends StatefulWidget {
     required String login,
     required ChannelHolder channel,
     required FavoritesHolder favorites,
+    required DownloadsHolder downloads,
     ValueChanged<String>? onOpenVod,
     ValueChanged<String>? onOpenLive,
   }) => MaterialPageRoute<void>(
@@ -99,6 +113,7 @@ class ChannelPage extends StatefulWidget {
           login: login,
           channel: channel,
           favorites: favorites,
+          downloads: downloads,
           onOpenVod: onOpenVod,
           onOpenLive: onOpenLive,
         ),
@@ -191,6 +206,7 @@ class _ChannelPageState extends State<ChannelPage>
                   child: switch ((_kind, header)) {
                     (VodKind(), _) => _Vods(
                       channel: channel,
+                      downloads: widget.downloads,
                       onOpenVod: widget.onOpenVod,
                     ),
                     (
@@ -324,9 +340,14 @@ class _LiveBadge extends StatelessWidget {
 
 /// The VODs of the selected tab.
 class _Vods extends StatelessWidget {
-  const new({required this.channel, required this.onOpenVod});
+  const new({
+    required this.channel,
+    required this.downloads,
+    required this.onOpenVod,
+  });
 
   final ChannelHolder channel;
+  final DownloadsHolder downloads;
   final ValueChanged<String>? onOpenVod;
 
   bool _onScroll(ScrollNotification notification) {
@@ -362,6 +383,16 @@ class _Vods extends StatelessWidget {
                     return VodTileView(
                       vod: vod,
                       onTap: open == null ? null : () => open(vod.id),
+                      onDownload: () => unawaited(
+                        downloadVod(
+                          context,
+                          downloads: downloads,
+                          videoId: vod.id,
+                          onView: () => unawaited(
+                            DownloadsPage.push(context, downloads: downloads),
+                          ),
+                        ),
+                      ),
                     );
                   },
                 ),
