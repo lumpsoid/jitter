@@ -883,6 +883,7 @@ dependencies = [
  "rinf",
  "serde",
  "sysinfo",
+ "tempfile",
  "tokio",
  "windows",
 ]
