@@ -1,7 +1,9 @@
 //! The downloads the GUI lists: one entry per started download, with its progress and how it ended.
+//! Finished ones are stored, so the list shows them again after a restart.
 
 use crate::download::{Download, DownloadProgress};
-use crate::models::VideoId;
+use crate::models::{FinishedDownload, VideoId};
+use crate::ports::{DownloadsStore, StoreError};
 
 /// Names one entry. Downloads run in parallel, so the GUI cancels or removes
 /// one by this key rather than by its file.
@@ -36,16 +38,49 @@ pub struct DownloadEntry {
     pub status: DownloadStatus,
 }
 
-/// The list of downloads the GUI shows.
-#[derive(Debug, Default)]
+/// The list of downloads the GUI shows. Only the finished ones are stored:
+/// a running one picks up from its checkpoint when it is started again, and
+/// a failed or cancelled one has nothing to show after a restart.
 pub struct DownloadsController {
     entries: Vec<DownloadEntry>,
     next: u64,
+    store: Box<dyn DownloadsStore>,
 }
 
 impl DownloadsController {
-    pub fn new() -> Self {
-        Self::default()
+    /// Starts empty; call [`DownloadsController::load`] to read the store.
+    pub fn new(store: Box<dyn DownloadsStore>) -> Self {
+        Self {
+            entries: Vec::new(),
+            next: 0,
+            store,
+        }
+    }
+
+    /// Replaces the list with the stored downloads, oldest first, each under
+    /// a fresh key.
+    pub fn load(&mut self) -> Result<(), StoreError> {
+        let stored = self.store.load_downloads()?;
+        self.entries = stored
+            .into_iter()
+            .map(|download| {
+                let key = self.next_key();
+                DownloadEntry {
+                    key,
+                    video: download.video,
+                    file_name: download.file_name,
+                    progress: DownloadProgress {
+                        done: download.segments,
+                        total: download.segments,
+                        bytes: download.bytes,
+                    },
+                    status: DownloadStatus::Done {
+                        path: download.path,
+                    },
+                }
+            })
+            .collect();
+        Ok(())
     }
 
     /// Adds a Running entry for `download`, newest last. None when that file
@@ -59,8 +94,7 @@ impl DownloadsController {
         if busy {
             return None;
         }
-        self.next = self.next.saturating_add(1);
-        let key = DownloadKey(self.next);
+        let key = self.next_key();
         self.entries.push(DownloadEntry {
             key,
             video,
@@ -81,12 +115,24 @@ impl DownloadsController {
         changed
     }
 
-    pub fn finish(&mut self, key: DownloadKey, path: String) -> bool {
+    /// Marks a Running entry Done and stores it; returns whether anything
+    /// changed. It is Done even when the store fails, since its file is
+    /// complete either way: the `Err` says it will not be listed after a
+    /// restart.
+    pub fn finish(&mut self, key: DownloadKey, path: String) -> Result<bool, StoreError> {
         let Some(entry) = self.running_mut(key) else {
-            return false;
+            return Ok(false);
+        };
+        let finished = FinishedDownload {
+            video: entry.video.clone(),
+            file_name: entry.file_name.clone(),
+            path: path.clone(),
+            segments: entry.progress.total,
+            bytes: entry.progress.bytes,
         };
         entry.status = DownloadStatus::Done { path };
-        true
+        self.store.put_download(&finished)?;
+        Ok(true)
     }
 
     pub fn fail(&mut self, key: DownloadKey, message: String) -> bool {
@@ -106,16 +152,36 @@ impl DownloadsController {
         true
     }
 
-    /// Drops an entry that is no longer Running (the GUI's "clear"); a Running one stays.
-    pub fn remove(&mut self, key: DownloadKey) -> bool {
-        let before = self.entries.len();
-        self.entries
-            .retain(|e| e.key != key || e.status == DownloadStatus::Running);
-        self.entries.len() != before
+    /// Drops an entry that is no longer Running (the GUI's "clear"); a
+    /// Running one stays. A Done one is forgotten by the store too, and its
+    /// file is kept. Returns whether it was dropped; when the store fails it
+    /// stays, so the list never hides what comes back after a restart.
+    pub fn remove(&mut self, key: DownloadKey) -> Result<bool, StoreError> {
+        let Some(index) = self
+            .entries
+            .iter()
+            .position(|e| e.key == key && e.status != DownloadStatus::Running)
+        else {
+            return Ok(false);
+        };
+        if let Some(DownloadEntry {
+            status: DownloadStatus::Done { path },
+            ..
+        }) = self.entries.get(index)
+        {
+            self.store.remove_download(path)?;
+        }
+        self.entries.remove(index);
+        Ok(true)
     }
 
     pub fn entries(&self) -> &[DownloadEntry] {
         &self.entries
+    }
+
+    fn next_key(&mut self) -> DownloadKey {
+        self.next = self.next.saturating_add(1);
+        DownloadKey(self.next)
     }
 
     fn running_mut(&mut self, key: DownloadKey) -> Option<&mut DownloadEntry> {

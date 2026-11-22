@@ -8,8 +8,8 @@ use rusqlite::{Connection, ErrorCode};
 
 use crate::migrations;
 
-/// One migrated SQLite connection that implements `FavoritesStore`,
-/// `HistoryStore`, `ResumeStore` and `SettingsStore`. Clones share the
+/// One migrated SQLite connection that implements `DownloadsStore`,
+/// `FavoritesStore`, `HistoryStore`, `ResumeStore` and `SettingsStore`. Clones share the
 /// connection, so a head hands one clone to each controller; an in-memory
 /// database stays a single database.
 ///

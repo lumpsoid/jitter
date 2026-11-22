@@ -10,6 +10,7 @@
 
 use jitter_core::browse::BrowseController;
 use jitter_core::categories::TopCategoriesController;
+use jitter_core::downloads::DownloadsController;
 use jitter_core::favorites::FavoritesController;
 use jitter_core::history::HistoryController;
 use jitter_core::models::{
@@ -103,8 +104,8 @@ pub struct Controllers {
 
 impl Controllers {
     /// Builds each controller on a clone of `store`, then loads the
-    /// favorites, the history and the settings; the chat starts under the
-    /// settings. Keeps a clone of `store` for backups.
+    /// favorites, the history, the settings and the finished downloads; the
+    /// chat starts under the settings. Keeps a clone of `store` for backups.
     pub fn boot(store: &SqliteStore) -> Result<Self, StoreError> {
         let mut favorites = FavoritesController::new(Box::new(store.clone()));
         favorites.load()?;
@@ -112,6 +113,8 @@ impl Controllers {
         history.load()?;
         let mut settings = SettingsController::new(Box::new(store.clone()));
         settings.load()?;
+        let mut downloads = DownloadsController::new(Box::new(store.clone()));
+        downloads.load()?;
         Ok(Self {
             favorites,
             // History
@@ -131,7 +134,7 @@ impl Controllers {
             // Search
             search: SearchPanel::default(),
             // Downloads
-            downloads: DownloadsPanel::new(),
+            downloads: DownloadsPanel::new(downloads),
             // Settings
             settings,
             // Backup
