@@ -392,7 +392,13 @@ pub async fn run(
 
             // Playback
             Some(pack) = play.recv() => {
-                let target = playback::play(&mut c.playback, &twitch, &fetch, pack.message.target);
+                let target = playback::play(
+                    &mut c.playback,
+                    &c.downloads,
+                    &twitch,
+                    &fetch,
+                    pack.message.target,
+                );
                 // Chat: follows the player.
                 chat::play(&mut c.chat, &twitch, &fetch, target.as_ref());
             }

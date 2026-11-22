@@ -22,6 +22,7 @@ class SettingsPage extends StatefulWidget {
     required this.backup,
     required this.downloads,
     required this.logs,
+    this.onOpenVod,
     super.key,
   });
 
@@ -29,6 +30,9 @@ class SettingsPage extends StatefulWidget {
   final BackupHolder backup;
   final DownloadsHolder downloads;
   final LogsHolder logs;
+
+  /// Opens the player on a VOD id, from a finished download.
+  final ValueChanged<String>? onOpenVod;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -159,7 +163,11 @@ class _SettingsPageState extends State<SettingsPage> {
                 'VODs saved to this device, and the ones still downloading.',
               ),
               onTap: () => unawaited(
-                DownloadsPage.push(context, downloads: widget.downloads),
+                DownloadsPage.push(
+                  context,
+                  downloads: widget.downloads,
+                  onOpenVod: widget.onOpenVod,
+                ),
               ),
             ),
             const _Header(label: 'Troubleshooting'),

@@ -175,6 +175,15 @@ impl DownloadsController {
         Ok(true)
     }
 
+    /// The file of `video`'s newest finished download, which plays in place
+    /// of the stream; `None` when it has none.
+    pub fn downloaded(&self, video: &VideoId) -> Option<&str> {
+        self.entries.iter().rev().find_map(|e| match &e.status {
+            DownloadStatus::Done { path } if e.video == *video => Some(path.as_str()),
+            _ => None,
+        })
+    }
+
     pub fn entries(&self) -> &[DownloadEntry] {
         &self.entries
     }

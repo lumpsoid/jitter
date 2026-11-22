@@ -280,3 +280,32 @@ fn a_remove_the_store_refuses_keeps_the_entry() -> TestResult {
     assert_eq!(store.downloads(), [finished("/out/a.ts")]);
     Ok(())
 }
+
+#[test]
+fn downloaded_is_the_newest_finished_file_of_that_vod() -> TestResult {
+    let other = FinishedDownload {
+        video: VideoId::parse("1").map_err(|e| StoreError::new(format!("{e:?}")))?,
+        ..finished("/out/other.ts")
+    };
+    let store = FakeDownloadsStore::with_downloads(vec![
+        finished("/out/old.ts"),
+        finished("/out/new.ts"),
+        other,
+    ]);
+    let mut controller = DownloadsController::new(Box::new(store));
+    controller.load()?;
+    let _running = start(&mut controller);
+
+    assert_eq!(controller.downloaded(&vod()), Some("/out/new.ts"));
+    Ok(())
+}
+
+#[test]
+fn a_vod_without_a_finished_download_has_no_file() {
+    let mut controller = controller();
+    let key = start(&mut controller);
+    assert_eq!(controller.downloaded(&vod()), None);
+
+    controller.fail(key, "network".to_owned());
+    assert_eq!(controller.downloaded(&vod()), None);
+}

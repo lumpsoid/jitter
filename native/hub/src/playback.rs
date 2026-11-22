@@ -16,6 +16,7 @@ use rinf::RustSignal;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
 
+use crate::downloads::{self, DownloadsPanel};
 use crate::format::{
     clock_error, duration_label, no_rewind_label, sleep_left_label, sleep_preset_label,
     streamed_label, twitch_error, uptime_label, viewers_label,
@@ -32,10 +33,14 @@ use crate::signals::{
 /// `Play`: starts resolving `target` through twitch, and loading what it
 /// plays beside it; both come back together as [`Fetched::Playback`], or
 /// as [`Fetched::PlaybackTimedOut`] when they take longer than core's
-/// `RESOLVE_TIMEOUT`. A target core rejects fails at once. Returns the
-/// target now playing, `None` when it was rejected.
+/// `RESOLVE_TIMEOUT`. A VOD with a finished download whose file is still
+/// there plays that file instead: it comes back at once with no details,
+/// and its details follow as [`Fetched::PlaybackDetails`], so a slow or
+/// absent network never holds it up. A target core rejects fails at once.
+/// Returns the target now playing, `None` when it was rejected.
 pub fn play(
     playback: &mut PlaybackController,
+    downloads: &DownloadsPanel,
     twitch: &Twitch,
     fetch: &UnboundedSender<Fetched>,
     target: PlaybackTarget,
@@ -48,10 +53,28 @@ pub fn play(
         }
     };
     log::info!("play {}", describe(&target));
+    let file = match &target {
+        playback::PlaybackTarget::Vod(id) => downloads.downloaded(id),
+        playback::PlaybackTarget::Live(_) => None,
+    };
     let attempt = playback.begin(target.clone());
     send_state(playback);
     let (twitch, fetch, playing) = (twitch.clone(), fetch.clone(), target.clone());
     tokio::spawn(async move {
+        if let Some(local) = downloads::playback_of(file).await {
+            let _ = fetch.send(Fetched::Playback {
+                target: target.clone(),
+                result: Ok(local),
+                details: Ok(models::PlaybackDetails::default()),
+            });
+            let details = details_within_limit(&twitch, &target).await;
+            let _ = fetch.send(Fetched::PlaybackDetails {
+                stream: target.clone(),
+                target,
+                details,
+            });
+            return;
+        }
         let _ = fetch.send(match resolve_with_details(&twitch, &target).await {
             Some((result, details)) => Fetched::Playback {
                 target,
@@ -284,17 +307,24 @@ pub fn refresh(
     };
     let (twitch, fetch) = (twitch.clone(), fetch.clone());
     tokio::spawn(async move {
-        let details =
-            match tokio::time::timeout(resolve_limit(), twitch.playback_details(&stream)).await {
-                Ok(details) => details.map_err(|e| e.to_string()),
-                Err(_) => Err(playback::TIMED_OUT.to_owned()),
-            };
+        let details = details_within_limit(&twitch, &stream).await;
         let _ = fetch.send(Fetched::PlaybackDetails {
             target,
             stream,
             details,
         });
     });
+}
+
+/// Loads what `stream` plays, within core's `RESOLVE_TIMEOUT`.
+async fn details_within_limit(
+    twitch: &Twitch,
+    stream: &playback::PlaybackTarget,
+) -> Result<models::PlaybackDetails, String> {
+    match tokio::time::timeout(resolve_limit(), twitch.playback_details(stream)).await {
+        Ok(details) => details.map_err(|e| e.to_string()),
+        Err(_) => Err(playback::TIMED_OUT.to_owned()),
+    }
 }
 
 /// A refresh's details came back for `stream`: core decides whether the
@@ -647,10 +677,16 @@ fn send_failed(message: String) {
 }
 
 /// Opens `open`, logging the server it plays from but not the URL: its
-/// query holds Twitch's access token, and users share their logs.
+/// query holds Twitch's access token, and users share their logs. A
+/// downloaded file is not named either: its path holds the user's name.
 fn send_open(open: Option<Open>) {
     if let Some(open) = open {
-        log::info!("opening {} at {} s", host(&open.url), open.start.get());
+        let from = if open.url.starts_with("file:") {
+            "a downloaded file"
+        } else {
+            host(&open.url)
+        };
+        log::info!("opening {from} at {} s", open.start.get());
         PlayerCommand::from(open).send_signal_to_dart();
     }
 }
@@ -845,6 +881,7 @@ impl From<&Quality> for QualityOption {
                 QualityKind::Source => format!("{} (source)", quality.name),
                 QualityKind::Transcode => quality.name.clone(),
                 QualityKind::AudioOnly => "Audio only".to_owned(),
+                QualityKind::Downloaded => "Downloaded".to_owned(),
             },
         }
     }

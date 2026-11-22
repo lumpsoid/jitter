@@ -6,21 +6,27 @@ import 'package:jitter/widgets/escape_goes_back.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// The downloads as Rust last sent them. A running one can be cancelled;
-/// any other can be removed from the list.
+/// any other can be removed from the list. Tapping a finished one opens its
+/// VOD, which Rust plays from the file.
 class DownloadsPage extends StatefulWidget {
-  const new({required this.downloads, super.key});
+  const new({required this.downloads, this.onOpenVod, super.key});
 
   final DownloadsHolder downloads;
+
+  /// Opens the player on a VOD id; `null`: finished downloads don't open.
+  final ValueChanged<String>? onOpenVod;
 
   /// Pushes the page. The holder already has the list, so nothing is asked.
   static Future<void> push(
     BuildContext context, {
     required DownloadsHolder downloads,
+    ValueChanged<String>? onOpenVod,
   }) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (context) =>
-            EscapeGoesBack(child: DownloadsPage(downloads: downloads)),
+        builder: (context) => EscapeGoesBack(
+          child: DownloadsPage(downloads: downloads, onOpenVod: onOpenVod),
+        ),
       ),
     );
   }
@@ -47,10 +53,14 @@ class _DownloadsPageState extends State<DownloadsPage> {
   }
 
   Widget _tile(DownloadItem item) {
+    final open = widget.onOpenVod;
     return ListTile(
       key: ValueKey(item.key),
       title: Text(item.fileName),
       subtitle: _subtitle(item),
+      onTap: item.state is DownloadStateDone && open != null
+          ? () => open(item.videoId)
+          : null,
       trailing: item.state is DownloadStateRunning
           ? IconButton(
               icon: const Icon(Icons.close),

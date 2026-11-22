@@ -24,7 +24,7 @@ use std::time::Duration;
 use futures_util::StreamExt;
 use jitter_core::download::{Download, DownloadProgress};
 use jitter_core::downloads::{DownloadEntry, DownloadKey, DownloadStatus, DownloadsController};
-use jitter_core::models::{Quality, VideoId};
+use jitter_core::models::{Playback, Quality, VideoId};
 use jitter_core::playback::PlaybackTarget;
 use jitter_twitch::Twitch;
 use jitter_twitch::part_file::{self, Rebase};
@@ -109,6 +109,53 @@ impl DownloadsPanel {
             running: HashMap::new(),
         }
     }
+
+    /// The file of `video`'s finished download, which core plays in place
+    /// of the stream; `None` when it has none.
+    pub fn downloaded(&self, video: &VideoId) -> Option<PathBuf> {
+        self.controller.downloaded(video).map(PathBuf::from)
+    }
+}
+
+/// A finished download's `file` as a VOD to play, `None` when there is no
+/// file or it is gone (deleted outside the app), which streams instead.
+pub async fn playback_of(file: Option<PathBuf>) -> Option<Playback> {
+    let file = file?;
+    let probe = file.clone();
+    match blocking(move || Ok(probe.is_file())).await {
+        Ok(true) => {}
+        Ok(false) | Err(_) => {
+            log::warn!("a finished download's file is gone; streaming instead");
+            return None;
+        }
+    }
+    let Some(url) = file_url(&file) else {
+        log::warn!("a finished download's path is not UTF-8; streaming instead");
+        return None;
+    };
+    Some(Playback::downloaded(url))
+}
+
+/// `path` as a `file://` URL: each byte outside a path's plain characters
+/// percent-encoded, and on Windows its `\` separators turned to `/` behind
+/// a `/` (`file:///C:/Users/...`). `None` for a path that is not UTF-8.
+fn file_url(path: &Path) -> Option<String> {
+    let path = path.to_str()?;
+    let path = if cfg!(windows) {
+        format!("/{}", path.replace('\\', "/"))
+    } else {
+        path.to_owned()
+    };
+    let mut url = String::from("file://");
+    for byte in path.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' | b':' => {
+                url.push(char::from(byte));
+            }
+            _ => url.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    Some(url)
 }
 
 /// One Dart signal about downloads, with its message.
@@ -674,6 +721,31 @@ mod tests {
         };
         let download = Download::new(None, &video, "720p60", list);
         Ok((video, download))
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_path_becomes_a_file_url_with_odd_bytes_encoded() {
+        let url = file_url(Path::new("/home/Zoë/My Videos/a_1_720p60.mp4"));
+        assert_eq!(
+            url.as_deref(),
+            Some("file:///home/Zo%C3%AB/My%20Videos/a_1_720p60.mp4")
+        );
+    }
+
+    #[tokio::test]
+    async fn a_file_that_is_there_plays_and_a_gone_one_streams() -> TestResult {
+        let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
+        let file = dir.path().join("a_1_720p60.mp4");
+        std::fs::write(&file, b"bytes").map_err(|e| e.to_string())?;
+
+        let playback = playback_of(Some(file.clone())).await.ok_or("no playback")?;
+        assert_eq!(Some(playback.master_url), file_url(&file));
+
+        std::fs::remove_file(&file).map_err(|e| e.to_string())?;
+        assert!(playback_of(Some(file)).await.is_none());
+        assert!(playback_of(None).await.is_none());
+        Ok(())
     }
 
     /// The list as Dart sees it.
