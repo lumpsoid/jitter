@@ -10,6 +10,7 @@
 
 mod backup;
 mod backup_file;
+mod download_rows;
 mod favorite_rows;
 mod history_rows;
 mod imported;

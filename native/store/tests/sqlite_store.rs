@@ -6,14 +6,17 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Barrier};
 use std::thread;
 
+use jitter_core::downloads::{DownloadStatus, DownloadsController};
 use jitter_core::favorites::FavoritesController;
 use jitter_core::models::{
-    CategoryId, Channel, ChannelId, ChannelLogin, Favorite, GameRef, NewVisit, QualityPreference,
-    ResumePoint, Seconds, Setting, Settings, Stream, ThemeChoice, Timestamp, VideoId, VisitDetails,
-    VisitId,
+    CategoryId, Channel, ChannelId, ChannelLogin, Favorite, FinishedDownload, GameRef, NewVisit,
+    QualityPreference, ResumePoint, Seconds, Setting, Settings, Stream, ThemeChoice, Timestamp,
+    VideoId, VisitDetails, VisitId,
 };
 use jitter_core::playback::PlaybackTarget;
-use jitter_core::ports::{FavoritesStore, HistoryStore, ResumeStore, SettingsStore};
+use jitter_core::ports::{
+    DownloadsStore, FavoritesStore, HistoryStore, ResumeStore, SettingsStore,
+};
 use jitter_core::resume::ResumeController;
 use jitter_core::settings::SettingsController;
 use jitter_store::SqliteStore;
@@ -257,6 +260,62 @@ fn resume_controller_over_the_store() -> TestResult {
     Ok(())
 }
 
+// --- Downloads -------------------------------------------------------------
+
+fn finished(path: &str, bytes: u64) -> FinishedDownload {
+    FinishedDownload {
+        video: video("100"),
+        file_name: "a_100_720p60.mp4".to_owned(),
+        path: path.to_owned(),
+        segments: 3,
+        bytes,
+    }
+}
+
+#[test]
+fn downloads_round_trip_in_the_order_first_stored() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.put_download(&finished("/out/a.mp4", 10))?;
+    store.put_download(&finished("/out/b.mp4", 20))?;
+    store.put_download(&finished("/out/a.mp4", 30))?;
+    assert_eq!(
+        store.load_downloads()?,
+        [finished("/out/a.mp4", 30), finished("/out/b.mp4", 20)]
+    );
+    Ok(())
+}
+
+#[test]
+fn removing_a_download_deletes_only_its_path() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.put_download(&finished("/out/a.mp4", 10))?;
+    store.put_download(&finished("/out/b.mp4", 20))?;
+    store.remove_download("/out/a.mp4")?;
+    store.remove_download("/out/unknown.mp4")?;
+    assert_eq!(store.load_downloads()?, [finished("/out/b.mp4", 20)]);
+    Ok(())
+}
+
+#[test]
+fn downloads_controller_lists_the_stored_ones_after_a_restart() -> TestResult {
+    let store = SqliteStore::open_in_memory()?;
+    let mut before = DownloadsController::new(Box::new(store.clone()));
+    before.load()?;
+    assert!(before.entries().is_empty());
+    let mut writer = store.clone();
+    writer.put_download(&finished("/out/a.mp4", 10))?;
+
+    let mut after = DownloadsController::new(Box::new(store));
+    after.load()?;
+    assert_eq!(
+        after.entries()[0].status,
+        DownloadStatus::Done {
+            path: "/out/a.mp4".to_owned()
+        }
+    );
+    Ok(())
+}
+
 // --- Migrations on a file ------------------------------------------------
 
 #[test]
@@ -267,7 +326,7 @@ fn reopening_a_migrated_file_keeps_its_rows() -> TestResult {
     drop(store);
     let store = SqliteStore::open(&path)?;
     assert_eq!(store.load_all()?, [favorite("1", "Alpha", 10)]);
-    assert_eq!(user_version(&path)?, 5);
+    assert_eq!(user_version(&path)?, 6);
     Ok(())
 }
 
@@ -293,7 +352,7 @@ fn a_v1_file_is_migrated_and_its_favorites_load_without_an_avatar() -> TestResul
     )?;
     drop(v1);
     let mut store = SqliteStore::open(&path)?;
-    assert_eq!(user_version(&path)?, 5);
+    assert_eq!(user_version(&path)?, 6);
     assert_eq!(store.load_all()?, [favorite("1", "Alpha", 10)]);
     store.set_avatar(&id("1"), "https://a/1.png")?;
     let expected = Favorite {
@@ -485,7 +544,7 @@ fn two_connections_opening_a_fresh_file_at_once_both_succeed() -> TestResult {
             let opened = handle.join().map_err(|_| "open thread panicked")?;
             assert_eq!(opened, Ok(()));
         }
-        assert_eq!(user_version(&path)?, 5);
+        assert_eq!(user_version(&path)?, 6);
     }
     Ok(())
 }

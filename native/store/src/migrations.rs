@@ -35,6 +35,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 5,
         sql: V5_VISITS,
     },
+    Migration {
+        version: 6,
+        sql: V6_DOWNLOADS,
+    },
 ];
 
 /// v1: favorite channels (login and display name are display caches; the
@@ -112,6 +116,19 @@ CREATE INDEX visits_by_start ON visits (started_at DESC, id DESC);
 CREATE INDEX visits_by_target ON visits (kind, target);
 ";
 
+/// v6: the finished downloads, one row per file, named by its full path.
+/// This device's paths, so not part of a backup. `segments` and `bytes`
+/// are what the file joined.
+const V6_DOWNLOADS: &str = "
+CREATE TABLE downloads (
+    path      TEXT PRIMARY KEY NOT NULL,
+    video_id  TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    segments  INTEGER NOT NULL,
+    bytes     INTEGER NOT NULL
+);
+";
+
 /// Applies every pending migration in one transaction: the database ends at
 /// the latest version or is left as it was. A database newer than this build
 /// is refused rather than written with an older schema's assumptions.
@@ -160,13 +177,14 @@ mod tests {
     }
 
     #[test]
-    fn empty_database_ends_at_v5_with_every_table() -> TestResult {
+    fn empty_database_ends_at_v6_with_every_table() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 5);
+        assert_eq!(user_version(&conn)?, 6);
         assert_eq!(
             tables(&conn)?,
             [
+                "downloads",
                 "favorites",
                 "resume_points",
                 "settings",
@@ -184,7 +202,7 @@ mod tests {
         conn.execute_batch(V2_FAVORITE_AVATARS)?;
         conn.pragma_update(None, "user_version", 2)?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 5);
+        assert_eq!(user_version(&conn)?, 6);
         let row: (i64, Option<String>, Option<i64>) = conn.query_row(
             "SELECT COUNT(*), MAX(theme), MAX(animated_emotes) FROM settings WHERE id = 1",
             [],
@@ -203,7 +221,7 @@ mod tests {
         conn.pragma_update(None, "user_version", 3)?;
         conn.execute("UPDATE settings SET theme = 'dark' WHERE id = 1", [])?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 5);
+        assert_eq!(user_version(&conn)?, 6);
         let row: (Option<String>, Option<i64>) = conn.query_row(
             "SELECT theme, background_audio FROM settings WHERE id = 1",
             [],
@@ -219,7 +237,7 @@ mod tests {
         migrate(&mut conn)?;
         conn.execute("INSERT INTO favorites VALUES ('1', 'a', 'A', 0, NULL)", [])?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 5);
+        assert_eq!(user_version(&conn)?, 6);
         let rows: i64 = conn.query_row("SELECT COUNT(*) FROM favorites", [], |r| r.get(0))?;
         assert_eq!(rows, 1);
         Ok(())
@@ -232,7 +250,7 @@ mod tests {
         conn.pragma_update(None, "user_version", 1)?;
         conn.execute("INSERT INTO favorites VALUES ('1', 'a', 'A', 7)", [])?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 5);
+        assert_eq!(user_version(&conn)?, 6);
         let row: (String, Option<String>, i64) = conn.query_row(
             "SELECT login, avatar_url, added_at FROM favorites WHERE channel_id = '1'",
             [],
@@ -245,9 +263,9 @@ mod tests {
     #[test]
     fn newer_database_is_refused_and_left_alone() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
-        conn.pragma_update(None, "user_version", 6)?;
+        conn.pragma_update(None, "user_version", 7)?;
         assert!(migrate(&mut conn).is_err());
-        assert_eq!(user_version(&conn)?, 6);
+        assert_eq!(user_version(&conn)?, 7);
         assert!(tables(&conn)?.is_empty());
         Ok(())
     }

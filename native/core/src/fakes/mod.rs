@@ -7,11 +7,13 @@
 //! Each fake is a handle to shared contents: clone it before boxing it into
 //! a controller and the clone shows what the controller wrote.
 
+mod fake_downloads_store;
 mod fake_favorites_store;
 mod fake_history_store;
 mod fake_resume_store;
 mod fake_settings_store;
 
+pub use fake_downloads_store::FakeDownloadsStore;
 pub use fake_favorites_store::FakeFavoritesStore;
 pub use fake_history_store::FakeHistoryStore;
 pub use fake_resume_store::FakeResumeStore;

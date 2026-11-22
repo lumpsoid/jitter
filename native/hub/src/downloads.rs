@@ -102,9 +102,10 @@ pub enum Ending {
 }
 
 impl DownloadsPanel {
-    pub fn new() -> Self {
+    /// The panel over `controller`, loaded: no writer runs yet.
+    pub fn new(controller: DownloadsController) -> Self {
         Self {
-            controller: DownloadsController::new(),
+            controller,
             running: HashMap::new(),
         }
     }
@@ -231,10 +232,24 @@ pub fn cancel(panel: &mut DownloadsPanel, signal: CancelDownload) {
     send_snapshot(panel);
 }
 
-/// `RemoveDownload`: drops a download that is no longer running from the list.
+/// `RemoveDownload`: drops a download that is no longer running from the
+/// list, and from the store when it finished; its file stays. One the store
+/// could not forget stays listed, and the failure goes out for its VOD.
 pub fn remove(panel: &mut DownloadsPanel, signal: RemoveDownload) {
-    if panel.controller.remove(DownloadKey::new(signal.key)) {
-        send_snapshot(panel);
+    let key = DownloadKey::new(signal.key);
+    let Some(video) = panel
+        .controller
+        .entries()
+        .iter()
+        .find(|e| e.key == key)
+        .map(|e| e.video.as_str().to_owned())
+    else {
+        return;
+    };
+    match panel.controller.remove(key) {
+        Ok(true) => send_snapshot(panel),
+        Ok(false) => {}
+        Err(e) => failed(video, format!("Couldn't remove the download: {e}")),
     }
 }
 
@@ -268,7 +283,14 @@ pub fn on_fetched(
             // Dropping the entry aborts its task, which is ending anyway.
             panel.running.remove(&key);
             let changed = match ending {
-                Ending::Done(path) => panel.controller.finish(key, path),
+                Ending::Done(path) => panel
+                    .controller
+                    .finish(key, path)
+                    // Done all the same: only the next start forgets it.
+                    .unwrap_or_else(|e| {
+                        log::warn!("storing a finished download: {e}");
+                        true
+                    }),
                 Ending::Failed(message) => panel.controller.fail(key, message),
                 // The cancel already marked it.
                 Ending::Cancelled => false,
@@ -633,6 +655,7 @@ fn count(n: usize) -> u32 {
 mod tests {
     use std::sync::{Arc, Mutex};
 
+    use jitter_core::fakes::FakeDownloadsStore;
     use jitter_core::models::SegmentList;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::{TcpListener, TcpStream};
@@ -664,7 +687,7 @@ mod tests {
 
     #[test]
     fn an_entry_maps_to_an_item() -> TestResult {
-        let mut controller = DownloadsController::new();
+        let mut controller = DownloadsController::new(Box::new(FakeDownloadsStore::default()));
         let (video, mut download) = resolved("2600000000")?;
         let key = controller.start(video, &download).ok_or("no key")?;
         download.record(5);
@@ -684,7 +707,7 @@ mod tests {
 
     #[test]
     fn ended_states_map_with_their_detail() -> TestResult {
-        let mut controller = DownloadsController::new();
+        let mut controller = DownloadsController::new(Box::new(FakeDownloadsStore::default()));
         let mut keys = Vec::new();
         for id in ["1", "2", "3"] {
             let (video, download) = resolved(id)?;
@@ -693,7 +716,9 @@ mod tests {
         let [finished, broken, stopped] = keys.as_slice() else {
             return Err("expected three keys".to_owned());
         };
-        controller.finish(*finished, "/out/1_720p60.ts".to_owned());
+        controller
+            .finish(*finished, "/out/1_720p60.ts".to_owned())
+            .map_err(|e| e.to_string())?;
         controller.fail(*broken, "segment 2 of 2: HTTP 404".to_owned());
         controller.cancel(*stopped);
 
