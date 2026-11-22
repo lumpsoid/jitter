@@ -41,7 +41,7 @@ pub struct RemoveDownload {
 }
 
 /// What the downloads feature tells Dart. `Snapshot` replaces the list;
-/// `Choices` and `Failed` are one-shot, not state.
+/// `Choices`, `Started` and `Failed` are one-shot, not state.
 #[derive(Serialize, RustSignal)]
 pub enum DownloadsUpdate {
     /// Every download, oldest first. Replaces the list.
@@ -51,6 +51,9 @@ pub enum DownloadsUpdate {
         video_id: String,
         qualities: Vec<QualityOption>,
     },
+    /// The download asked for `video_id` started: it is in the list. A
+    /// start answers with this or `Failed`. One-shot.
+    Started { video_id: String },
     /// A request for `video_id` failed, or its download failed to start.
     /// One-shot notice; tagged so a flow waiting on one VOD skips another's.
     Failed { video_id: String, message: String },
