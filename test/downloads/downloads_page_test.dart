@@ -27,18 +27,23 @@ void main() {
   late DownloadsHolder holder;
   late List<CancelDownload> cancelled;
   late List<RemoveDownload> removed;
+  late List<String> opened;
 
   setUp(() {
     cancelled = [];
     removed = [];
+    opened = [];
     holder = DownloadsHolder(
       sendCancel: cancelled.add,
       sendRemove: removed.add,
     );
   });
 
-  Future<void> pumpPage(WidgetTester tester) =>
-      tester.pumpWidget(MaterialApp(home: DownloadsPage(downloads: holder)));
+  Future<void> pumpPage(WidgetTester tester) => tester.pumpWidget(
+    MaterialApp(
+      home: DownloadsPage(downloads: holder, onOpenVod: opened.add),
+    ),
+  );
 
   testWidgets('says so when there are no downloads', (tester) async {
     await pumpPage(tester);
@@ -84,6 +89,17 @@ void main() {
       ),
     );
     expect(removed, [RemoveDownload(key: Uint64.parse('2'))]);
+  });
+
+  testWidgets('only a finished download opens its VOD', (tester) async {
+    await pumpPage(tester);
+    holder.apply(_snapshot());
+    await tester.pump();
+
+    for (final name in ['a.mp4', 'b.mp4', 'c.mp4', 'd.mp4']) {
+      await tester.tap(find.text(name));
+    }
+    expect(opened, ['42']);
   });
 
   testWidgets('a failure shows a snackbar', (tester) async {

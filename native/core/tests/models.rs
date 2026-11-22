@@ -2,9 +2,9 @@ use std::time::{Duration, Instant};
 
 use jitter_core::models::{
     Category, CategoryId, CategoryIdError, Channel, ChannelId, ChannelIdError, ChannelLogin,
-    ChannelLoginError, ClockError, FadeLevel, LiveDetails, Playback, QualityKind, Resolution,
-    SLEEP_FADE, SLEEP_FADE_STEP, Seconds, SleepStep, SleepTimer, Stream, Timestamp, Variant,
-    VideoId, VideoIdError,
+    ChannelLoginError, ClockError, FadeLevel, LiveDetails, Playback, QualityKind,
+    QualityPreference, Resolution, SLEEP_FADE, SLEEP_FADE_STEP, Seconds, SleepStep, SleepTimer,
+    Stream, Timestamp, Variant, VideoId, VideoIdError,
 };
 
 fn login(s: &str) -> ChannelLogin {
@@ -455,4 +455,19 @@ fn a_position_goes_no_further_than_the_end() {
         Seconds::parse_position("9h", Seconds::ZERO),
         Ok(Seconds::new(32400))
     );
+}
+
+#[test]
+fn a_downloaded_playback_opens_its_file_at_every_preference() {
+    let playback = Playback::downloaded("file:///out/a.mp4".to_owned());
+    for preference in [
+        QualityPreference::Source,
+        QualityPreference::P480,
+        QualityPreference::AudioOnly,
+    ] {
+        let quality = playback.preferred_quality(preference);
+        assert_eq!(quality.map(|q| q.url.as_str()), Some("file:///out/a.mp4"));
+        assert_eq!(quality.map(|q| q.kind), Some(QualityKind::Downloaded));
+    }
+    assert_eq!(playback.audio_only(), None);
 }

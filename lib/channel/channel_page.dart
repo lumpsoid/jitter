@@ -389,7 +389,11 @@ class _Vods extends StatelessWidget {
                           downloads: downloads,
                           videoId: vod.id,
                           onView: () => unawaited(
-                            DownloadsPage.push(context, downloads: downloads),
+                            DownloadsPage.push(
+                              context,
+                              downloads: downloads,
+                              onOpenVod: onOpenVod,
+                            ),
                           ),
                         ),
                       ),

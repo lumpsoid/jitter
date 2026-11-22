@@ -186,6 +186,7 @@ class _AppShellState extends State<AppShell> {
         backup: widget.backup,
         downloads: widget.downloads,
         logs: widget.logs,
+        onOpenVod: _openVod,
       ),
       refresh: null,
     ),

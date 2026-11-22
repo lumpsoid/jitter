@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:fvp/fvp.dart' show FvpCreateCancellation;
@@ -75,7 +76,11 @@ class VideoPlayerEngine implements PlayerEngine {
     await _setPlayerVolume(_volume.end());
     if (generation != _generation) return;
     _start = start;
-    final next = VideoPlayerController.networkUrl(Uri.parse(url));
+    // A finished download comes as a `file:` URL.
+    final uri = Uri.parse(url);
+    final next = uri.isScheme('file')
+        ? VideoPlayerController.file(File(uri.toFilePath()))
+        : VideoPlayerController.networkUrl(uri);
     final cancellation = _loading = FvpCreateCancellation();
     unawaited(_load(next, cancellation, generation));
   }

@@ -9,6 +9,8 @@ pub enum QualityKind {
     Source,
     Transcode,
     AudioOnly,
+    /// A finished download's file: the one quality of a VOD played from it.
+    Downloaded,
 }
 
 /// A selectable stream quality. `frame_rate` is whole frames per second.

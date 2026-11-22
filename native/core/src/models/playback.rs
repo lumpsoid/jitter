@@ -15,12 +15,29 @@ impl Playback {
     /// needs a stable word for "the best one".
     pub const DEFAULT_QUALITY: &str = "source";
 
+    /// The name of [`Self::downloaded`]'s one quality.
+    pub const DOWNLOADED_QUALITY: &str = "downloaded";
+
+    /// A finished download's file at `url`, played as a VOD of one quality.
+    pub fn downloaded(url: String) -> Self {
+        Self {
+            master_url: url.clone(),
+            qualities: vec![Quality {
+                name: Self::DOWNLOADED_QUALITY.to_owned(),
+                url,
+                resolution: None,
+                frame_rate: None,
+                kind: QualityKind::Downloaded,
+            }],
+        }
+    }
+
     /// Orders variants: source first, then transcodes by resolution, frame
     /// rate and bandwidth (all descending), then audio only.
     pub fn from_variants(master_url: String, mut variants: Vec<Variant>) -> Self {
         variants.sort_by_key(|v| {
             let rank = match v.kind {
-                QualityKind::Source => 0,
+                QualityKind::Source | QualityKind::Downloaded => 0,
                 QualityKind::Transcode => 1,
                 QualityKind::AudioOnly => 2,
             };
