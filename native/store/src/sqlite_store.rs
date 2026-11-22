@@ -23,7 +23,8 @@ pub struct SqliteStore {
 impl SqliteStore {
     /// Opens (creating if needed) the database file at `path`, switches it
     /// to WAL so readers and a writer in other processes do not block each
-    /// other, and brings its schema up to date.
+    /// other, and brings its schema up to date. Commits are not fsynced
+    /// (`synchronous=NORMAL`): see `sync_at_checkpoints`.
     ///
     /// Opening waits up to `OPEN_WAIT` for another connection's lock, and
     /// every later call up to `CALL_WAIT`.
@@ -31,6 +32,7 @@ impl SqliteStore {
         let mut conn = Connection::open(path).map_err(db_error)?;
         conn.busy_timeout(OPEN_WAIT).map_err(db_error)?;
         enable_wal(&conn)?;
+        sync_at_checkpoints(&conn)?;
         migrations::migrate(&mut conn)?;
         conn.busy_timeout(CALL_WAIT).map_err(db_error)?;
         Ok(Self::new(conn))
@@ -95,6 +97,16 @@ fn enable_wal(conn: &Connection) -> Result<(), StoreError> {
     }
 }
 
+/// Sets `synchronous=NORMAL`: in WAL, SQLite then fsyncs only at a
+/// checkpoint, not at every commit. The file stays consistent; a power cut
+/// can lose the last commits (a resume point, a visit, a favorite added just
+/// before), an app crash loses nothing. Each fsync on a busy SD card held
+/// another head's open waiting for seconds. The setting is per connection.
+fn sync_at_checkpoints(conn: &Connection) -> Result<(), StoreError> {
+    conn.pragma_update(None, "synchronous", "NORMAL")
+        .map_err(db_error)
+}
+
 fn is_busy(error: &rusqlite::Error) -> bool {
     error.sqlite_error_code() == Some(ErrorCode::DatabaseBusy)
 }
@@ -107,4 +119,23 @@ pub(crate) fn db_error(error: rusqlite::Error) -> StoreError {
 /// was written by something other than this store.
 pub(crate) fn bad_row(table: &str, column: &str, value: impl std::fmt::Display) -> StoreError {
     StoreError::new(format!("invalid {table}.{column} in database: {value}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    /// `PRAGMA synchronous` reads 1 for NORMAL (2 is FULL, the default).
+    #[test]
+    fn an_opened_file_syncs_only_at_checkpoints() -> TestResult {
+        let dir = tempfile::tempdir()?;
+        let store = SqliteStore::open(dir.path().join("jitter.db"))?;
+        let synchronous: i64 = store
+            .conn()?
+            .pragma_query_value(None, "synchronous", |row| row.get(0))?;
+        assert_eq!(synchronous, 1);
+        Ok(())
+    }
 }
