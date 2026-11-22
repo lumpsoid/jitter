@@ -6,6 +6,31 @@ All notable changes to Jitter are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-22
+
+### Added
+
+- Watch a downloaded VOD in the app: tap it under Settings → Downloads.
+  A VOD you have downloaded plays from its file wherever you open it,
+  offline too, and carries on from where you stopped.
+- Finished downloads stay listed after the app restarts. Removing one from
+  the list keeps its file.
+
+### Changed
+
+- On Android 11 and later, downloads are saved to `Download/Jitter`, where
+  any file manager can reach them, instead of the app's own folder.
+
+### Fixed
+
+- A downloaded fMP4 VOD's timestamps start at 0:00, so other players show
+  its time from the start of the file.
+- "Download started" shows only once the download has really started; a
+  download that fails to start says why instead.
+- A failure for one VOD's download no longer shows on another's.
+- Opening the app while a command-line `jitter` holds the database waits
+  for it instead of failing.
+
 ## [0.2.0] - 2026-11-21
 
 ### Added
@@ -115,9 +140,10 @@ The first release: Android, Linux (AppImage) and Windows.
 - The version and commit under Settings and in `jitter --version`.
 - A command-line head, `jitter`, on the same core.
 
-[Unreleased]: https://github.com/lumpsoid/jitter/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/lumpsoid/jitter/compare/v0.2.1...HEAD
 [0.1.0]: https://github.com/lumpsoid/jitter/releases/tag/v0.1.0
 [0.1.1]: https://github.com/lumpsoid/jitter/compare/v0.1.0...v0.1.1
 [0.1.2]: https://github.com/lumpsoid/jitter/compare/v0.1.1...v0.1.2
 [0.1.3]: https://github.com/lumpsoid/jitter/compare/v0.1.2...v0.1.3
 [0.2.0]: https://github.com/lumpsoid/jitter/compare/v0.1.3...v0.2.0
+[0.2.1]: https://github.com/lumpsoid/jitter/compare/v0.2.0...v0.2.1
