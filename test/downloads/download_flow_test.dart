@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jitter/downloads/download_flow.dart';
 import 'package:jitter/downloads/downloads_holder.dart';
@@ -203,5 +204,33 @@ void main() {
 
     expect(find.textContaining('No folder to save into'), findsOneWidget);
     expect(started, isEmpty);
+  });
+
+  group('androidDownloadDir', () {
+    const channel = MethodChannel('jitter/storage');
+    late Directory shared;
+
+    setUp(() async {
+      shared = await Directory.systemTemp.createTemp('shared_downloads');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            channel,
+            (call) async =>
+                call.method == 'sharedDownloadsDir' ? shared.path : null,
+          );
+    });
+
+    tearDown(() async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+      await shared.delete(recursive: true);
+    });
+
+    test('creates Jitter in the shared Download folder', () async {
+      final dir = await androidDownloadDir();
+
+      expect(dir?.path, '${shared.path}/Jitter');
+      expect(dir?.existsSync(), isTrue);
+    });
   });
 }

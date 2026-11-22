@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:jitter/downloads/downloads_holder.dart';
 import 'package:jitter/src/bindings/bindings.dart';
 import 'package:material_ui/material_ui.dart';
@@ -78,20 +79,33 @@ Future<void> downloadVod(
   );
 }
 
-/// The folder downloads save into. Android gets the app's own external
-/// folder and iOS its documents folder, both writable without a storage
-/// permission; elsewhere the system Downloads folder, or the documents
-/// folder when there is none.
+/// The folder downloads save into. Android gets `Jitter` in the shared
+/// Download folder ([androidDownloadDir]) and iOS its documents folder,
+/// both writable without a storage permission; elsewhere the system
+/// Downloads folder, or the documents folder when there is none.
 Future<String> platformDownloadDir() async {
   final Directory? dir;
   if (Platform.isAndroid) {
-    dir = await getExternalStorageDirectory();
+    dir = await androidDownloadDir();
   } else if (Platform.isIOS) {
     dir = await getApplicationDocumentsDirectory();
   } else {
     dir = await getDownloadsDirectory();
   }
   return (dir ?? await getApplicationDocumentsDirectory()).path;
+}
+
+const _storage = MethodChannel('jitter/storage');
+
+/// `Jitter` in the shared Download folder, created if needed, where the
+/// user reaches downloads from any file manager. Below Android 11 the
+/// platform has no such folder for an app without a storage permission,
+/// and the app's own external folder is used instead.
+@visibleForTesting
+Future<Directory?> androidDownloadDir() async {
+  final shared = await _storage.invokeMethod<String>('sharedDownloadsDir');
+  if (shared == null) return await getExternalStorageDirectory();
+  return await Directory('$shared/Jitter').create(recursive: true);
 }
 
 void _showSnackBar(BuildContext context, String message) {
