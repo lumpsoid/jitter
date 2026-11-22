@@ -3,7 +3,7 @@ use futures_util::StreamExt;
 use jitter_core::download::Download;
 use jitter_core::models::Playback;
 use jitter_core::playback::PlaybackTarget;
-use jitter_twitch::part_file;
+use jitter_twitch::part_file::{self, Rebase};
 use std::io::Write;
 use std::path::PathBuf;
 
@@ -26,6 +26,9 @@ pub struct DownloadArgs {
 /// The bytes go to `<name>.part`, which is renamed to the final name only once
 /// every segment is in, so the final name never holds a partial file. An
 /// existing file with the final name is an error, never overwritten.
+///
+/// An fMP4 VOD's timestamps are moved to start at zero as they are written,
+/// so players show its real length.
 ///
 /// After each segment, `<name>.part.resume` records how much of the `.part`
 /// file is whole. On any error, or a Ctrl-C, both files stay where they are,
@@ -76,9 +79,11 @@ pub async fn run(args: DownloadArgs) -> Result<()> {
     // Cloned so that `record` can borrow the download mutably.
     let urls = download.remaining().to_vec();
     let mut segments = std::pin::pin!(twitch.segment_bytes(&urls).enumerate());
+    let mut rebase = Rebase::new();
     while let Some((index, bytes)) = segments.next().await {
         let n = resumed + index + 1;
-        let bytes = bytes.map_err(ctx(format!("segment {n} of {total}")))?;
+        let mut bytes = bytes.map_err(ctx(format!("segment {n} of {total}")))?;
+        rebase.prepare(&mut download, &mut bytes);
         file.write_all(&bytes)
             .map_err(ctx(format!("writing {}", part_path.display())))?;
         download.record(bytes.len());

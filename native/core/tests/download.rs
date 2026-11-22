@@ -1,4 +1,4 @@
-use jitter_core::download::{Download, DownloadProgress, PartStart};
+use jitter_core::download::{Download, DownloadProgress, PartStart, Timeline, TrackShift};
 use jitter_core::models::{ChannelLogin, SegmentList, VideoId};
 
 fn login() -> ChannelLogin {
@@ -155,9 +155,90 @@ fn resume_starts_over_for_a_checkpoint_it_cannot_read() {
     for saved in [
         "",
         "garbage",
-        "jitter-download 2\ndone 1\nbytes 10\nlast s0\n",
+        // Format 1, from before the timeline line.
+        "jitter-download 1\ndone 1\nbytes 10\nlast s0\n",
+        "jitter-download 2\ndone 1\nbytes 10\nlast s0\ntimeline sideways\n",
+        "jitter-download 2\ndone 1\nbytes 10\nlast s0\ntimeline shifted 1:x\n",
         &nothing_done,
     ] {
         assert_eq!(fresh().resume(saved, 100), PartStart::Fresh, "{saved:?}");
     }
+}
+
+/// An fMP4 download: the init, then two segments.
+fn fresh_fmp4() -> Download {
+    Download::new(None, &vod(), "480p", fmp4("init", &["s0", "s1"]))
+}
+
+fn shifted() -> Timeline {
+    Timeline::Shifted(vec![
+        TrackShift {
+            track: 1,
+            ticks: 2_976_800,
+        },
+        TrackShift {
+            track: 2,
+            ticks: 62_016_666,
+        },
+    ])
+}
+
+#[test]
+fn only_an_fmp4_timeline_waits_to_be_decided() {
+    assert_eq!(fresh().timeline(), &Timeline::Raw);
+    assert_eq!(fresh_fmp4().timeline(), &Timeline::Undecided);
+}
+
+#[test]
+fn a_settled_timeline_stays_as_it_is() {
+    let mut download = fresh_fmp4();
+    download.settle_timeline(shifted());
+    download.settle_timeline(Timeline::Raw);
+    assert_eq!(download.timeline(), &shifted());
+
+    let mut ts = fresh();
+    ts.settle_timeline(shifted());
+    assert_eq!(ts.timeline(), &Timeline::Raw);
+}
+
+#[test]
+fn resume_moves_the_rest_as_the_first_run_did() {
+    let mut earlier = fresh_fmp4();
+    earlier.record(5);
+    earlier.settle_timeline(shifted());
+    earlier.record(10);
+
+    let mut download = fresh_fmp4();
+    assert_eq!(
+        download.resume(&earlier.checkpoint(), 15),
+        PartStart::Resume { keep: 15 }
+    );
+    assert_eq!(download.timeline(), &shifted());
+    assert_eq!(download.remaining(), ["s1"]);
+}
+
+#[test]
+fn resume_keeps_a_raw_fmp4_timeline_raw() {
+    let mut earlier = fresh_fmp4();
+    earlier.record(5);
+    earlier.settle_timeline(Timeline::Raw);
+    earlier.record(10);
+
+    let mut download = fresh_fmp4();
+    assert_eq!(
+        download.resume(&earlier.checkpoint(), 15),
+        PartStart::Resume { keep: 15 }
+    );
+    assert_eq!(download.timeline(), &Timeline::Raw);
+}
+
+#[test]
+fn resume_after_only_the_init_starts_over() {
+    let mut earlier = fresh_fmp4();
+    earlier.record(5);
+
+    let mut download = fresh_fmp4();
+    assert_eq!(download.resume(&earlier.checkpoint(), 5), PartStart::Fresh);
+    assert_eq!(download.remaining(), ["init", "s0", "s1"]);
+    assert_eq!(download.timeline(), &Timeline::Undecided);
 }
