@@ -26,7 +26,8 @@ use jitter_core::download::{Download, DownloadProgress};
 use jitter_core::downloads::{DownloadEntry, DownloadKey, DownloadStatus, DownloadsController};
 use jitter_core::models::{Quality, VideoId};
 use jitter_core::playback::PlaybackTarget;
-use jitter_twitch::{Twitch, part_file};
+use jitter_twitch::Twitch;
+use jitter_twitch::part_file::{self, Rebase};
 use rinf::{DartSignal, DartSignalPack, RustSignal, SignalReceiver};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::watch;
@@ -420,8 +421,9 @@ async fn open_part(download: &mut Download, files: &Files) -> io::Result<File> {
     Ok(file)
 }
 
-/// Appends each segment to the part file, in order, then renames it to the
-/// final name and returns that name's path. A failure returns before the
+/// Appends each segment to the part file, in order, an fMP4 one's
+/// timestamps moved to start at zero, then renames it to the final name and
+/// returns that name's path. A failure returns before the
 /// rename and leaves the part file and its checkpoint where they are, for
 /// the next start of the same download to resume.
 ///
@@ -458,6 +460,7 @@ async fn write(
     let urls = download.remaining().to_vec();
     // Dropping the stream on a return drops its requests in flight.
     let mut segments = std::pin::pin!(twitch.segment_bytes(&urls).enumerate());
+    let mut rebase = Rebase::new();
     loop {
         let next = tokio::select! {
             next = segments.next() => next,
@@ -466,13 +469,14 @@ async fn write(
         let Some((index, bytes)) = next else {
             break;
         };
-        let bytes = bytes.map_err(|e| {
+        let mut bytes = bytes.map_err(|e| {
             failed_to(format!(
                 "segment {} of {total}: {}",
                 resumed + index + 1,
                 twitch_error(&e)
             ))
         })?;
+        rebase.prepare(download, &mut bytes);
         download.record(bytes.len());
         let (saved, to) = (download.checkpoint(), checkpoint.clone());
         // The checkpoint only after the bytes it counts are in the part file.
