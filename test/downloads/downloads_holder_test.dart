@@ -83,6 +83,25 @@ void main() {
     expect(await answer, mine);
   });
 
+  test("start answers with its VOD's start, skipping another's", () async {
+    final answer = holder.start(videoId: '42', quality: '720p60', dir: '/d');
+
+    const mine = DownloadsUpdateStarted(videoId: '42');
+    holder
+      ..apply(const DownloadsUpdateStarted(videoId: '7'))
+      ..apply(mine);
+    expect(await answer, mine);
+    expect(notifications, 0);
+  });
+
+  test("start answers with its VOD's failure", () async {
+    final answer = holder.start(videoId: '42', quality: '720p60', dir: '/d');
+
+    const mine = DownloadsUpdateFailed(videoId: '42', message: 'exists');
+    holder.apply(mine);
+    expect(await answer, mine);
+  });
+
   test('a failure goes out once and leaves the downloads alone', () {
     final before = [download(fileName: 'a.mp4')];
     holder.apply(DownloadsUpdateSnapshot(downloads: before));
@@ -98,8 +117,8 @@ void main() {
   test('each ask sends its signal', () {
     final key = Uint64.parse('7');
     unawaited(holder.choose('42'));
+    unawaited(holder.start(videoId: '42', quality: '720p60', dir: '/d'));
     holder
-      ..start(videoId: '42', quality: '720p60', dir: '/d')
       ..cancel(key)
       ..remove(key);
     expect(chosen, const [ChooseDownload(videoId: '42')]);

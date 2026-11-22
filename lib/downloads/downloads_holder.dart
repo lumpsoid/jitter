@@ -23,7 +23,7 @@ class DownloadsHolder extends ChangeNotifier {
 
   StreamSubscription<RustSignalPack<DownloadsUpdate>>? _subscription;
 
-  /// Rust's one-shot answers, `Choices` and `Failed`. Not state.
+  /// Rust's one-shot answers, `Choices`, `Started` and `Failed`. Not state.
   final _notices = StreamController<DownloadsUpdate>.broadcast(sync: true);
 
   /// One message per failure Rust reports, for a snackbar each. Not state.
@@ -59,24 +59,39 @@ class DownloadsHolder extends ChangeNotifier {
     return answer;
   }
 
-  void start({
+  /// Asks Rust to download [videoId] in [quality] into [dir]. Completes
+  /// with its `Started`, or with its `Failed` when the download cannot
+  /// start; answers for other VODs are skipped.
+  Future<DownloadsUpdate> start({
     required String videoId,
     required String quality,
     required String dir,
-  }) => sendStart(StartDownload(videoId: videoId, quality: quality, dir: dir));
+  }) {
+    final answer = _notices.stream.firstWhere(
+      (notice) => switch (notice) {
+        DownloadsUpdateStarted(videoId: final id) ||
+        DownloadsUpdateFailed(videoId: final id) => id == videoId,
+        _ => false,
+      },
+    );
+    sendStart(StartDownload(videoId: videoId, quality: quality, dir: dir));
+    return answer;
+  }
 
   void cancel(Uint64 key) => sendCancel(CancelDownload(key: key));
 
   void remove(Uint64 key) => sendRemove(RemoveDownload(key: key));
 
-  /// Folds one update in: a snapshot replaces the downloads; choices and
-  /// failures leave them alone and go to [choose] and [failures].
+  /// Folds one update in: a snapshot replaces the downloads; the one-shot
+  /// answers leave them alone and go to [choose], [start] and [failures].
   void apply(DownloadsUpdate update) {
     switch (update) {
       case DownloadsUpdateSnapshot(:final downloads):
         _downloads = downloads;
         notifyListeners();
-      case DownloadsUpdateChoices() || DownloadsUpdateFailed():
+      case DownloadsUpdateChoices() ||
+          DownloadsUpdateStarted() ||
+          DownloadsUpdateFailed():
         _notices.add(update);
     }
   }

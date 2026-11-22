@@ -282,7 +282,8 @@ pub fn on_fetched(
 
 /// Starts a resolved download, unless its file is already in the directory,
 /// already being written, or still being cleaned up after a cancel. All
-/// three are refused before any byte is written.
+/// three are refused before any byte is written. Answers the start with
+/// `Started` or `Failed`.
 fn start_writer(
     panel: &mut DownloadsPanel,
     video: VideoId,
@@ -307,6 +308,7 @@ fn start_writer(
     let task = spawn_writer(twitch, fetch, key, download, dir, stopped);
     panel.running.insert(key, Running { task, stop, part });
     send_snapshot(panel);
+    DownloadsUpdate::Started { video_id: id }.send_signal_to_dart();
 }
 
 /// Resolves a VOD for one quality: what a download needs before its file

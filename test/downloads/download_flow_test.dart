@@ -72,6 +72,10 @@ void main() {
     expect(started, [
       const StartDownload(videoId: '42', quality: '160p30', dir: '/d'),
     ]);
+    expect(find.text('Download started'), findsNothing);
+
+    holder.apply(const DownloadsUpdateStarted(videoId: '42'));
+    await tester.pumpAndSettle();
     expect(find.text('Download started'), findsOneWidget);
     await tester.tap(find.text('View'));
     await tester.pumpAndSettle();
@@ -124,6 +128,54 @@ void main() {
     holder.apply(_choices);
     await tester.pumpAndSettle();
     expect(find.text('Download in quality'), findsOneWidget);
+  });
+
+  Future<void> chooseQuality(WidgetTester tester) async {
+    await tester.tap(find.text('go'));
+    await tester.pump();
+    holder.apply(_choices);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('160p'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('a start failure shows its message instead of started', (
+    tester,
+  ) async {
+    await pumpFlow(tester);
+    await chooseQuality(tester);
+
+    holder.apply(
+      const DownloadsUpdateFailed(videoId: '42', message: 'a.mp4 exists'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('a.mp4 exists'), findsOneWidget);
+    expect(find.text('Download started'), findsNothing);
+  });
+
+  testWidgets("ignores another VOD's start", (tester) async {
+    await pumpFlow(tester);
+    await chooseQuality(tester);
+
+    holder.apply(const DownloadsUpdateStarted(videoId: '7'));
+    await tester.pumpAndSettle();
+    expect(find.text('Download started'), findsNothing);
+  });
+
+  testWidgets('a start failure still shows after the page is gone', (
+    tester,
+  ) async {
+    await pumpFlow(tester);
+    await chooseQuality(tester);
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: Text('elsewhere'))),
+    );
+
+    holder.apply(
+      const DownloadsUpdateFailed(videoId: '42', message: 'a.mp4 exists'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('a.mp4 exists'), findsOneWidget);
   });
 
   testWidgets('dismissing the sheet starts nothing', (tester) async {

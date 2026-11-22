@@ -8,8 +8,8 @@ import 'package:path_provider/path_provider.dart';
 
 /// Downloads [videoId] from the GUI: asks Rust for its qualities, lets the
 /// user pick one in a sheet, then starts it into [downloadDir]. Reports a
-/// failure or the outcome in a snackbar; [onView] adds a View action to the
-/// started download's snackbar.
+/// failure, or that it started once Rust says so, in a snackbar; [onView]
+/// adds a View action to the started download's snackbar.
 Future<void> downloadVod(
   BuildContext context, {
   required DownloadsHolder downloads,
@@ -45,18 +45,30 @@ Future<void> downloadVod(
     ),
   );
   if (name == null || !context.mounted) return;
+  // The app's messenger outlives this page: what follows still shows if the
+  // user leaves it before Rust answers.
+  final messenger = ScaffoldMessenger.of(context);
   final String dir;
   try {
     dir = await downloadDir();
   } on Object catch (e) {
-    if (context.mounted) {
-      _showSnackBar(context, 'No folder to save into: $e');
-    }
+    messenger.showSnackBar(
+      SnackBar(content: Text('No folder to save into: $e')),
+    );
     return;
   }
-  downloads.start(videoId: videoId, quality: name, dir: dir);
+  final started = await downloads.start(
+    videoId: videoId,
+    quality: name,
+    dir: dir,
+  );
+  if (started is DownloadsUpdateFailed) {
+    messenger.showSnackBar(SnackBar(content: Text(started.message)));
+    return;
+  }
+  // View pushes from this page, so it needs the page still there.
   if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
+  messenger.showSnackBar(
     SnackBar(
       content: const Text('Download started'),
       action: onView == null
